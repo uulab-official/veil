@@ -117,6 +117,7 @@ public sealed class AgentSession
                 MessageTypes.WindowResizeRequest => await HandleWindowResizeAsync(request, requestId, cancellationToken),
                 MessageTypes.DisplayResizeRequest => await HandleDisplayResizeAsync(request, requestId, cancellationToken),
                 MessageTypes.SystemShutdownRequest => HandleSystemShutdown(requestId),
+                MessageTypes.FrameCaptureStrategySet => HandleFrameCaptureStrategySet(request, requestId),
                 MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputText => await HandleTextInputAsync(request, requestId, cancellationToken),
@@ -1044,7 +1045,27 @@ public sealed class AgentSession
             response["packageIdentityStatus"] = sparsePackageStatus;
         }
 
+        // Diagnostic and optional: per-step capture times, so the host can see where mirrored frame time
+        // goes inside the guest without reading guest logs.
+        response["frameCapture"] = FrameCaptureDiagnostics.Shared.Snapshot();
         return response;
+    }
+
+    /// <summary>
+    /// Forces a capture method for diagnosis (screen copy or PrintWindow) or returns to automatic, and
+    /// clears the recorded capture times so the next health reply describes only the new method.
+    /// </summary>
+    private AgentReplies HandleFrameCaptureStrategySet(JsonObject request, string? requestId)
+    {
+        var strategy = request["strategy"]?.GetValue<string>() ?? "";
+        if (!FrameCaptureDiagnostics.Shared.SetStrategy(strategy))
+        {
+            return AgentReplies.Direct(
+                ErrorResponse(requestId, "invalid_message", $"Unsupported capture strategy {strategy}")
+            );
+        }
+
+        return AgentReplies.Direct(OperationAck(requestId));
     }
 
     private async Task<AgentReplies> HandleSharedFolderRequestAsync(

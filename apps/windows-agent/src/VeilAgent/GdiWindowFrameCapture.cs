@@ -47,18 +47,29 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            var diagnostics = FrameCaptureDiagnostics.Shared;
+            var total = System.Diagnostics.Stopwatch.StartNew();
+            var step = System.Diagnostics.Stopwatch.StartNew();
             var bounds = GetCaptureBounds(window);
-            using var bitmap = CaptureBitmap(window, bounds);
+            var bitmap = ReusableBitmap(window.WindowId, bounds);
+            CaptureInto(bitmap, window, bounds, diagnostics.Strategy);
+            diagnostics.Record("capture", step.Elapsed.TotalMilliseconds);
+            step.Restart();
             var pixels = CopyPixels(bitmap);
+            diagnostics.Record("copy", step.Elapsed.TotalMilliseconds);
+            step.Restart();
             var changed = TakeChangedRegion(window.WindowId, pixels, bounds.Width, bounds.Height, cancellationToken);
+            diagnostics.Record("diff", step.Elapsed.TotalMilliseconds);
 
             if (changed is null)
             {
+                diagnostics.Record("unchangedTotal", total.Elapsed.TotalMilliseconds);
                 // The expensive work -- PNG encode plus base64 -- is skipped entirely here. This is the
                 // common case for a window the user is not currently interacting with.
                 return WindowFrameCaptureResult.Unchanged(sequence);
             }
 
+            step.Restart();
             var scale = GetWindowScale(window.Hwnd);
             var isKeyFrame = changed.Covers(bounds.Width, bounds.Height);
             var tileFormat = tileFormatsByWindowId.GetValueOrDefault(window.WindowId, FrameChannelCodec.PngFormat);
@@ -86,6 +97,8 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
                 EncodedData: tilePayload,
                 PayloadFormat: deflatesTile ? FrameChannelCodec.BgraDeflateFormat : FrameChannelCodec.PngFormat
             );
+            diagnostics.Record("encode", step.Elapsed.TotalMilliseconds);
+            diagnostics.Record("changedTotal", total.Elapsed.TotalMilliseconds);
 
             return WindowFrameCaptureResult.Changed(includeFullFrame ? fullFrame : null, tile);
         }, cancellationToken);
@@ -147,6 +160,14 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         {
             previousPixelsByWindowId.Remove(windowId);
         }
+
+        lock (bitmapsByWindowId)
+        {
+            if (bitmapsByWindowId.Remove(windowId, out var bitmap))
+            {
+                bitmap.Dispose();
+            }
+        }
     }
 
     /// <summary>
@@ -188,21 +209,71 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         return EncodeFrame(window, bounds, sequence, bitmap);
     }
 
-    private static Bitmap CaptureBitmap(LaunchedWindow window, WindowRect bounds)
+    private readonly Dictionary<string, Bitmap> bitmapsByWindowId = new();
+
+    /// <summary>
+    /// One capture bitmap per window, replaced only when the window changes size. Allocating a fresh
+    /// full-window bitmap every tick cost an allocation and a GDI+ object per frame for nothing.
+    /// </summary>
+    private Bitmap ReusableBitmap(string windowId, WindowRect bounds)
     {
-        var bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
+        lock (bitmapsByWindowId)
+        {
+            if (bitmapsByWindowId.TryGetValue(windowId, out var existing)
+                && existing.Width == bounds.Width
+                && existing.Height == bounds.Height)
+            {
+                return existing;
+            }
+
+            existing?.Dispose();
+            var bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
+            bitmapsByWindowId[windowId] = bitmap;
+            return bitmap;
+        }
+    }
+
+    private static void CaptureInto(Bitmap bitmap, LaunchedWindow window, WindowRect bounds, string strategy)
+    {
         using var graphics = Graphics.FromImage(bitmap);
 
         // PrintWindow makes the app render a fresh copy of itself, which took 50 to 150 ms a frame in the
         // guest and held mirrored drawing to about ten frames a second. A window that is fully on screen and
         // on top is already composed there, so copying those pixels gives the same image in a few
         // milliseconds. The window being used is almost always that one, since input brings it forward.
+        var copiesScreen = strategy switch
+        {
+            FrameCaptureDiagnostics.ScreenCopyStrategy => true,
+            FrameCaptureDiagnostics.PrintWindowStrategy => false,
+            _ => IsFullyVisibleOnScreen(window.Hwnd, bounds)
+        };
+        if (copiesScreen)
+        {
+            graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, new Size(bounds.Width, bounds.Height));
+            FrameCaptureDiagnostics.Shared.RecordMethod(FrameCaptureDiagnostics.ScreenCopyStrategy);
+            return;
+        }
+
+        FrameCaptureDiagnostics.Shared.RecordMethod(FrameCaptureDiagnostics.PrintWindowStrategy);
+        PrintInto(graphics, window, bounds);
+    }
+
+    private static Bitmap CaptureBitmap(LaunchedWindow window, WindowRect bounds)
+    {
+        var bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
+        using var graphics = Graphics.FromImage(bitmap);
         if (IsFullyVisibleOnScreen(window.Hwnd, bounds))
         {
             graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, new Size(bounds.Width, bounds.Height));
             return bitmap;
         }
 
+        PrintInto(graphics, window, bounds);
+        return bitmap;
+    }
+
+    private static void PrintInto(Graphics graphics, LaunchedWindow window, WindowRect bounds)
+    {
         var deviceContext = graphics.GetHdc();
         try
         {
@@ -221,8 +292,6 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
                 graphics.ReleaseHdc(deviceContext);
             }
         }
-
-        return bitmap;
     }
 
     /// <summary>
