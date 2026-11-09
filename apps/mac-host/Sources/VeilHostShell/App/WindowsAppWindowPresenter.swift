@@ -8,6 +8,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private var windowsById: [String: NSWindow] = [:]
     private var windowOrder: [String] = []
     private var suppressedCloseWindowIds: Set<String> = []
+    private var identitiesById: [String: WindowsAppWindowIdentity] = [:]
+    private var otherWindowKeyObserver: NSObjectProtocol?
+#if DEBUG
+    private var debugCommandObserver: NSObjectProtocol?
+#endif
     /// When each zooming window's animation ends. Guest updates arriving before then must not touch the frame.
     private var zoomEndsAt: [String: Date] = [:]
     /// When each window last reported a size during a live resize, so the guest follows without being flooded.
@@ -96,7 +101,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
         windowsById.removeAll()
         windowOrder.removeAll()
+        identitiesById.removeAll()
         foregroundWindowId = nil
+        WindowsAppDockIcon.showInDock(nil)
     }
 
     func closeWindow(windowId: String, suppressWindowCloseCallback: Bool = true) {
@@ -149,6 +156,111 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
         rememberWindowId(windowId)
         foregroundWindowId = windowId
+        WindowsAppDockIcon.showInDock(identitiesById[windowId])
+        observeOtherWindowsBecomingKey()
+    }
+
+#if DEBUG
+    /// Development builds only: lets a script drive the front mirrored window without touching the user's
+    /// mouse, for checking zoom and resize behavior against a live guest.
+    /// `zoom` and `minimize` use the same AppKit paths as the Windows caption buttons; `resize` steps the
+    /// window to `width` x `height` the way an edge drag reports sizes while it moves.
+    func installDebugCommandObserver() {
+        guard debugCommandObserver == nil else {
+            return
+        }
+        debugCommandObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("org.uulab.veil.debug.mirroredWindow"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let action = notification.userInfo?["action"] as? String
+            let width = (notification.userInfo?["width"] as? String).flatMap(Double.init)
+            let height = (notification.userInfo?["height"] as? String).flatMap(Double.init)
+            MainActor.assumeIsolated {
+                if action == "dump-icons" {
+                    Self.dumpDebugIcons(window: self?.foregroundWindowId.flatMap { self?.windowsById[$0] })
+                    return
+                }
+                self?.performDebugCommand(action: action, width: width, height: height)
+            }
+        }
+    }
+
+    /// Writes the current Dock icon and the front window's minimized icon as PNGs to the temporary directory,
+    /// since neither can be screenshotted without capturing the user's whole screen.
+    private static func dumpDebugIcons(window: NSWindow?) {
+        let directory = FileManager.default.temporaryDirectory
+        let images: [(String, NSImage?)] = [
+            ("veil-dock-icon.png", NSApp.applicationIconImage),
+            ("veil-miniwindow-icon.png", window?.miniwindowImage)
+        ]
+        for (name, image) in images {
+            guard let image,
+                  let tiff = image.tiffRepresentation,
+                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
+                continue
+            }
+            try? png.write(to: directory.appendingPathComponent(name))
+        }
+        VeilLog.window.notice("Debug icons written to \(directory.path, privacy: .public)")
+    }
+
+    private func performDebugCommand(action: String?, width: Double?, height: Double?) {
+        guard let windowId = foregroundWindowId ?? visibleWindowIds.last,
+              let window = windowsById[windowId] else {
+            return
+        }
+        VeilLog.window.notice("Debug command \(action ?? "nil", privacy: .public) on \(windowId, privacy: .public)")
+
+        switch action {
+        case "zoom":
+            window.performZoom(nil)
+        case "minimize":
+            window.performMiniaturize(nil)
+        case "restore":
+            MacWindowRestorePolicy.restoreToFront(window)
+        case "resize":
+            guard let width, let height, let contentView = window.contentView else {
+                return
+            }
+            let start = contentView.bounds.size
+            Task { @MainActor in
+                let steps = 10
+                for step in 1...steps {
+                    let fraction = Double(step) / Double(steps)
+                    window.setContentSize(NSSize(
+                        width: start.width + (width - start.width) * fraction,
+                        height: start.height + (height - start.height) * fraction
+                    ))
+                    reportContentSize(contentView.bounds.size, windowId: windowId, screen: window.screen)
+                    try? await Task.sleep(for: .milliseconds(120))
+                }
+            }
+        default:
+            break
+        }
+    }
+#endif
+
+    /// Veil's own windows (the launcher, settings, the desktop) take the Dock icon back from a Windows app.
+    private func observeOtherWindowsBecomingKey() {
+        guard otherWindowKeyObserver == nil else {
+            return
+        }
+        otherWindowKeyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let windowId = (notification.object as? NSWindow)?.identifier?.rawValue
+            MainActor.assumeIsolated {
+                guard let self, windowId.map({ self.windowsById[$0] == nil }) ?? true else {
+                    return
+                }
+                WindowsAppDockIcon.showInDock(nil)
+            }
+        }
     }
 
     /// A minimized window shows nothing, so nothing should be produced for it.
@@ -289,6 +401,10 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
     private func forgetWindowId(_ windowId: String) {
         windowOrder.removeAll { $0 == windowId }
+        identitiesById[windowId] = nil
+        if windowsById.isEmpty {
+            WindowsAppDockIcon.showInDock(nil)
+        }
         zoomEndsAt[windowId] = nil
         lastLiveResizeReportAt[windowId] = nil
         if foregroundWindowId == windowId {
@@ -493,7 +609,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             window.standardWindowButton(button)?.isHidden = true
         }
-        window.miniwindowImage = identity.iconData.flatMap(NSImage.init(data:))
+        identitiesById[session.id] = identity
+        window.miniwindowImage = WindowsAppDockIcon.image(for: identity)
+        if foregroundWindowId == session.id, window.isKeyWindow {
+            WindowsAppDockIcon.showInDock(identity)
+        }
     }
 
     /// Locks a mirrored window to the guest window's shape while the user resizes it.

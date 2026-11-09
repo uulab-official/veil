@@ -40,6 +40,9 @@ extension VeilHostShellApp {
     }
 
     func configureWindowsAppWindowCloseBridge() {
+#if DEBUG
+        windowsAppWindowPresenter.installDebugCommandObserver()
+#endif
         windowsAppWindowPresenter.appIdentityProvider = { appId in
             WindowsAppWindowIdentity.resolve(appId: appId, apps: model.apps)
         }
