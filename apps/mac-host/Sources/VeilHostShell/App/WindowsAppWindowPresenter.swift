@@ -187,6 +187,41 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
     }
 
+    private static func inputCaptureView(in view: NSView) -> InputCaptureNSView? {
+        if let inputView = view as? InputCaptureNSView {
+            return inputView
+        }
+        return view.subviews.lazy.compactMap(inputCaptureView(in:)).first
+    }
+
+    /// Delivered straight to the input view rather than through `NSWindow.sendEvent`, which would first
+    /// activate Veil and take focus from whatever the user is working in.
+    private static func postDebugMouseEvent(_ type: NSEvent.EventType, at point: NSPoint, in window: NSWindow) {
+        guard let contentView = window.contentView,
+              let inputView = contentView.hitTest(point) as? InputCaptureNSView,
+              let event = NSEvent.mouseEvent(
+            with: type,
+            location: point,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: type == .leftMouseUp ? 0 : 1
+        ) else {
+            return
+        }
+        switch type {
+        case .leftMouseDown:
+            inputView.mouseDown(with: event)
+        case .leftMouseDragged:
+            inputView.mouseDragged(with: event)
+        default:
+            inputView.mouseUp(with: event)
+        }
+    }
+
     /// Writes the current Dock icon and the front window's minimized icon as PNGs to the temporary directory,
     /// since neither can be screenshotted without capturing the user's whole screen.
     private static func dumpDebugIcons(window: NSWindow?) {
@@ -220,6 +255,43 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             window.performMiniaturize(nil)
         case "restore":
             MacWindowRestorePolicy.restoreToFront(window)
+        case "draw":
+            // A stroke across the middle of the window, delivered as real AppKit events to the window so it
+            // takes the same hit-testing and input path as the user's mouse.
+            guard let contentView = window.contentView else {
+                return
+            }
+            let bounds = contentView.bounds
+            let points = (0...20).map { step in
+                NSPoint(
+                    x: bounds.midX - 120 + Double(step) * 12,
+                    y: bounds.midY + 40 * sin(Double(step) / 3)
+                )
+            }
+            Task { @MainActor in
+                for (index, point) in points.enumerated() {
+                    let type: NSEvent.EventType = index == 0 ? .leftMouseDown : .leftMouseDragged
+                    Self.postDebugMouseEvent(type, at: point, in: window)
+                    try? await Task.sleep(for: .milliseconds(30))
+                }
+                Self.postDebugMouseEvent(.leftMouseUp, at: points[points.count - 1], in: window)
+            }
+        case "undo":
+            if let event = NSEvent.keyEvent(
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: .command,
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber,
+                context: nil,
+                characters: "z",
+                charactersIgnoringModifiers: "z",
+                isARepeat: false,
+                keyCode: 6
+            ),
+               let inputView = window.contentView.flatMap(Self.inputCaptureView(in:)) {
+                _ = inputView.performKeyEquivalent(with: event)
+            }
         case "resize":
             guard let width, let height, let contentView = window.contentView else {
                 return
