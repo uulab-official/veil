@@ -157,5 +157,7 @@ public sealed record WindowFrameTile(
     double Scale,
     bool IsKeyFrame,
     WindowFrameTileRect Rect,
-    string EncodedData
+    string EncodedData,
+    // How EncodedData is encoded; see FrameChannelCodec.PngFormat and BgraDeflateFormat.
+    byte PayloadFormat = FrameChannelCodec.PngFormat
 );

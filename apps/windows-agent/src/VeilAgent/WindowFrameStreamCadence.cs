@@ -16,7 +16,9 @@ namespace Veil.Agent;
 /// </remarks>
 public sealed class WindowFrameStreamCadence
 {
-    public static readonly TimeSpan DefaultActiveInterval = TimeSpan.FromMilliseconds(33);
+    // One display refresh at 60 Hz. At 33 ms a drawn stroke trailed the pointer by up to two refreshes
+    // before capture even started.
+    public static readonly TimeSpan DefaultActiveInterval = TimeSpan.FromMilliseconds(16);
     public static readonly TimeSpan DefaultIdleInterval = TimeSpan.FromMilliseconds(250);
 
     /// <summary>

@@ -3,6 +3,7 @@ namespace Veil.Agent;
 public sealed class WindowFrameStreamer
 {
     private static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ImmediateCaptureDelay = TimeSpan.FromMilliseconds(1);
     private readonly IWindowFrameCapture capture;
     private readonly TimeSpan? fixedInterval;
     private readonly Func<WindowFrameStreamCadence> cadenceFactory;
@@ -59,10 +60,12 @@ public sealed class WindowFrameStreamer
         {
             lock (cadenceGate)
             {
-                var interval = cadence.Wake();
-                if (fixedInterval is null && timer.Period != interval)
+                cadence.Wake();
+                // Capture right away rather than at the next tick: input usually changes the window within a
+                // frame, and the tick after this capture returns to the active interval through Retune.
+                if (fixedInterval is null)
                 {
-                    timer.Period = interval;
+                    timer.Period = ImmediateCaptureDelay;
                 }
             }
         };

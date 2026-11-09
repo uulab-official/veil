@@ -506,6 +506,14 @@ public sealed class AgentSession
             return AgentReplies.Direct(ErrorResponse(requestId, "window_not_tracked", $"No tracked window exists for id {windowId}."));
         }
 
+        // A host that can decode them asks for deflated BGRA tiles; any other value, or none, keeps PNG.
+        capture.SetTileFormat(
+            windowId,
+            request["tileFormat"]?.GetValue<string>() == FrameChannelCodec.BgraDeflateFormatName
+                ? FrameChannelCodec.BgraDeflateFormat
+                : FrameChannelCodec.PngFormat
+        );
+
         return new AgentReplies(
             // The ack is a direct reply so a host that waits for exactly one frame reads it before
             // the stream's first frame arrives on the broadcast side.

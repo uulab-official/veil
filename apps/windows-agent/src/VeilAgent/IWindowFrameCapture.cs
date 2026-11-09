@@ -45,4 +45,12 @@ public interface IWindowFrameCapture
     void ForgetWindow(string windowId)
     {
     }
+
+    /// <summary>
+    /// Sets the tile payload format for a window's stream, as the subscribing host asked. No-op by default for
+    /// implementations that only produce PNG.
+    /// </summary>
+    void SetTileFormat(string windowId, byte format)
+    {
+    }
 }

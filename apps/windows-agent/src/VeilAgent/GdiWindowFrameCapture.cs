@@ -15,6 +15,9 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
     /// extra full-window buffer per streamed window, released by ForgetWindow when the stream stops.
     /// </remarks>
     private readonly Dictionary<string, byte[]> previousPixelsByWindowId = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> tileFormatsByWindowId = new();
+
+    public void SetTileFormat(string windowId, byte format) => tileFormatsByWindowId[windowId] = format;
     private readonly object pixelGate = new();
 
     public Task<WindowFrame> CaptureFrameAsync(LaunchedWindow window, int sequence, CancellationToken cancellationToken)
@@ -58,15 +61,19 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
 
             var scale = GetWindowScale(window.Hwnd);
             var isKeyFrame = changed.Covers(bounds.Width, bounds.Height);
-            var fullFrame = includeFullFrame || isKeyFrame
+            var tileFormat = tileFormatsByWindowId.GetValueOrDefault(window.WindowId, FrameChannelCodec.PngFormat);
+            var deflatesTile = tileFormat == FrameChannelCodec.BgraDeflateFormat;
+            var fullFrame = includeFullFrame || (isKeyFrame && !deflatesTile)
                 ? EncodeFrame(window, bounds, sequence, bitmap)
                 : null;
 
-            // A key frame's payload is the whole surface, so reuse the full-frame encode instead of
-            // encoding the same pixels twice.
-            var tilePayload = isKeyFrame
-                ? fullFrame!.EncodedData
-                : EncodeRegion(bitmap, changed);
+            // A PNG key frame's payload is the whole surface, so reuse the full-frame encode instead of
+            // encoding the same pixels twice. Deflated tiles come straight from the compared pixel buffer.
+            var tilePayload = deflatesTile
+                ? EncodeRegionBgraDeflate(pixels, bounds.Width, changed)
+                : isKeyFrame
+                    ? fullFrame!.EncodedData
+                    : EncodeRegion(bitmap, changed);
 
             var tile = new WindowFrameTile(
                 WindowId: window.WindowId,
@@ -76,7 +83,8 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
                 Scale: scale,
                 IsKeyFrame: isKeyFrame,
                 Rect: changed,
-                EncodedData: tilePayload
+                EncodedData: tilePayload,
+                PayloadFormat: deflatesTile ? FrameChannelCodec.BgraDeflateFormat : FrameChannelCodec.PngFormat
             );
 
             return WindowFrameCaptureResult.Changed(includeFullFrame ? fullFrame : null, tile);
@@ -139,6 +147,26 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         {
             previousPixelsByWindowId.Remove(windowId);
         }
+    }
+
+    /// <summary>
+    /// Encodes the changed rectangle as BGRA rows compressed with raw deflate at its fastest level; see
+    /// <see cref="FrameChannelCodec.BgraDeflateFormat"/>. Reads the pixel buffer already copied for change
+    /// detection, so the bitmap is neither cropped nor re-encoded.
+    /// </summary>
+    internal static string EncodeRegionBgraDeflate(byte[] pixels, int surfaceWidth, WindowFrameTileRect rect)
+    {
+        using var output = new MemoryStream();
+        using (var deflate = new System.IO.Compression.DeflateStream(
+            output, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
+        {
+            var rowBytes = rect.Width * 4;
+            for (var row = 0; row < rect.Height; row++)
+            {
+                deflate.Write(pixels, ((rect.Y + row) * surfaceWidth + rect.X) * 4, rowBytes);
+            }
+        }
+        return Convert.ToBase64String(output.GetBuffer(), 0, (int)output.Length);
     }
 
     /// <summary>

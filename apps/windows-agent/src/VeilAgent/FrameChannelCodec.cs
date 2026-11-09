@@ -37,6 +37,13 @@ public static class FrameChannelCodec
 {
     public static readonly byte[] Magic = Encoding.ASCII.GetBytes("VFR2");
     public const byte PngFormat = 1;
+    /// <summary>
+    /// The tile's pixels as 32-bit BGRA rows, top to bottom with no padding, compressed with raw deflate at
+    /// its fastest level. Several times cheaper to produce than PNG, which filters every row and compresses
+    /// harder; sent only to hosts that ask for it in <c>window.frame.subscribe</c>.
+    /// </summary>
+    public const byte BgraDeflateFormat = 2;
+    public const string BgraDeflateFormatName = "bgra-deflate";
     public const byte KeyFrameFlag = 0x01;
     public const int HeaderByteCountWithoutWindowId = 36;
     public const int MaximumWindowIdByteCount = 512;
@@ -105,7 +112,7 @@ public static class FrameChannelCodec
         var span = message.AsSpan();
 
         Magic.CopyTo(span);
-        span[4] = PngFormat;
+        span[4] = tile.PayloadFormat;
         span[5] = tile.IsKeyFrame ? KeyFrameFlag : (byte)0;
         BinaryPrimitives.WriteUInt16BigEndian(span[6..8], (ushort)windowIdBytes.Length);
         windowIdBytes.CopyTo(span[8..]);
