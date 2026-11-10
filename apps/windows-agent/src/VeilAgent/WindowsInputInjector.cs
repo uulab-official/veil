@@ -157,7 +157,12 @@ internal static class WindowsInputInjector
         return true;
     }
 
-    private static void KeepOnWorkArea(IntPtr hwnd)
+    /// <summary>
+    /// Moves a window that reaches past its monitor's work area back inside it. Besides keeping input
+    /// targets reachable, this keeps a mirrored window off the taskbar and the display edge, so the host
+    /// can crop it from the guest framebuffer (<c>window.layout</c>'s <c>fullyVisible</c>).
+    /// </summary>
+    internal static void KeepOnWorkArea(IntPtr hwnd)
     {
         if (IsZoomed(hwnd) || !GetWindowRect(hwnd, out var rect))
         {

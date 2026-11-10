@@ -409,6 +409,12 @@ public sealed class WindowsDesktop : IWindowsDesktop
             physicalHeight,
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER
         );
+        if (accepted)
+        {
+            // A window that grew past the display edge or under the taskbar cannot be cropped from the
+            // guest framebuffer.
+            WindowsInputInjector.KeepOnWorkArea(hwnd);
+        }
 
         return Task.FromResult<WindowRect?>(accepted ? GetWindowBounds(hwnd) : null);
     }
