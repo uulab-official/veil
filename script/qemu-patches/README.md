@@ -25,3 +25,19 @@ The host side is `QEMUMemoryBalloon` and `QEMUMemoryBalloonPolicy` in
 `apps/mac-host/Sources/VeilHostCore`; the host sizes the balloon only on a QEMU bundled with this
 patch. Linux's free page reporting (`free-page-reporting=on`) returned nothing in 20 s with either
 build and the Windows driver does not implement it, so Veil does not enable it.
+
+### Windows guest, first live run (2026-11-10)
+
+Not yet effective for Windows. With the patched runtime, Windows 11 Arm 26300 bound the virtio-win
+0.1.302 Balloon driver and began inflating (QEMU logged its "backing page size > 4kiB" warning on
+the first inflated page), but:
+
+- QEMU's footprint rose from 17.1 GB to 21.3 GB instead of falling. Apple silicon backs guest RAM
+  with 16 KiB host pages, and QEMU discards one only after all four of its 4 KiB balloon pages
+  arrive while it is still the single partially ballooned page it tracks. Windows hands back
+  scattered 4 KiB pages, so the tracking restarts on nearly every page and almost nothing is
+  discarded, while Windows zeroing the pages it gives up touches them. A follow-up patch has to
+  track partially ballooned host pages across the whole guest.
+- `query-balloon` kept reporting 16 GiB and every `guest-stats` value stayed unset (QEMU prints
+  them as 2^64-1), so `QEMUMemoryBalloonPolicy` sees no statistics and leaves Windows at full size.
+  The driver appears to fill statistics only through its user-mode service, `blnsvr.exe`.
