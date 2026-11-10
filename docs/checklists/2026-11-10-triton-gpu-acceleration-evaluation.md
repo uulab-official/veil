@@ -2,11 +2,11 @@
 
 Date: 2026-11-10
 
-Status: **interim**. Licensing and source analysis are done. The host-side build, the boot of the
-VM copy, and the present-rate measurements are **not done**: building LLVM 15 and ANGLE from the
-fetched sources was refused by this session's permission policy (it classifies running build
-systems from freshly cloned external repositories as executing external code). Nothing was worked
-around. Sections below say exactly what is measured and what is not.
+Status: **interim**. Licensing, source analysis and the host-side build are done, and the built
+QEMU passes a headless smoke test. Booting the existing VM on it, installing the guest driver and
+the present-rate measurements are **not done yet**: they need a short stop of the user's VM, which
+the user is told about first. (The build was first refused by the session's permission policy and
+ran after the user allowed it.)
 
 Source: <https://blog.getutm.app/2026/introducing-triton-directx-11-driver-for-qemu/> (2026-07-24).
 
@@ -61,12 +61,29 @@ virtio-gpu, host virglrenderer + DXMT) lift DWM to 60-120 presents a second, and
   | utmapp/dxmt | main | `8b9d33470d6417734bf156d87d265ca2ede0aaa8` (2026-10-19) |
   | utmapp/WebKit (ANGLE only) | — | `6a7f464047e2f6f2b65fe315aaad5d1ff3229cb7` |
 
-- [ ] **LLVM 15: blocked.** `brew install llvm@15` fails on this host (macOS 27.0.1, Xcode 27.2):
-      "An unsatisfied requirement failed this build" (Tier 3 configuration). The fallback is
-      DXMT's documented source build of `llvmorg-15.0.7` (arm64, no targets, no tools); that
-      command was refused by the permission policy.
-- [ ] **ANGLE: blocked** (same refusal, `xcodebuild archive` of the WebKit ANGLE scheme).
-- [ ] libepoxy, DXMT, virglrenderer, QEMU: not attempted, they depend on the two above.
+- [x] **LLVM 15.0.7** from source into `~/VeilTriton/llvm15` (arm64, no targets, no tools), because
+      `brew install llvm@15` fails on macOS 27.0.1 ("unsatisfied requirement", Tier 3).
+- [x] **ANGLE** (`xcodebuild archive`). Needed two build-setting overrides on Xcode 27.2:
+      `MACOSX_DEPLOYMENT_TARGET=12.0` (11.0 is below the SDK's supported range) and `-Wno-error`
+      (new `-Wunnecessary-virtual-specifier` warning in `src/libANGLE/Fence.h`).
+- [x] **libepoxy** (`-Degl=yes -Dx11=false`).
+- [x] **virglrenderer** arm64 with `-Dvenus=false -Dneptune=true -Drender-server-worker=process`
+      (needs Python `PyYAML`; a venv at `~/VeilTriton/venv`). Venus is off: it needs Vulkan/MoltenVK
+      and Triton does not use it. The x86_64/D3DMetal slice is skipped.
+- [x] **DXMT** native (`libdxmt-native.dylib`, `-Dnative_llvm_path=~/VeilTriton/llvm15`).
+- [x] **QEMU** `utm-edition` with `--disable-pvg --disable-docs`: `apple-gfx.m` no longer compiles
+      against the macOS 27 SDK (`PGTask_t` obsoleted). Configure reports virglrenderer 1.3.0 with
+      `VIRGL_RENDERER_NEPTUNE`, OpenGL (epoxy) 1.5.11, GBM no.
+- [x] **Local patch for a windowless GL display** (`ui/egl-helpers.c`, `ui/egl-headless.c`,
+      `ui/meson.build`, 18 lines): `egl_init` on macOS uses the fork's existing
+      `qemu_egl_init_dpy_cocoa` (ANGLE on Metal, no window) instead of a GBM render node, the
+      `egl-headless` module builds without GBM on Darwin, and Metal-native scanouts are ignored by
+      the headless reader instead of being read as a GL texture id.
+- [x] Smoke test (no disk, no VM state): `-accel hvf,ipa-granule-size=0x1000 -device
+      virtio-ramfb-gl,hostmem=1G,blob=true,venus=false,neptune=true -display egl-headless,gl=es
+      -vnc 127.0.0.1:9` realizes the device, shows the UEFI shell through `screendump`, opens no Mac
+      window, and quits cleanly over QMP. The Neptune path itself is not exercised until a guest
+      driver talks to it.
 - Host toolchain present: meson, ninja, pkg-config, cmake, Xcode 27.2 with the Metal toolchain
   (`metal` 32023.922).
 
@@ -85,13 +102,15 @@ virtio-gpu, host virglrenderer + DXMT) lift DWM to 60-120 presents a second, and
 | Guest UMD `osy/virtio-win-mesa` (neptune) | Mesa: MIT for most files, per-file licenses in `licenses/` | Yes, keep notices. |
 | MoltenVK (only if `venus=true`) | Apache-2.0 | Not needed for Triton; leave `venus` off. |
 
-Signing is the practical blocker for shipping the guest driver, not the license. The release asset
-is named `-signed`, but `BUILDING.md` says self-built packages are **test-signed** with the repo's
-`VirtIOTestCert.pfx`. Whether the release binaries carry a Microsoft (attestation) signature was
-**not verified** (the zip was not downloaded). If they are test-signed, they need
-`bcdedit /set testsigning on`, which conflicts with Secure Boot, and Veil boots
-`edk2-aarch64-secure-code.fd` with a TPM. A Veil distribution would need its own attestation-signed
-build of `viogpu3d` under Veil's Microsoft Partner Center account.
+Signing: the v0.5 release `viogpu3d-arm64x-signed.zip` (SHA-256
+`155695ab7820f71e75c369aeae7b8c060691ba43646ac37edef72aa2428506d5`) has a catalog signed by
+**Microsoft Windows Hardware Compatibility Publisher** (issuer Microsoft Windows Third Party
+Component CA 2014), i.e. attestation-signed. It installs without test signing, so Secure Boot and
+`edk2-aarch64-secure-code.fd` stay as they are. Self-built packages are test-signed
+(`VirtIOTestCert.pfx`, per `BUILDING.md`), so a Veil build of the driver would need its own
+attestation signing through a Microsoft Partner Center account. The INF (`DriverVer
+10/29/2026,100.6.101.58000`) matches `PCI\VEN_1AF4&DEV_1050`, the same ID as today's
+`virtio-gpu-pci`, so installing it replaces viogpudo on that device as well.
 
 ### 4. VM copy
 
@@ -235,6 +254,16 @@ Consequences for the plan:
   install stops there and the user has to approve it in the guest.
 - `~/VeilTriton/vm` (the earlier copy, cloned while the VM was running) stays only as a spare; the
   snapshot above is the restore point.
+
+## QEMU Base Version and Patches to Carry
+
+- The Triton fork `utmapp/qemu` `utm-edition` @`2934963d` is based on **QEMU 10.0.12** (merge commit
+  `6601422e1`, "Merge tag 'v10.0.12' into utm-edition"), one major version below Veil's bundled
+  11.1.3. A Veil build of the fork must carry Veil's own QEMU patches.
+- Apply the balloon patch to the Triton QEMU too:
+  `script/qemu-patches/0001-virtio-balloon-release-discarded-pages-on-darwin.patch`
+  (on `refactor/split-large-files` @`e7110fde`). It applies to the fork's
+  `hw/virtio/virtio-balloon.c` without fuzz (`patch -p1 --dry-run`).
 
 ## To Resume
 
