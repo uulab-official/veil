@@ -16,6 +16,12 @@ extension VeilHostShellApp {
         if isNeeded {
             fitMirroredWindowsOntoGuestDisplay()
         }
+        if model.health?.capabilities.windowLayout == true,
+           let windowIds = GuestFramebufferSource.shared.cropListToReport() {
+            Task { @MainActor in
+                await model.setCroppedWindows(windowIds: windowIds)
+            }
+        }
     }
 
     /// A mirrored window that reaches past the guest display or under the taskbar cannot be cropped from

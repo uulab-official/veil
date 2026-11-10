@@ -41,6 +41,8 @@ public protocol HostDashboardService: Sendable {
     func sendClipboardFiles(_ clipboard: ClipboardFilesSet) async throws
     func subscribeWindowFrames(windowId: String) async throws
     func unsubscribeWindowFrames(windowId: String) async throws
+    /// Tells the agent which windows the host shows by cropping the guest framebuffer (`window.crop.set`).
+    func setCroppedWindows(windowIds: [String]) async throws
     func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport
 }
 
@@ -70,6 +72,10 @@ public extension HostDashboardService {
         try await sendMouseInput(input)
         return nil
     }
+
+    /// Default for services without a guest framebuffer. Nothing is cropped there, so nothing is lost;
+    /// the list only lets the agent capture cropped windows less often.
+    func setCroppedWindows(windowIds: [String]) async throws {}
 
     func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse {
         WindowResizeResponse(

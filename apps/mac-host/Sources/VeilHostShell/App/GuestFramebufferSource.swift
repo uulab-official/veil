@@ -53,6 +53,29 @@ final class GuestFramebufferSource {
     }
 
     private var fitAttempts: [String: GuestPixelRect] = [:]
+    /// Windows whose view currently shows the cropped framebuffer instead of captured frames.
+    private(set) var croppingWindowIds: Set<String> = []
+    private var lastReportedCrop: (windowIds: Set<String>, at: Date)?
+
+    func setCropping(windowId: String, _ isCropping: Bool) {
+        if isCropping {
+            croppingWindowIds.insert(windowId)
+        } else {
+            croppingWindowIds.remove(windowId)
+        }
+    }
+
+    /// The crop list to send the agent now, or nil when it was sent recently and has not changed. The agent
+    /// lets a list lapse after six seconds, so it is repeated every two.
+    func cropListToReport(now: Date = Date()) -> [String]? {
+        if let lastReportedCrop,
+           lastReportedCrop.windowIds == croppingWindowIds,
+           now.timeIntervalSince(lastReportedCrop.at) < 2 {
+            return nil
+        }
+        lastReportedCrop = (croppingWindowIds, now)
+        return croppingWindowIds.sorted()
+    }
 
     /// True the first time a window is fitted at this frame, so a window that still does not fit is not
     /// resized again on every layout.

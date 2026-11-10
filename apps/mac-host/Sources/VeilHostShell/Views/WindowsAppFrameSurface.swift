@@ -77,7 +77,10 @@ struct WindowsAppFrameSurface: View {
                 // `window.layout` says the display shows all of this window; empty otherwise.
                 FramebufferCropView(
                     windowId: presentedSession.id,
-                    pointsPerPixel: WindowFrameViewport.pointsPerPixel(forWindowsScale: session.latestFrame?.scale ?? 1)
+                    pointsPerPixel: WindowFrameViewport.pointsPerPixel(forWindowsScale: session.latestFrame?.scale ?? 1),
+                    onAvailabilityChange: { [windowId = presentedSession.id] isCropping in
+                        GuestFramebufferSource.shared.setCropping(windowId: windowId, isCropping)
+                    }
                 )
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))

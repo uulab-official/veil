@@ -67,4 +67,14 @@ struct GuestWindowLayoutTests {
         #expect(CoherenceDisplayFit.needsFit(window: GuestPixelRect(x: 0, y: 300, width: 800, height: 540), display: display))
         #expect(!CoherenceDisplayFit.needsFit(window: GuestPixelRect(x: 40, y: 40, width: 800, height: 600), display: display))
     }
+
+    @Test func encodesTheCropSetFixtureShape() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("harness/protocol-fixtures/window.crop.set.json")
+        let fixture = try JSONDecoder.veilProtocol.decode(WindowCropSetRequest.self, from: Data(contentsOf: url))
+
+        #expect(fixture == WindowCropSetRequest(requestId: "req_window_crop_1A2B3C4D", windowIds: ["hwnd:000F0254"]))
+    }
 }

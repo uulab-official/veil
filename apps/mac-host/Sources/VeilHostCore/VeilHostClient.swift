@@ -1445,6 +1445,14 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    public func setCroppedWindows(windowIds: [String]) async throws {
+        try await sendAcknowledged(
+            encoder.encode(
+                WindowCropSetRequest(requestId: "req_window_crop_\(UUID().uuidString.prefix(8))", windowIds: windowIds)
+            )
+        )
+    }
+
     /// Sends a message the guest treats as fire-and-forget, but waits for the one reply frame
     /// when the agent advertises `operationAcks`: an `error` frame fails the call with the guest's
     /// own code, and a matching positive `operation.ack` confirms it. Only agents that have not

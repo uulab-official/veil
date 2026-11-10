@@ -74,6 +74,10 @@ final class FramebufferCropHostView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     func detach() {
+        if isShowingCrop {
+            isShowingCrop = false
+            onAvailabilityChange?(false)
+        }
         MainActor.assumeIsolated {
             if let frameToken {
                 GuestFramebufferSource.shared.removeSink(frameToken)

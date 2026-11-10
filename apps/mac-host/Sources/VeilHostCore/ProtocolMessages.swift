@@ -28,6 +28,7 @@ public enum MessageType: String, Codable, Sendable {
     case systemShutdownRequest = "system.shutdown.request"
     case systemShutdownResponse = "system.shutdown.response"
     case windowLayout = "window.layout"
+    case windowCropSet = "window.crop.set"
     case clipboardTextSet = "clipboard.text.set"
     case clipboardImageSet = "clipboard.image.set"
     case clipboardFilesSet = "clipboard.files.set"
@@ -556,6 +557,19 @@ public struct WindowFrameSubscribeRequest: Codable, Equatable, Sendable {
         self.windowId = windowId
         self.format = format
         self.tileFormat = tileFormat
+    }
+}
+
+/// `window.crop.set`: the windows the host shows by cropping the guest framebuffer. See docs/protocol.md.
+public struct WindowCropSetRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var windowIds: [String]
+
+    public init(requestId: String, windowIds: [String]) {
+        self.type = .windowCropSet
+        self.requestId = requestId
+        self.windowIds = windowIds
     }
 }
 

@@ -477,3 +477,19 @@ extension HostDashboardModel {
     /// tying it to the main actor would be a property of the enclosing model rather than of the rule.
     nonisolated static let maximumWindowTitleLength = 256
 }
+
+extension HostDashboardModel {
+    /// Tells the agent which windows the host shows by cropping the guest framebuffer, so it captures
+    /// them only about once a second (`window.crop.set`). A failure only costs guest CPU, so it is logged
+    /// rather than shown.
+    public func setCroppedWindows(windowIds: [String]) async {
+        guard hasLiveAgentConnection, health?.capabilities.windowLayout == true else {
+            return
+        }
+        do {
+            try await service.setCroppedWindows(windowIds: windowIds)
+        } catch {
+            VeilLog.window.error("Failed to report cropped windows: \(String(describing: error), privacy: .public)")
+        }
+    }
+}
