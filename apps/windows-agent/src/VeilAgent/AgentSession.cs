@@ -118,6 +118,7 @@ public sealed class AgentSession
                 MessageTypes.DisplayResizeRequest => await HandleDisplayResizeAsync(request, requestId, cancellationToken),
                 MessageTypes.SystemShutdownRequest => HandleSystemShutdown(requestId),
                 MessageTypes.FrameCaptureStrategySet => HandleFrameCaptureStrategySet(request, requestId),
+                MessageTypes.WindowCropSet => HandleWindowCropSet(request, requestId),
                 MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputText => await HandleTextInputAsync(request, requestId, cancellationToken),
@@ -1024,7 +1025,8 @@ public sealed class AgentSession
                 ["virtioGpuDisplay"] = VirtioGpuDisplay.IsDriverInstalled(),
                 // Lets the host shut Windows down through the agent instead of the ACPI power button.
                 ["systemShutdown"] = OperatingSystem.IsWindows(),
-                // Lets the host crop windows out of the guest framebuffer from window.layout events.
+                // Lets the host crop windows out of the guest framebuffer from window.layout events, and
+                // slow their capture with window.crop.set.
                 ["windowLayout"] = OperatingSystem.IsWindows(),
                 // Lets the host wait for the operation.ack reply on the fire-and-forget paths
                 // (input, clipboard, frame subscribe). An older host ignores it; an older agent
@@ -1067,6 +1069,27 @@ public sealed class AgentSession
             );
         }
 
+        return AgentReplies.Direct(OperationAck(requestId));
+    }
+
+    private AgentReplies HandleWindowCropSet(JsonObject request, string? requestId)
+    {
+        if (request["windowIds"] is not JsonArray windowIds)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "window.crop.set needs windowIds."));
+        }
+
+        HashSet<string> tracked;
+        lock (trackedWindowsGate)
+        {
+            tracked = trackedWindowsById.Keys.ToHashSet(StringComparer.Ordinal);
+        }
+
+        // Only tracked windows: the list slows their capture and must not name anything else.
+        FramebufferCropRegistry.Set(windowIds
+            .Select(node => node?.GetValue<string>())
+            .OfType<string>()
+            .Where(tracked.Contains));
         return AgentReplies.Direct(OperationAck(requestId));
     }
 

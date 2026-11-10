@@ -64,7 +64,8 @@ public sealed class WindowFrameStreamer
                 cadence.Wake();
                 // Capture right away rather than at the next tick: input usually changes the window within a
                 // frame, and the tick after this capture returns to the active interval through Retune.
-                if (fixedInterval is null)
+                // A window the host crops from the framebuffer already shows the change there.
+                if (fixedInterval is null && !FramebufferCropRegistry.IsCropped(window.WindowId))
                 {
                     timer.Period = ImmediateCaptureDelay;
                 }
@@ -85,7 +86,7 @@ public sealed class WindowFrameStreamer
                 // Transient capture failure. Treated as "no change" for cadence purposes, but never
                 // reported as a heartbeat: the host must still be able to see a stream that has stopped
                 // producing anything at all.
-                Retune(timer, cadence, cadenceGate, changed: false);
+                Retune(timer, cadence, cadenceGate, window.WindowId, changed: false);
                 continue;
             }
 
@@ -96,13 +97,13 @@ public sealed class WindowFrameStreamer
                     await onUnchanged(sequence, cancellationToken);
                 }
 
-                Retune(timer, cadence, cadenceGate, changed: false);
+                Retune(timer, cadence, cadenceGate, window.WindowId, changed: false);
                 continue;
             }
 
             await onFrame(result, cancellationToken);
             sequence += 1;
-            Retune(timer, cadence, cadenceGate, changed: true);
+            Retune(timer, cadence, cadenceGate, window.WindowId, changed: true);
         }
     }
 
@@ -118,14 +119,17 @@ public sealed class WindowFrameStreamer
         }
     }
 
-    private void Retune(PeriodicTimer timer, WindowFrameStreamCadence cadence, object cadenceGate, bool changed)
+    private void Retune(
+        PeriodicTimer timer, WindowFrameStreamCadence cadence, object cadenceGate, string windowId, bool changed)
     {
         lock (cadenceGate)
         {
             var next = cadence.Next(changed);
             if (fixedInterval is null)
             {
-                timer.Period = next;
+                timer.Period = FramebufferCropRegistry.IsCropped(windowId) && next < FramebufferCropRegistry.CroppedInterval
+                    ? FramebufferCropRegistry.CroppedInterval
+                    : next;
             }
         }
     }

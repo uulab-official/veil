@@ -30,6 +30,7 @@ public static class MessageTypes
     public const string FrameCaptureStrategySet = "frame.capture.strategy.set";
     public const string SystemShutdownResponse = "system.shutdown.response";
     public const string WindowLayout = "window.layout";
+    public const string WindowCropSet = "window.crop.set";
     public const string InputMouse = "input.mouse";
     public const string InputKey = "input.key";
     public const string InputText = "input.text";
