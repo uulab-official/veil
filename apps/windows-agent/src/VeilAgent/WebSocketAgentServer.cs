@@ -126,6 +126,13 @@ public sealed class WebSocketAgentServer
                 return;
             }
 
+            // Layouts go out only on change, so a host that connects later starts from the current one.
+            // Sent before the socket joins the broadcast list, where nothing else can write to it yet.
+            if (windowLayoutStreamer?.CurrentEvent() is { } currentLayout)
+            {
+                await SendTextAsync(socket, currentLayout.ToJsonString(ProtocolJson.Options), cancellationToken);
+            }
+
             clients[clientId] = socket;
 
             try

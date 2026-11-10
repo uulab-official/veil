@@ -80,9 +80,12 @@ public class WindowLayoutTests
         Assert.Equal(10, (int?)moved!["windows"]![0]!["frame"]!["x"]);
         Assert.Equal(2, (int?)moved["sequence"]);
 
+        Assert.Equal(2, (int?)streamer.CurrentEvent()!["sequence"]);
+
         tracked.Clear();
         var empty = streamer.NextEvent();
         Assert.Empty(empty!["windows"]!.AsArray());
         Assert.Null(streamer.NextEvent());
+        Assert.Null(streamer.CurrentEvent());
     }
 }

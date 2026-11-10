@@ -23,6 +23,7 @@ public sealed class WindowLayoutStreamer
     private readonly Func<TimeSpan, CancellationToken, Task> delay;
     private int sequence;
     private string? lastSent;
+    private JsonObject? lastEvent;
 
     public WindowLayoutStreamer(
         AgentSession session,
@@ -101,7 +102,9 @@ public sealed class WindowLayoutStreamer
 
             // The last tracked window went away: say so once, with an empty layout.
             lastSent = null;
-            return new WindowLayout(new WindowRect(0, 0, 0, 0), Array.Empty<WindowLayoutWindow>()).ToEvent(++sequence);
+            var empty = new WindowLayout(new WindowRect(0, 0, 0, 0), Array.Empty<WindowLayoutWindow>()).ToEvent(++sequence);
+            Volatile.Write(ref lastEvent, null);
+            return empty;
         }
 
         var layout = WindowLayoutComposer.Compose(current.ZOrdered, owners, current.Display, current.ForegroundWindowId);
@@ -112,6 +115,11 @@ public sealed class WindowLayoutStreamer
         }
 
         lastSent = key;
-        return layout.ToEvent(++sequence);
+        var layoutEvent = layout.ToEvent(++sequence);
+        Volatile.Write(ref lastEvent, layoutEvent);
+        return layoutEvent;
     }
+
+    /// <summary>The layout most recently sent, for a host that connects after it; null with no windows.</summary>
+    public JsonObject? CurrentEvent() => Volatile.Read(ref lastEvent)?.DeepClone().AsObject();
 }

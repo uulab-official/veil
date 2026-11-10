@@ -522,6 +522,7 @@ Rules:
   - The agent sends a layout only when it differs from the previous one.
   - It checks every 8 ms while windows are tracked and every 250 ms otherwise.
   - When the last tracked window goes away it sends one layout with no windows.
+  - A host that connects while windows are tracked receives the current layout first, before any other event.
 - **`sequence`:** counts up per agent process. The host ignores a layout older than one it has applied.
 - **Choosing a source per window:**
   - A window that is not `fullyVisible` keeps its `window.frame` stream.
