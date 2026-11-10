@@ -50,7 +50,13 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Engine build tools
-        run: brew install qemu swtpm llvm lld acpica
+        run: brew install qemu swtpm llvm lld acpica meson ninja pkgconf glib pixman libslirp dtc capstone zstd libpng jpeg-turbo
+
+      - name: Patched QEMU cache
+        uses: actions/cache@v4
+        with:
+          path: dist/.patched-qemu
+          key: patched-qemu-${{ hashFiles('script/build_patched_qemu.sh', 'script/qemu-patches/*.patch') }}
 
       - name: Secure Boot firmware cache
         uses: actions/cache@v4
