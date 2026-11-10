@@ -2,7 +2,7 @@
 
 Date: 2026-11-10
 
-Status: design, not implemented.
+Status: stages 1-3 implemented on 2026-11-10 (see "Implementation status" at the end); stages 4-5 open.
 
 ## Problem
 
@@ -163,3 +163,39 @@ Documented in `docs/protocol.md` before implementation:
 - **DPI.** Mac backing scale 2.0 means a 2560x1600 guest display for a 1280x800 Mac screen, four times the pixels the software renderer draws today. Start with scale 1.0 and measure before raising it.
 - **Several Mac displays and Spaces.** These are out of scope for the first stages. They use the fallback.
 - **Fullscreen and games.** Exclusive fullscreen keeps using the desktop view.
+
+## Implementation status (2026-11-10)
+
+**Agent**
+
+| Piece | Commit |
+|---|---|
+| `window.layout` from a z-ordered `EnumWindows` scan every 8 ms | `9c558c91` |
+| Current layout sent to a host that connects later | `51f134dc` |
+| Resized windows kept on the work area | `3a46ccd9` |
+| Windows pointer hidden while a host is connected | `37e77973` |
+| Cropped windows captured once a second (`window.crop.set`) | `95f5976d` |
+
+- The agent polls instead of using WinEvent hooks: a scan takes well under a millisecond and needs no message loop.
+- The pointer had to be hidden because the VirtIO GPU display draws it into the framebuffer, so cropped windows showed a second Windows pointer.
+
+**Host**
+
+| Piece | Commit |
+|---|---|
+| One passive VNC connection (`GuestFramebufferSource`, no wake pointer move) | `490ef6de` |
+| Per-window `contentsRect` crop over the captured frame | `490ef6de` |
+| One-time resize of windows past the display edge | `490ef6de` |
+| Crop list reported to the agent | `d1e882c5` |
+
+**Measured on the live Windows 11 Arm guest**
+
+- The guest display was 1280x768, with Paint at 1113x720 and `fullyVisible`.
+- While a stroke was being drawn, the framebuffer updated 26.7 times a second. That is the guest's own software-rendered present rate, so transport no longer limits it.
+- Agent captures for the cropped window dropped to about one a second.
+
+**Not done**
+
+- Stage 3 z-order and position push for several overlapping apps. A covered window falls back to captured frames, which is correct but slower.
+- Stage 4, the shared-memory QEMU listener.
+- Stage 5, GPU scanout.
