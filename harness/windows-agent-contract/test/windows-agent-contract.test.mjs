@@ -44,7 +44,11 @@ test("windows agent is wired to real HWND capture by default", async () => {
   assert.doesNotMatch(program, /new BootstrapPngFrameCapture\(\)/);
   assert.match(capture, /Task\.Run/);
   assert.match(capture, /PrintWindow/);
-  assert.match(capture, /GetWindowRect/);
+  // Window rectangles come from WindowGeometry: the visible frame inside GetWindowRect's invisible borders.
+  const geometry = await readFile(resolve(agentRoot, "src/VeilAgent/WindowGeometry.cs"), "utf8");
+  assert.match(capture, /WindowGeometry\.Read/);
+  assert.match(geometry, /GetWindowRect/);
+  assert.match(geometry, /DWMWA_EXTENDED_FRAME_BOUNDS/);
   assert.match(capture, /ImageFormat\.Png/);
 });
 
@@ -486,7 +490,7 @@ test("windows agent exposes an inbox app catalog for native-style Mac windows", 
   assert.match(desktop, /EnumWindows/);
   assert.match(desktop, /GetWindowThreadProcessId/);
   assert.match(desktop, /GetWindowText/);
-  assert.match(desktop, /GetWindowRect/);
+  assert.match(desktop, /WindowGeometry\.Read/);
 });
 
 test("windows agent sample launch flow emits Notepad window and first frame", async () => {
