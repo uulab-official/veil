@@ -191,6 +191,18 @@ final class RFBEmbeddedDisplayModel {
         worker?.sendKey(key)
     }
 
+    var framebufferPixelSize: (width: Int, height: Int)? {
+        worker?.framebufferPixelSize
+    }
+
+    func sendPointer(x: Int, y: Int, buttonMask: UInt8) {
+        worker?.sendPointer(x: x, y: y, buttonMask: buttonMask)
+    }
+
+    func sendWheel(x: Int, y: Int, buttonMask: UInt8, notches: [UInt8]) {
+        worker?.sendWheel(x: x, y: y, buttonMask: buttonMask, notches: notches)
+    }
+
     /// Keeps the last transport failure visible until the scheduled retry actually starts. Without
     /// this state, a timed-out VM looks indistinguishable from a healthy connection still opening.
     func showConnectionFailure(_ message: String) {
@@ -441,6 +453,49 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
         } catch {
             // The read loop owns reconnect/recovery. A transient input write should
             // not block the UI while that loop repairs the stream.
+        }
+    }
+
+    /// The current framebuffer size, for mapping view points to pixels.
+    var framebufferPixelSize: (width: Int, height: Int)? {
+        lock.lock()
+        let activeClient = client
+        lock.unlock()
+        guard let serverInit = activeClient?.serverInit else {
+            return nil
+        }
+        return (serverInit.width, serverInit.height)
+    }
+
+    /// Sends one pointer state: position plus the buttons held. Moves, drags, presses, and releases all
+    /// travel this way, so a held button stays held while the pointer moves.
+    func sendPointer(x: Int, y: Int, buttonMask: UInt8) {
+        sendPointerEvents(x: x, y: y, masks: [buttonMask])
+    }
+
+    /// Scrolls by pressing and releasing a wheel button per notch, keeping held buttons held.
+    func sendWheel(x: Int, y: Int, buttonMask: UInt8, notches: [UInt8]) {
+        sendPointerEvents(x: x, y: y, masks: notches.flatMap { [buttonMask | $0, buttonMask] })
+    }
+
+    private func sendPointerEvents(x: Int, y: Int, masks: [UInt8]) {
+        lock.lock()
+        let activeClient = client
+        lock.unlock()
+        guard let activeClient, let serverInit = activeClient.serverInit, !masks.isEmpty else {
+            return
+        }
+
+        let clampedX = min(max(x, 0), max(0, serverInit.width - 1))
+        let clampedY = min(max(y, 0), max(0, serverInit.height - 1))
+        writeLock.lock()
+        defer { writeLock.unlock() }
+        do {
+            for mask in masks {
+                try activeClient.sendPointerEvent(buttonMask: mask, x: clampedX, y: clampedY)
+            }
+        } catch {
+            // The read loop owns reconnect/recovery.
         }
     }
 

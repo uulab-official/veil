@@ -362,3 +362,55 @@ public struct RFBDesktopResizeRejection: Equatable, Sendable {
         self.resultCode = resultCode
     }
 }
+
+/// RFB pointer button bits and wheel notches for the desktop view.
+///
+/// RFB has no wheel amount: each notch is a press and release of button 4 (up), 5 (down), 6 (left), or
+/// 7 (right), so scrolling is sent as whole notches with the fraction kept for the next event.
+public enum RFBPointerButtons {
+    public static let left: UInt8 = 1 << 0
+    public static let middle: UInt8 = 1 << 1
+    public static let right: UInt8 = 1 << 2
+    public static let wheelUp: UInt8 = 1 << 3
+    public static let wheelDown: UInt8 = 1 << 4
+    public static let wheelLeft: UInt8 = 1 << 5
+    public static let wheelRight: UInt8 = 1 << 6
+
+    /// The button bit for an AppKit button number (0 left, 1 right, 2 middle), or nil for side buttons,
+    /// which RFB cannot express.
+    public static func bit(forButtonNumber number: Int) -> UInt8? {
+        switch number {
+        case 0: left
+        case 1: right
+        case 2: middle
+        default: nil
+        }
+    }
+
+    /// One wheel button per notch, in the order to press them. `deltaX`/`deltaY` use the Windows signs
+    /// from `WindowsScrollAmount`: positive scrolls up or right.
+    public static func wheelNotches(deltaX: Int, deltaY: Int) -> [UInt8] {
+        Array(repeating: deltaY > 0 ? wheelUp : wheelDown, count: abs(deltaY))
+            + Array(repeating: deltaX > 0 ? wheelRight : wheelLeft, count: abs(deltaX))
+    }
+
+    /// Maps a point in the view to a framebuffer pixel, clamped to the framebuffer so a drag that leaves
+    /// the picture keeps the button held at the nearest edge instead of being dropped.
+    public static func framebufferPixel(
+        pointInContainer: CGPoint,
+        viewport: CGRect,
+        framebufferWidth: Int,
+        framebufferHeight: Int
+    ) -> (x: Int, y: Int)? {
+        guard viewport.width > 0, viewport.height > 0, framebufferWidth > 0, framebufferHeight > 0 else {
+            return nil
+        }
+
+        let normalizedX = min(max((pointInContainer.x - viewport.minX) / viewport.width, 0), 1)
+        // AppKit's y grows upward; the framebuffer's grows downward.
+        let normalizedY = 1 - min(max((pointInContainer.y - viewport.minY) / viewport.height, 0), 1)
+        let x = Int((normalizedX * Double(framebufferWidth - 1)).rounded())
+        let y = Int((normalizedY * Double(framebufferHeight - 1)).rounded())
+        return (x, y)
+    }
+}

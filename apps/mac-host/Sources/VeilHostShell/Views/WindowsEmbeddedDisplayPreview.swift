@@ -122,6 +122,7 @@ struct WindowsEmbeddedDisplayPreview: View {
             ConsolePreviewInputCaptureView(
                 framebufferSize: renderedFramebufferSize,
                 commandKeyMapping: commandKeyMapping,
+                rfbDisplayModel: surface.kind == .vncLoopback ? rfbDisplayModel : nil,
                 pointerTapAction: { normalizedX, normalizedY in
                     if surface.kind == .vncLoopback {
                         rfbDisplayModel.sendPointerTap(
@@ -271,6 +272,9 @@ enum WindowsDisplayAspectRatioPolicy {
 struct ConsolePreviewInputCaptureView: NSViewRepresentable {
     var framebufferSize: CGSize
     var commandKeyMapping: VMCommandKeyMapping
+    /// When set, the view sends every pointer change over RFB (moves, drags, both buttons, scrolling)
+    /// instead of reducing a press to a tap.
+    var rfbDisplayModel: RFBEmbeddedDisplayModel? = nil
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
 
@@ -278,6 +282,7 @@ struct ConsolePreviewInputCaptureView: NSViewRepresentable {
         let view = ConsolePreviewInputCaptureNSView()
         view.framebufferSize = framebufferSize
         view.keyboardMapper.commandKeyMapping = commandKeyMapping
+        view.rfbDisplayModel = rfbDisplayModel
         view.pointerTapAction = pointerTapAction
         view.keyAction = keyAction
         return view
@@ -286,6 +291,7 @@ struct ConsolePreviewInputCaptureView: NSViewRepresentable {
     func updateNSView(_ nsView: ConsolePreviewInputCaptureNSView, context: Context) {
         nsView.framebufferSize = framebufferSize
         nsView.keyboardMapper.commandKeyMapping = commandKeyMapping
+        nsView.rfbDisplayModel = rfbDisplayModel
         nsView.pointerTapAction = pointerTapAction
         nsView.keyAction = keyAction
     }
@@ -296,12 +302,107 @@ final class ConsolePreviewInputCaptureNSView: NSView {
     var pointerTapAction: ((Double, Double) -> Void)?
     var keyAction: ((String) -> Void)?
     var keyboardMapper = QEMUConsoleKeyboardInputMapper()
+    weak var rfbDisplayModel: RFBEmbeddedDisplayModel?
+    /// RFB buttons currently held, sent with every move so a drag keeps its button down.
+    private var heldButtons: UInt8 = 0
+    private var scrollRemainder = (x: 0.0, y: 0.0)
+    private var trackingArea: NSTrackingArea?
 
     override var acceptsFirstResponder: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        sendPointerTap(event)
+        if !sendPointerButton(event, isDown: true) {
+            sendPointerTap(event)
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) { sendPointerButton(event, isDown: false) }
+    override func rightMouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        sendPointerButton(event, isDown: true)
+    }
+    override func rightMouseUp(with event: NSEvent) { sendPointerButton(event, isDown: false) }
+    override func otherMouseDown(with event: NSEvent) { sendPointerButton(event, isDown: true) }
+    override func otherMouseUp(with event: NSEvent) { sendPointerButton(event, isDown: false) }
+    override func mouseMoved(with event: NSEvent) { sendPointerMove(event) }
+    override func mouseDragged(with event: NSEvent) { sendPointerMove(event) }
+    override func rightMouseDragged(with event: NSEvent) { sendPointerMove(event) }
+    override func otherMouseDragged(with event: NSEvent) { sendPointerMove(event) }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard let rfbDisplayModel, let pixel = framebufferPixel(event) else {
+            super.scrollWheel(with: event)
+            return
+        }
+
+        // Same feel as mirrored app windows: about 60 points of trackpad travel per wheel notch, and one
+        // notch per line of a stepped mouse wheel.
+        let notchesPerDelta = event.hasPreciseScrollingDeltas ? 1.0 / 60.0 : 1.0
+        let amount = WindowsScrollAmount.accumulate(
+            remainder: scrollRemainder,
+            scrollingDeltaX: Double(event.scrollingDeltaX),
+            scrollingDeltaY: Double(event.scrollingDeltaY),
+            unitsPerDelta: notchesPerDelta
+        )
+        scrollRemainder = amount.remainder
+        let notches = RFBPointerButtons.wheelNotches(deltaX: amount.deltaX, deltaY: amount.deltaY)
+        rfbDisplayModel.sendWheel(x: pixel.x, y: pixel.y, buttonMask: heldButtons, notches: notches)
+    }
+
+    /// Returns false when this view has no RFB session, so the caller falls back to a tap.
+    @discardableResult
+    private func sendPointerButton(_ event: NSEvent, isDown: Bool) -> Bool {
+        guard let rfbDisplayModel, let pixel = framebufferPixel(event) else {
+            return false
+        }
+        guard let bit = RFBPointerButtons.bit(forButtonNumber: event.buttonNumber) else {
+            return true
+        }
+
+        heldButtons = isDown ? heldButtons | bit : heldButtons & ~bit
+        rfbDisplayModel.sendPointer(x: pixel.x, y: pixel.y, buttonMask: heldButtons)
+        return true
+    }
+
+    private func sendPointerMove(_ event: NSEvent) {
+        guard let rfbDisplayModel, let pixel = framebufferPixel(event) else {
+            return
+        }
+        rfbDisplayModel.sendPointer(x: pixel.x, y: pixel.y, buttonMask: heldButtons)
+    }
+
+    private func framebufferPixel(_ event: NSEvent) -> (x: Int, y: Int)? {
+        guard let size = rfbDisplayModel?.framebufferPixelSize else {
+            return nil
+        }
+        let viewport = RFBViewportMapper.viewport(
+            framebufferWidth: Double(size.width),
+            framebufferHeight: Double(size.height),
+            containerWidth: bounds.width,
+            containerHeight: bounds.height
+        )
+        return RFBPointerButtons.framebufferPixel(
+            pointInContainer: convert(event.locationInWindow, from: nil),
+            viewport: viewport,
+            framebufferWidth: size.width,
+            framebufferHeight: size.height
+        )
     }
 
     override func keyDown(with event: NSEvent) {
