@@ -58,6 +58,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     /// window so the real Windows HWND can follow without sending one request per drag event.
     /// Window id, content width and height in points, and the size of the Mac screen the window is on.
     var onWindowResize: ((String, Int, Int, CGSize?) -> Void)?
+    /// A mirrored window became the Mac's key window.
+    var onWindowBecameKey: ((String) -> Void)?
 
     var visibleWindowIds: [String] {
         windowOrder.filter { windowsById[$0] != nil }
@@ -325,6 +327,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         foregroundWindowId = windowId
         WindowsAppDockIcon.showInDock(identitiesById[windowId])
         observeOtherWindowsBecomingKey()
+        onWindowBecameKey?(windowId)
     }
 
 #if DEBUG

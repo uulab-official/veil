@@ -24,6 +24,21 @@ extension VeilHostShellApp {
         }
     }
 
+    /// Raises a window in Windows when its Mac window becomes key and another app's window covers it there,
+    /// so the guest z-order follows the Mac's and the window can be cropped from the framebuffer again.
+    /// Without this it stayed on captured frames until the first click reached it.
+    func raiseGuestWindowForCrop(windowId: String) async {
+        guard model.health?.capabilities.windowLayout == true,
+              let window = GuestWindowLayoutStore.shared.latest?.windows.first(where: { $0.windowId == windowId }),
+              window.isShown,
+              !window.fullyVisible,
+              !window.isForeground,
+              model.mirrorSessions.first(where: { $0.id == windowId })?.window.isPopup == false else {
+            return
+        }
+        _ = await model.focusMirrorSession(windowId: windowId)
+    }
+
     /// A mirrored window that reaches past the guest display or under the taskbar cannot be cropped from
     /// the framebuffer. Re-sending its size grows the display to fit (`MirroredWindowDisplayFit`) and lets
     /// the agent move the window back onto the work area. Sent once per window and size.

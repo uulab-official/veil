@@ -105,6 +105,11 @@ extension VeilHostShellApp {
                 )
             }
         }
+        windowsAppWindowPresenter.onWindowBecameKey = { windowId in
+            Task { @MainActor in
+                await raiseGuestWindowForCrop(windowId: windowId)
+            }
+        }
         windowsAppWindowPresenter.onDropRefused = { refusal in
             Task { @MainActor in
                 model.recordFileDropRefusal(refusal)
