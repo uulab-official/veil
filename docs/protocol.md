@@ -531,6 +531,28 @@ Rules:
 
 Fixture: `harness/protocol-fixtures/window.layout.json`.
 
+## Window Crop Set
+
+Request (host → agent), sent when the agent advertises `capabilities.windowLayout`:
+
+```json
+{
+  "type": "window.crop.set",
+  "requestId": "req_window_crop_1A2B3C4D",
+  "windowIds": ["hwnd:000F0254"]
+}
+```
+
+Rules:
+
+- **Meaning:** `windowIds` lists the windows the host currently shows by cropping the guest framebuffer. Each request replaces the previous list, and an empty list means none.
+- **Effect:** the agent keeps their frame streams but captures them about once a second instead of up to 120 times. The host still reads each window's size and scale from those frames, while the pixels the user sees come from the framebuffer.
+- **Validation:** the agent ignores ids it does not track.
+- **Expiry:** the host repeats the list every two seconds. The agent lets a list lapse after six, so windows are not left slowed if the host goes away.
+- **Reply:** the agent answers with `operation.ack`, or with `error` code `invalid_message` when `windowIds` is missing.
+
+Fixture: `harness/protocol-fixtures/window.crop.set.json`.
+
 ## Window Frame
 
 Example production-sized frame event from guest to host:
