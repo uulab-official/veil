@@ -76,6 +76,7 @@ Response:
     "displayResize": true,
     "virtioGpuDisplay": true,
     "systemShutdown": true,
+    "windowLayout": true,
     "binaryFrameChannel": true,
     "sharedFolder": true,
     "clipboardImage": true,
@@ -140,6 +141,9 @@ the device list is part of the machine a saved memory state belongs to. See
 
 `capabilities.systemShutdown` is optional. `true` means the agent accepts `system.shutdown.request`;
 an absent value means it predates the message, and the host uses the ACPI power button instead.
+
+`capabilities.windowLayout` is optional. `true` means the agent sends `window.layout` events. When the value
+is absent, the host receives every window's pixels through `window.frame` as before.
 
 `capabilities.packageIdentity` is `true` only when the Windows agent is running
 with Windows package identity. The agent reads this from Windows' app model
@@ -477,6 +481,54 @@ Rules:
 
 - `window.updated` must refer to a tracked HWND.
 - The host updates title, bounds, state, and focus metadata without resetting the current frame stream or timing evidence.
+
+## Window Layout
+
+Event (agent → host), sent when the agent advertises `capabilities.windowLayout`:
+
+```json
+{
+  "type": "window.layout",
+  "sequence": 412,
+  "display": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+  "windows": [
+    {
+      "windowId": "hwnd:000F0254",
+      "ownerWindowId": null,
+      "frame": { "x": 120, "y": 80, "width": 1299, "height": 840 },
+      "zOrder": 0,
+      "isForeground": true,
+      "isShown": true,
+      "fullyVisible": true
+    }
+  ]
+}
+```
+
+Fields:
+
+- `display` is the guest's virtual screen.
+- `windows` lists every tracked window, topmost first.
+- Each window has:
+  - `frame`: its visible frame in display pixels (see Window Geometry).
+  - `zOrder`: its rank among tracked windows, 0 at the top.
+  - `isShown`: false while the window is hidden, minimized, or cloaked.
+  - `fullyVisible`: true when the framebuffer shows the whole window. That means it is shown, it lies inside `display`, and no shown window of another process above it overlaps it. Windows of the same process above it, such as its menus and dialogs, do not count, since their pixels are what belongs there.
+
+Rules:
+
+- **Purpose:** this lets the host take a window's pixels from the guest display it already receives and crop each window into its Mac window, instead of having the agent capture, encode, and send frames. The design is in `docs/superpowers/specs/2026-11-10-coherence-framebuffer-design.md`.
+- **When it is sent:**
+  - The agent sends a layout only when it differs from the previous one.
+  - It checks every 8 ms while windows are tracked and every 250 ms otherwise.
+  - When the last tracked window goes away it sends one layout with no windows.
+- **`sequence`:** counts up per agent process. The host ignores a layout older than one it has applied.
+- **Choosing a source per window:**
+  - A window that is not `fullyVisible` keeps its `window.frame` stream.
+  - The host may crop a `fullyVisible` window from the framebuffer and pause its frame stream.
+- **Read-only:** the message moves no window. Positioning and z-order requests stay with `window.resize.request` and `window.focus.request`.
+
+Fixture: `harness/protocol-fixtures/window.layout.json`.
 
 ## Window Frame
 

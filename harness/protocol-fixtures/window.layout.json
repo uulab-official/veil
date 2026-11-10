@@ -1,0 +1,25 @@
+{
+  "type": "window.layout",
+  "sequence": 412,
+  "display": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+  "windows": [
+    {
+      "windowId": "hwnd:000F0254",
+      "ownerWindowId": null,
+      "frame": { "x": 120, "y": 80, "width": 1299, "height": 840 },
+      "zOrder": 0,
+      "isForeground": true,
+      "isShown": true,
+      "fullyVisible": true
+    },
+    {
+      "windowId": "hwnd:0003029A",
+      "ownerWindowId": null,
+      "frame": { "x": 900, "y": 300, "width": 800, "height": 600 },
+      "zOrder": 1,
+      "isForeground": false,
+      "isShown": true,
+      "fullyVisible": false
+    }
+  ]
+}
