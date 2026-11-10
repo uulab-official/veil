@@ -198,8 +198,8 @@ took in the guest, so the host can see where frame time goes without reading gue
 ```
 
 Means are exponentially weighted (factor 0.1), so they follow the current workload. `methods` counts
-captures by method: `screen` copies the already composed screen, `printWindow` asks the app to render
-itself. `strategy` is the method in force; see [Frame Capture Strategy](#frame-capture-strategy).
+captures by method: `duplication` reads the desktop DWM already composed through DXGI Desktop
+Duplication, `screen` copies the screen with GDI, `printWindow` asks the app to render itself. `strategy` is the method in force; see [Frame Capture Strategy](#frame-capture-strategy).
 Hosts must not depend on the phase names, which may change with the capture code.
 
 ## App List
@@ -958,8 +958,9 @@ Diagnostic host request:
 }
 ```
 
-`strategy` is `auto` (the default: copy the screen when the window is fully visible and on top,
-otherwise `PrintWindow`), `screen`, or `printWindow`. The agent answers with an `operation.ack`, or an
+`strategy` is `auto` (the default: read a fully visible, on-top window from DXGI Desktop Duplication,
+falling back to a GDI screen copy if duplication is unavailable, and use `PrintWindow` otherwise),
+`duplication`, `screen`, or `printWindow`. The agent answers with an `operation.ack`, or an
 `error` with code `invalid_message` for any other value, and clears the `frameCapture` times in health so
 they describe only the new method.
 
