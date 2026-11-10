@@ -49,6 +49,7 @@ public sealed class WindowFrameStreamer
         // A powered-off display stops apps from redrawing, so a mirrored window would freeze at its
         // last composed pixels.
         using var displayHold = keepAwake.Hold();
+        using var timerResolution = TimerResolution.Hold();
         var sequence = firstSequence;
         var cadence = cadenceFactory();
         var cadenceGate = new object();

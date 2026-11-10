@@ -16,9 +16,10 @@ namespace Veil.Agent;
 /// </remarks>
 public sealed class WindowFrameStreamCadence
 {
-    // One display refresh at 60 Hz. At 33 ms a drawn stroke trailed the pointer by up to two refreshes
-    // before capture even started.
-    public static readonly TimeSpan DefaultActiveInterval = TimeSpan.FromMilliseconds(16);
+    // One display refresh at 120 Hz. An unchanged tick costs well under a millisecond with Desktop
+    // Duplication, so sampling at ProMotion rates no longer costs the guest; at 16 ms a change waited up to
+    // a full 60 Hz refresh before capture started. Needs the 1 ms timer resolution from TimerResolution.
+    public static readonly TimeSpan DefaultActiveInterval = TimeSpan.FromMilliseconds(8);
     public static readonly TimeSpan DefaultIdleInterval = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
@@ -28,7 +29,7 @@ public sealed class WindowFrameStreamCadence
     /// Small enough that a genuinely idle window drops to the cheap rate quickly, large enough that a
     /// pause between keystrokes does not cost the user a visible lag spike on the next change.
     /// </remarks>
-    public const int DefaultUnchangedTicksBeforeIdle = 15;
+    public const int DefaultUnchangedTicksBeforeIdle = 30;
 
     private readonly TimeSpan activeInterval;
     private readonly TimeSpan idleInterval;
