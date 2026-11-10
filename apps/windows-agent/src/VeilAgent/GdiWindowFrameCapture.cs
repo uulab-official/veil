@@ -19,6 +19,7 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
 
     public void SetTileFormat(string windowId, byte format) => tileFormatsByWindowId[windowId] = format;
     private readonly object pixelGate = new();
+    private readonly WindowGeometrySettling geometrySettling = new();
 
     public Task<WindowFrame> CaptureFrameAsync(LaunchedWindow window, int sequence, CancellationToken cancellationToken)
     {
@@ -53,6 +54,12 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
             var geometry = GetCaptureGeometry(window);
             var bounds = geometry.Visible;
             var strategy = diagnostics.Strategy;
+            if (strategy == FrameCaptureDiagnostics.AutomaticStrategy
+                && geometrySettling.IsSettling(window.WindowId, geometry.Outer, Environment.TickCount64))
+            {
+                // What DWM last composed predates the move or resize; see WindowGeometrySettling.
+                strategy = FrameCaptureDiagnostics.PrintWindowStrategy;
+            }
             var tileFormat = tileFormatsByWindowId.GetValueOrDefault(window.WindowId, FrameChannelCodec.PngFormat);
             var deflatesTile = tileFormat == FrameChannelCodec.BgraDeflateFormat;
             var bitmap = ReusableBitmap(window.WindowId, geometry.Outer);
@@ -186,6 +193,7 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         }
 
         duplicationVersionsByWindowId.TryRemove(windowId, out _);
+        geometrySettling.Forget(windowId);
         lock (bitmapsByWindowId)
         {
             if (bitmapsByWindowId.Remove(windowId, out var bitmap))
