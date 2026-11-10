@@ -234,6 +234,7 @@ extension LocalVMRuntimeService {
     call "%~dp0Install Veil Agent.cmd" %*
     :veil_after_agent_command
     set VEIL_EXIT_CODE=%errorlevel%
+    if "%VEIL_EXIT_CODE%"=="0" exit /b 0
     if not "%VEIL_AGENT_AUTOMATION_HOLD%"=="0" (
         echo.
         echo Veil automation status will remain visible for %VEIL_AGENT_AUTOMATION_HOLD% seconds.
@@ -247,7 +248,7 @@ extension LocalVMRuntimeService {
     Veil Guest Agent
 
     Run Install Veil Agent.cmd after Windows 11 reaches the desktop.
-    V.cmd is the short automation entrypoint used by the macOS host. It runs Repair Veil Agent Connectivity.cmd when present, falls back to Install Veil Agent.cmd for older media layouts, and keeps the console visible briefly so macOS post-attempt screenshots can capture success or failure text.
+    V.cmd is the short automation entrypoint used by the macOS host. It runs Repair Veil Agent Connectivity.cmd when present, falls back to Install Veil Agent.cmd for older media layouts, and, when it fails, keeps the console visible briefly so macOS post-attempt screenshots can capture the failure text. A success closes the console at once, since the agent's health reply already proves it.
     P.cmd is the short sparse-package automation entrypoint used by veil-vmctl qemu-prepare-sparse-package. It runs Prepare Sparse Package.cmd and keeps the console visible briefly so package identity status is visible in post-attempt screenshots.
     The installer uses the packaged VeilAgent.exe bundle when present, registers the VeilAgent user logon task when Windows allows it, and listens inside Windows on 0.0.0.0:18444 so the macOS host can connect through QEMU at ws://127.0.0.1:18444/.
     Bootstrap and installer logs are written under %LOCALAPPDATA%\\Veil\\Agent\\logs.

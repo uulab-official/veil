@@ -551,7 +551,9 @@ extension VeilHostShellApp {
             VeilLog.runtime.notice("Tools update started.")
             displayMessage = String(localized: "Updating Windows tools. When Windows asks for approval, choose Yes.")
             // The approval prompt appears on the Windows desktop; the launcher would hide it, and an
-            // unanswered prompt left the update to fail without the user ever seeing it.
+            // unanswered prompt left the update to fail without the user ever seeing it. Most updates
+            // need no approval now, so a successful one returns to the view the user had.
+            let viewModeBeforeUpdate = shellNavigation.viewMode
             shellNavigation.showsWindowsDesktop = true
             if let refusal = await vmModel.insertGuestToolsUpdateMedia() {
                 VeilLog.runtime.notice("Tools update media refused: \(refusal, privacy: .public)")
@@ -595,6 +597,7 @@ extension VeilHostShellApp {
             await recordGuestAgentInstallEvidenceIfNeeded()
 
             if installedVersion == bundledVersion {
+                shellNavigation.viewMode = viewModeBeforeUpdate
                 displayMessage = String(localized: "Windows tools updated. Restart Windows once so the screen follows the window size.")
             } else {
                 displayMessage = String(localized: "Windows tools are not updated yet. If the Windows approval prompt is still open, choose Yes; otherwise choose Update Tools again.")
