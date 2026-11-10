@@ -134,6 +134,7 @@ public sealed class WebSocketAgentServer
             }
 
             clients[clientId] = socket;
+            using var hostCursor = GuestCursorVisibility.HostConnected();
 
             try
             {
