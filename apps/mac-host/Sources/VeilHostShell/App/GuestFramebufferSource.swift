@@ -130,7 +130,26 @@ final class GuestFramebufferSource {
         return true
     }
 
+    /// When recent frames arrived, for the debug statistics below.
+    private var recentFrameTimes: [Date] = []
+
+    /// The frame source and how many frames arrived in the last five seconds.
+    func statistics(now: Date = Date()) -> [String: Any] {
+        let recent = recentFrameTimes.filter { now.timeIntervalSince($0) <= 5 }
+        return [
+            "source": sourceName,
+            "framesLast5s": recent.count,
+            "framesPerSecond": Double(recent.count) / 5,
+            "croppingWindowIds": croppingWindowIds.sorted()
+        ]
+    }
+
     private func deliver(_ image: CGImage) {
+        let now = Date()
+        recentFrameTimes.append(now)
+        if recentFrameTimes.count > 1_200 {
+            recentFrameTimes.removeFirst(recentFrameTimes.count - 1_200)
+        }
         latestFrame = image
         for sink in sinks.values {
             sink(image)

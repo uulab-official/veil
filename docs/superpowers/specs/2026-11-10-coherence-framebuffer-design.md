@@ -197,5 +197,7 @@ Documented in `docs/protocol.md` before implementation:
 **Not done**
 
 - Stage 3 z-order and position push for several overlapping apps. A covered window falls back to captured frames, which is correct but slower.
-- Stage 4, the shared-memory QEMU listener: built and verified against an Alpine guest (patch 0003, `SharedFramebufferClient`). Not yet measured on Windows, which needs a cold start on the rebuilt runtime.
+- Stage 4 is implemented: the shared-memory QEMU listener (patch 0003, `SharedFramebufferClient`, `a8f85f7f` and earlier). Measured on Windows after a cold start on the rebuilt runtime:
+  - With Veil's own frames counted (`org.uulab.veil.debug.framebufferStats`), a QMP-driven stroke in Paint showed 228 frames in 5 s, 45.6 a second. VNC gave 26.7 a second.
+  - A ten-step resize of the Mac window, from 1010x607 to 1180x700 at 120 ms a step, showed no desktop in any of 16 window captures, because each moved or resized window settles for 300 ms before cropping resumes.
 - Stage 5, GPU scanout.

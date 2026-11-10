@@ -276,6 +276,25 @@ extension VeilHostShellApp {
                 updateGuestTools(presentsWindowsDesktop: false)
             }
         }
+        // Writes the Coherence framebuffer's source and recent frame rate to Diagnostics, for measuring
+        // the display path from a script without touching the Mac.
+        DebugViewModeObserver.framebufferStatsToken = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("org.uulab.veil.debug.framebufferStats"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                let url = VeilApplicationSupport.directory
+                    .appendingPathComponent("Diagnostics", isDirectory: true)
+                    .appendingPathComponent("framebuffer-stats.json")
+                if let data = try? JSONSerialization.data(
+                    withJSONObject: GuestFramebufferSource.shared.statistics(),
+                    options: [.prettyPrinted, .sortedKeys]
+                ) {
+                    try? data.write(to: url)
+                }
+            }
+        }
         DebugViewModeObserver.launchAppToken = DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("org.uulab.veil.debug.launchApp"),
             object: nil,
@@ -309,6 +328,7 @@ extension VeilHostShellApp {
         @MainActor static var token: NSObjectProtocol?
         @MainActor static var updateToolsToken: NSObjectProtocol?
         @MainActor static var launchAppToken: NSObjectProtocol?
+        @MainActor static var framebufferStatsToken: NSObjectProtocol?
     }
 #endif
 
