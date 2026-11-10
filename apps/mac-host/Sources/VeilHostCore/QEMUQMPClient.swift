@@ -19,7 +19,8 @@ public struct QEMUProcessOutcome: Equatable, Sendable {
 ///
 /// Veil deliberately models only the commands the Windows App Runtime needs -- runtime state,
 /// pause/resume, memory-state save, removable disc change, the HMP bridge used for internal disk
-/// snapshots, and USB device attach/detach -- instead of exposing a general QEMU control surface.
+/// snapshots, USB device attach/detach, and memory balloon sizing -- instead of exposing a general
+/// QEMU control surface.
 /// Adding a case here is a protocol-boundary decision, not a convenience.
 public enum QEMUQMPCommand: Equatable, Sendable {
     /// Required handshake before any other command on a freshly opened QMP connection.
@@ -62,6 +63,12 @@ public enum QEMUQMPCommand: Equatable, Sendable {
     case queryUSBDeviceAttached(id: String)
     /// Presses the VM's ACPI power button. Windows decides whether to shut down.
     case systemPowerdown
+    /// Asks the guest's balloon driver to resize the guest to this many bytes (`QEMUMemoryBalloon`).
+    case setBalloonTarget(bytes: Int64)
+    /// The guest's current size through the balloon, in bytes.
+    case queryBalloon
+    /// The memory statistics the balloon driver last reported (`guest-stats`).
+    case queryBalloonStatistics(deviceID: String)
     case quit
 
     public var executeName: String {
@@ -102,6 +109,12 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "qom-get"
         case .systemPowerdown:
             "system_powerdown"
+        case .setBalloonTarget:
+            "balloon"
+        case .queryBalloon:
+            "query-balloon"
+        case .queryBalloonStatistics:
+            "qom-get"
         case .quit:
             "quit"
         }
@@ -146,6 +159,12 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "USB device attach state query \(id)"
         case .systemPowerdown:
             "VM power button press"
+        case .setBalloonTarget(let bytes):
+            "memory balloon resize to \(bytes) bytes"
+        case .queryBalloon:
+            "memory balloon size query"
+        case .queryBalloonStatistics:
+            "memory balloon statistics query"
         case .quit:
             "QEMU process quit"
         }
@@ -184,6 +203,10 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             return ["id": id]
         case .queryUSBDeviceAttached(let id):
             return ["path": "/machine/peripheral/\(id)", "property": "attached"]
+        case .setBalloonTarget(let bytes):
+            return ["value": bytes]
+        case .queryBalloonStatistics(let deviceID):
+            return ["path": "/machine/peripheral/\(deviceID)", "property": "guest-stats"]
         default:
             return nil
         }
@@ -224,6 +247,11 @@ public struct QEMUQMPReply: Equatable, Sendable {
     public var jobsReturn: [QEMUQMPJob]?
     /// A bare boolean return, as `qom-get` gives for a boolean property.
     public var boolReturn: Bool?
+    /// `actual` from `query-balloon`.
+    public var balloonActualBytes: Int64?
+    /// `guest-stats` from the balloon device: each `stat-*` value plus `last-update`, in bytes and
+    /// seconds since the epoch. QEMU reports a statistic the driver never sent as -1.
+    public var balloonStatistics: [String: Int64]?
 
     public init(
         id: String?,
@@ -234,7 +262,9 @@ public struct QEMUQMPReply: Equatable, Sendable {
         statusReturn: String? = nil,
         isRunning: Bool? = nil,
         jobsReturn: [QEMUQMPJob]? = nil,
-        boolReturn: Bool? = nil
+        boolReturn: Bool? = nil,
+        balloonActualBytes: Int64? = nil,
+        balloonStatistics: [String: Int64]? = nil
     ) {
         self.id = id
         self.isSuccess = isSuccess
@@ -245,6 +275,8 @@ public struct QEMUQMPReply: Equatable, Sendable {
         self.isRunning = isRunning
         self.jobsReturn = jobsReturn
         self.boolReturn = boolReturn
+        self.balloonActualBytes = balloonActualBytes
+        self.balloonStatistics = balloonStatistics
     }
 }
 
@@ -443,9 +475,20 @@ public struct QEMUQMPClient: QEMUQMPControlling {
                         }
                         return QEMUQMPJob(id: id, status: status, error: job["error"] as? String)
                     },
-                    boolReturn: boolReturn
+                    boolReturn: boolReturn,
+                    balloonActualBytes: (returnObject?["actual"] as? NSNumber)?.int64Value,
+                    balloonStatistics: balloonStatistics(from: returnObject)
                 )
             }
+    }
+
+    private static func balloonStatistics(from object: [String: Any]?) -> [String: Int64]? {
+        guard let object, let stats = object["stats"] as? [String: Any] else {
+            return nil
+        }
+        var result = stats.compactMapValues { ($0 as? NSNumber)?.int64Value }
+        result["last-update"] = (object["last-update"] as? NSNumber)?.int64Value
+        return result
     }
 
     /// Asynchronous event names seen in one session, useful as suspend/resume evidence.

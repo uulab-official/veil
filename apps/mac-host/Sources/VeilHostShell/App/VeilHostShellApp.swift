@@ -32,6 +32,7 @@ struct VeilHostShellApp: App {
     @State var automaticGuestAgentRecoveryTask: Task<Void, Never>?
     @State var automaticRuntimeConnectionRecoveryTask: Task<Void, Never>?
     @State var automaticFrameStreamMaintenanceTask: Task<Void, Never>?
+    @State var memoryBalloonTask: Task<Void, Never>?
     @State var automaticGuestAgentRecoveryAttemptedTokens: Set<String> = []
     @State var automaticRuntimeConnectionRecoveryCooldownUntil: [String: Date] = [:]
     @State var hasObservedLiveAgentConnection = false
@@ -110,6 +111,7 @@ struct VeilHostShellApp: App {
                 configureWindowsAppWindowCloseBridge()
                 startAgentReconnectPollerIfNeeded()
                 startAutomaticFrameStreamMaintenanceLoopIfNeeded()
+                startMemoryBalloonLoopIfNeeded()
 
                 await model.loadRestoreIntent()
                 async let hostLoad: Void = model.load()
