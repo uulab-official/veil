@@ -16,6 +16,7 @@ public sealed class WebSocketAgentServer
     private readonly ClipboardTextStreamer clipboardTextStreamer;
     private readonly WindowDiscoveryStreamer windowDiscoveryStreamer;
     private readonly WindowsNotificationStreamer notificationStreamer;
+    private readonly WindowLayoutStreamer? windowLayoutStreamer;
     private readonly ConcurrentDictionary<Guid, WebSocket> clients = new();
     /// <summary>
     /// Connections that asked for the binary frame channel. Kept separate from <see cref="clients"/> so
@@ -27,6 +28,7 @@ public sealed class WebSocketAgentServer
     private CancellationTokenSource? clipboardStreamCancellation;
     private CancellationTokenSource? windowDiscoveryStreamCancellation;
     private CancellationTokenSource? notificationStreamCancellation;
+    private CancellationTokenSource? windowLayoutStreamCancellation;
 
     public WebSocketAgentServer(
         AgentEndpoint endpoint,
@@ -34,7 +36,8 @@ public sealed class WebSocketAgentServer
         WindowFrameStreamer frameStreamer,
         ClipboardTextStreamer clipboardTextStreamer,
         WindowDiscoveryStreamer windowDiscoveryStreamer,
-        WindowsNotificationStreamer? notificationStreamer = null
+        WindowsNotificationStreamer? notificationStreamer = null,
+        WindowLayoutStreamer? windowLayoutStreamer = null
     )
     {
         this.endpoint = endpoint;
@@ -43,6 +46,7 @@ public sealed class WebSocketAgentServer
         this.clipboardTextStreamer = clipboardTextStreamer;
         this.windowDiscoveryStreamer = windowDiscoveryStreamer;
         this.notificationStreamer = notificationStreamer ?? new WindowsNotificationStreamer(new DisabledWindowsNotificationListener());
+        this.windowLayoutStreamer = windowLayoutStreamer;
     }
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
@@ -52,6 +56,7 @@ public sealed class WebSocketAgentServer
         StartClipboardStream(cancellationToken);
         StartWindowDiscoveryStream(cancellationToken);
         StartNotificationStream(cancellationToken);
+        StartWindowLayoutStream(cancellationToken);
 
         try
         {
@@ -377,6 +382,37 @@ public sealed class WebSocketAgentServer
             {
                 Console.Error.WriteLine(
                     $"WebSocketAgentServer: window discovery stream stopped unexpectedly. {error.GetType().Name}: {error.Message}"
+                );
+            }
+        }, streamCancellation.Token);
+    }
+
+    private void StartWindowLayoutStream(CancellationToken serverCancellationToken)
+    {
+        if (windowLayoutStreamer is null || windowLayoutStreamCancellation is not null)
+        {
+            return;
+        }
+
+        var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(serverCancellationToken);
+        windowLayoutStreamCancellation = streamCancellation;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await windowLayoutStreamer.StreamAsync(
+                    async (message, token) => await BroadcastTextAsync(message.ToJsonString(ProtocolJson.Options), token),
+                    streamCancellation.Token
+                );
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when the agent shuts down.
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(
+                    $"WebSocketAgentServer: window layout stream stopped unexpectedly. {error.GetType().Name}: {error.Message}"
                 );
             }
         }, streamCancellation.Token);

@@ -1024,6 +1024,8 @@ public sealed class AgentSession
                 ["virtioGpuDisplay"] = VirtioGpuDisplay.IsDriverInstalled(),
                 // Lets the host shut Windows down through the agent instead of the ACPI power button.
                 ["systemShutdown"] = OperatingSystem.IsWindows(),
+                // Lets the host crop windows out of the guest framebuffer from window.layout events.
+                ["windowLayout"] = OperatingSystem.IsWindows(),
                 // Lets the host wait for the operation.ack reply on the fire-and-forget paths
                 // (input, clipboard, frame subscribe). An older host ignores it; an older agent
                 // omits it and the host keeps its fire-and-forget semantics instead of hanging.
@@ -1339,6 +1341,15 @@ public sealed class AgentSession
     /// actually been launched, and to know which windows are already reported so it doesn't
     /// re-announce them.
     /// </summary>
+    /// <summary>Every tracked window id with the window that owns it, for <c>window.layout</c>.</summary>
+    internal IReadOnlyDictionary<string, string?> SnapshotTrackedWindowOwners()
+    {
+        lock (trackedWindowsGate)
+        {
+            return trackedWindowsById.ToDictionary(pair => pair.Key, pair => pair.Value.OwnerWindowId);
+        }
+    }
+
     internal IReadOnlyList<(WindowsAppDescriptor App, IReadOnlySet<string> KnownWindowIds)> SnapshotTrackedAppsForDiscovery()
     {
         lock (trackedWindowsGate)

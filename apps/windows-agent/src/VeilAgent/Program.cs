@@ -19,7 +19,8 @@ var session = new AgentSession(desktop, capture, packageIdentityProbe);
 session.WindowActivity = streamer.Wake;
 var windowDiscoveryStreamer = new WindowDiscoveryStreamer(session, desktop);
 var notificationStreamer = new WindowsNotificationStreamer(WindowsNotificationListenerFactory.Create(packageIdentityProbe));
-var server = new WebSocketAgentServer(endpoint, session, streamer, clipboardStreamer, windowDiscoveryStreamer, notificationStreamer);
+var windowLayoutStreamer = new WindowLayoutStreamer(session);
+var server = new WebSocketAgentServer(endpoint, session, streamer, clipboardStreamer, windowDiscoveryStreamer, notificationStreamer, windowLayoutStreamer);
 
 Console.WriteLine($"Veil Windows Agent listening on {endpoint.WebSocketUrl}");
 await server.RunAsync();
