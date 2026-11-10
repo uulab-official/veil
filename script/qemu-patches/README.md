@@ -8,6 +8,7 @@ in place of Homebrew's binary. `qemu-img` and the data files stay Homebrew's.
 | Patch | Against | Status |
 |---|---|---|
 | `0001-virtio-balloon-release-discarded-pages-on-darwin.patch` | QEMU 11.1.3 (`qemu-11.1.3.tar.xz`, SHA-256 `5a8289c7…4b22`, the tarball Homebrew pins); also applies cleanly to UTM's `utm-edition` (QEMU 10.0.12) | Built and measured, see below. |
+| `0002-virtio-balloon-track-partial-host-pages-across-the-guest.patch` | QEMU 11.1.3 after 0001 | Built; no regression on Linux. Its effect on Windows is not measured yet (see below). |
 
 ## 0001: the memory balloon gives memory back to macOS
 
@@ -36,8 +37,16 @@ the first inflated page), but:
   with 16 KiB host pages, and QEMU discards one only after all four of its 4 KiB balloon pages
   arrive while it is still the single partially ballooned page it tracks. Windows hands back
   scattered 4 KiB pages, so the tracking restarts on nearly every page and almost nothing is
-  discarded, while Windows zeroing the pages it gives up touches them. A follow-up patch has to
-  track partially ballooned host pages across the whole guest.
+  discarded. 0002 tracks partially ballooned host pages across the whole guest instead.
 - `query-balloon` kept reporting 16 GiB and every `guest-stats` value stayed unset (QEMU prints
   them as 2^64-1), so `QEMUMemoryBalloonPolicy` sees no statistics and leaves Windows at full size.
   The driver appears to fill statistics only through its user-mode service, `blnsvr.exe`.
+
+QEMU's `virtio_balloon_*` trace events then showed the deeper problem. Asked for 1 GiB, Windows
+updated `actual` in 512-page steps exactly as the driver source says, but every one of the 353,280
+page frame numbers it queued arrived as 0 (`virtio_balloon_bad_addr 0x0`), so QEMU discarded
+nothing. The statistics buffer likewise always reads as the -1 fill the driver writes when it
+allocates it. In both cases QEMU sees the driver's DMA buffer as first initialised and never the
+values written later. NetKVM, on the same machine, works. Until the ARM64 Balloon driver's buffers
+reach QEMU, the balloon cannot return Windows memory, and `QEMUMemoryBalloonPolicy` leaves Windows
+at full size because it never gets statistics. No public report of this was found.
