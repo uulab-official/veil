@@ -52,13 +52,38 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
             var step = System.Diagnostics.Stopwatch.StartNew();
             var geometry = GetCaptureGeometry(window);
             var bounds = geometry.Visible;
+            var strategy = diagnostics.Strategy;
+            var tileFormat = tileFormatsByWindowId.GetValueOrDefault(window.WindowId, FrameChannelCodec.PngFormat);
+            var deflatesTile = tileFormat == FrameChannelCodec.BgraDeflateFormat;
             var bitmap = ReusableBitmap(window.WindowId, geometry.Outer);
-            CaptureInto(bitmap, window, geometry, diagnostics.Strategy);
-            diagnostics.Record("capture", step.Elapsed.TotalMilliseconds);
-            step.Restart();
-            var pixels = CopyPixels(bitmap, VisibleRectangle(geometry));
-            diagnostics.Record("copy", step.Elapsed.TotalMilliseconds);
-            step.Restart();
+            byte[] pixels;
+            switch (TryDuplicate(window, geometry, strategy))
+            {
+                case (DesktopDuplicationCapture.CopyResult.Unchanged, _):
+                    // DWM presented nothing since this window's last frame, so its pixels cannot differ.
+                    diagnostics.Record("capture", step.Elapsed.TotalMilliseconds);
+                    diagnostics.Record("unchangedTotal", total.Elapsed.TotalMilliseconds);
+                    return WindowFrameCaptureResult.Unchanged(sequence);
+                case (DesktopDuplicationCapture.CopyResult.Copied, { } duplicated):
+                    pixels = duplicated;
+                    diagnostics.Record("capture", step.Elapsed.TotalMilliseconds);
+                    if (!deflatesTile || includeFullFrame)
+                    {
+                        // The PNG paths encode from the bitmap.
+                        WritePixels(bitmap, VisibleRectangle(geometry), pixels);
+                    }
+                    step.Restart();
+                    break;
+                default:
+                    CaptureInto(bitmap, window, geometry, strategy);
+                    diagnostics.Record("capture", step.Elapsed.TotalMilliseconds);
+                    step.Restart();
+                    pixels = CopyPixels(bitmap, VisibleRectangle(geometry));
+                    diagnostics.Record("copy", step.Elapsed.TotalMilliseconds);
+                    step.Restart();
+                    break;
+            }
+
             var changed = TakeChangedRegion(window.WindowId, pixels, bounds.Width, bounds.Height, cancellationToken);
             diagnostics.Record("diff", step.Elapsed.TotalMilliseconds);
 
@@ -73,8 +98,6 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
             step.Restart();
             var scale = GetWindowScale(window.Hwnd);
             var isKeyFrame = changed.Covers(bounds.Width, bounds.Height);
-            var tileFormat = tileFormatsByWindowId.GetValueOrDefault(window.WindowId, FrameChannelCodec.PngFormat);
-            var deflatesTile = tileFormat == FrameChannelCodec.BgraDeflateFormat;
             var fullFrame = includeFullFrame || (isKeyFrame && !deflatesTile)
                 ? EncodeFrame(window, bounds, sequence, bitmap, VisibleRectangle(geometry))
                 : null;
@@ -162,6 +185,7 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
             previousPixelsByWindowId.Remove(windowId);
         }
 
+        duplicationVersionsByWindowId.TryRemove(windowId, out _);
         lock (bitmapsByWindowId)
         {
             if (bitmapsByWindowId.Remove(windowId, out var bitmap))
@@ -212,6 +236,71 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
     }
 
     private readonly Dictionary<string, Bitmap> bitmapsByWindowId = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (WindowRect Region, long Version)>
+        duplicationVersionsByWindowId = new();
+
+    /// <summary>
+    /// Reads a fully visible window's pixels from Desktop Duplication, or returns
+    /// <see cref="DesktopDuplicationCapture.CopyResult.Unavailable"/> for the GDI paths to handle.
+    /// </summary>
+    private (DesktopDuplicationCapture.CopyResult Result, byte[]? Pixels) TryDuplicate(
+        LaunchedWindow window, WindowGeometry geometry, string strategy)
+    {
+        var allowed = strategy switch
+        {
+            FrameCaptureDiagnostics.DuplicationStrategy => true,
+            FrameCaptureDiagnostics.AutomaticStrategy => IsFullyVisibleOnScreen(window.Hwnd, geometry.Visible),
+            _ => false
+        };
+        if (!allowed)
+        {
+            return (DesktopDuplicationCapture.CopyResult.Unavailable, null);
+        }
+
+        var visible = geometry.Visible;
+        // A window that moved or changed size needs its pixels copied again even from an unchanged desktop.
+        var knownVersion = duplicationVersionsByWindowId.TryGetValue(window.WindowId, out var known)
+            && known.Region == visible
+                ? known.Version
+                : -1;
+        var pixels = new byte[visible.Width * visible.Height * 4];
+        DesktopDuplicationCapture.CopyResult result;
+        try
+        {
+            result = DesktopDuplicationCapture.Shared.TryCopy(visible, pixels, ref knownVersion);
+        }
+        catch (Exception error)
+        {
+            FrameCaptureDiagnostics.Shared.RecordDuplicationFailure($"{error.GetType().Name}: {error.Message}");
+            result = DesktopDuplicationCapture.CopyResult.Unavailable;
+        }
+        if (result == DesktopDuplicationCapture.CopyResult.Unavailable)
+        {
+            duplicationVersionsByWindowId.TryRemove(window.WindowId, out _);
+            return (result, null);
+        }
+
+        duplicationVersionsByWindowId[window.WindowId] = (visible, knownVersion);
+        FrameCaptureDiagnostics.Shared.RecordMethod(FrameCaptureDiagnostics.DuplicationStrategy);
+        return result == DesktopDuplicationCapture.CopyResult.Copied ? (result, pixels) : (result, null);
+    }
+
+    private static void WritePixels(Bitmap bitmap, Rectangle rectangle, byte[] pixels)
+    {
+        var data = bitmap.LockBits(rectangle, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            var rowBytes = rectangle.Width * 4;
+            for (var row = 0; row < rectangle.Height; row++)
+            {
+                Marshal.Copy(pixels, row * rowBytes, data.Scan0 + row * data.Stride, rowBytes);
+            }
+        }
+        finally
+        {
+            bitmap.UnlockBits(data);
+        }
+    }
 
     /// <summary>
     /// One capture bitmap per window, replaced only when the window changes size. Allocating a fresh

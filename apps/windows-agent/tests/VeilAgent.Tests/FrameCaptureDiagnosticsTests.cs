@@ -29,6 +29,7 @@ public class FrameCaptureDiagnosticsTests
         var diagnostics = new FrameCaptureDiagnostics();
         diagnostics.Record("capture", 10);
 
+        Assert.True(diagnostics.SetStrategy(FrameCaptureDiagnostics.DuplicationStrategy));
         Assert.True(diagnostics.SetStrategy(FrameCaptureDiagnostics.PrintWindowStrategy));
 
         var snapshot = diagnostics.Snapshot();

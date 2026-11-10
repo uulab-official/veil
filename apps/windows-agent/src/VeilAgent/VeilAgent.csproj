@@ -4,6 +4,8 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- DesktopDuplicationCapture calls DXGI and Direct3D 11 through COM vtable pointers. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>Veil.Agent</RootNamespace>
     <AssemblyName>VeilAgent</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>

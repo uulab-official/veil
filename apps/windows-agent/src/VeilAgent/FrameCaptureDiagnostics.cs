@@ -18,12 +18,23 @@ public sealed class FrameCaptureDiagnostics
     public const string AutomaticStrategy = "auto";
     public const string ScreenCopyStrategy = "screen";
     public const string PrintWindowStrategy = "printWindow";
+    public const string DuplicationStrategy = "duplication";
 
     private const double Smoothing = 0.1;
     private readonly object gate = new();
     private readonly Dictionary<string, (double Mean, double Max, long Count)> phases = new();
     private readonly Dictionary<string, long> methodCounts = new();
     private string strategy = AutomaticStrategy;
+    private string? lastDuplicationFailure;
+
+    /// <summary>Why Desktop Duplication last fell back, for the health reply.</summary>
+    public void RecordDuplicationFailure(string reason)
+    {
+        lock (gate)
+        {
+            lastDuplicationFailure = $"{DateTime.UtcNow:O} {reason}";
+        }
+    }
 
     /// <summary>
     /// The capture method in force: automatic, or one forced for comparison from the host.
@@ -42,7 +53,7 @@ public sealed class FrameCaptureDiagnostics
     /// <summary>Returns false for an unknown strategy, which is ignored.</summary>
     public bool SetStrategy(string value)
     {
-        if (value is not (AutomaticStrategy or ScreenCopyStrategy or PrintWindowStrategy))
+        if (value is not (AutomaticStrategy or ScreenCopyStrategy or PrintWindowStrategy or DuplicationStrategy))
         {
             return false;
         }
@@ -108,7 +119,8 @@ public sealed class FrameCaptureDiagnostics
             {
                 ["strategy"] = strategy,
                 ["phases"] = phaseObject,
-                ["methods"] = methodObject
+                ["methods"] = methodObject,
+                ["lastDuplicationFailure"] = lastDuplicationFailure
             };
         }
     }
