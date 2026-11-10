@@ -194,6 +194,48 @@ VM setting: a second QEMU binary in `Runtime/` (keep 11.1.3 as default), the SPI
 backend, `virtio-gpu-gl-pci` with `blob=true,hostmem=…,neptune=true` after a driver-installed flag
 (mirroring `QEMUWindowsDisplayDevices`), and LGPL/GPL notices for DXMT and the fork.
 
+## Decision: Apply to the Existing VM, After a Snapshot
+
+The user decided (2026-11-10) that Triton is tried on the existing Veil VM, not on a separate copy,
+so the guest uses the Mac's GPU as a shared resource rather than a second allocated VM. Conditions:
+snapshot first and document the revert, never erase Windows, never touch the Mac UI (restarts only
+through background paths such as `VEIL_LAUNCH_IN_BACKGROUND=1`), tell the user before the VM
+(QEMU pid 21548, `-m 16384M -smp 8`) goes down, and never type Windows credentials.
+
+Snapshot (VM must be shut down so the disk is consistent; the user is told first):
+
+```text
+SNAP=~/"Virtual Machines/Veil/snapshots/pre-triton-$(date +%Y%m%d-%H%M)"
+mkdir -p "$SNAP/tpm"
+V=~/"Virtual Machines/Veil"
+cp -c "$V/Windows 11 Arm.img" "$SNAP/Windows 11 Arm.img"   # APFS clone, no extra space
+cp "$V/uefi-vars.fd" "$SNAP/uefi-vars.fd"
+cp "$V/tpm/tpm2-00.permall" "$SNAP/tpm/tpm2-00.permall"
+shasum "$V/uefi-vars.fd" "$SNAP/uefi-vars.fd"
+```
+
+Revert (VM shut down; restores disk, UEFI variables and TPM state together, since BitLocker or
+Windows Hello may be sealed to the TPM):
+
+```text
+cp -c "$SNAP/Windows 11 Arm.img" "$V/Windows 11 Arm.img"
+cp "$SNAP/uefi-vars.fd" "$V/uefi-vars.fd"
+cp "$SNAP/tpm/tpm2-00.permall" "$V/tpm/tpm2-00.permall"
+```
+
+Then start the VM again with Veil's normal bundled QEMU 11.1.3 and `virtio-gpu-pci`.
+
+Consequences for the plan:
+
+- The Triton QEMU still has to be built first; without it there is nothing to apply.
+- The existing VM is launched by Veil.app's boot plan. Running it on the Triton QEMU means a manual
+  launch with the same disk, firmware, TPM socket and port forwards as pid 21548, plus the Neptune
+  device and a GL display backend (section 5). Veil's own launcher would not know about that QEMU.
+- Installing `viogpu3d` needs an elevated prompt in Windows. If UAC asks for credentials, the
+  install stops there and the user has to approve it in the guest.
+- `~/VeilTriton/vm` (the earlier copy, cloned while the VM was running) stays only as a spare; the
+  snapshot above is the restore point.
+
 ## To Resume
 
 1. Allow the build (or run it yourself): LLVM 15.0.7 per `~/VeilTriton/src/dxmt/docs/DEVELOPMENT.md`
