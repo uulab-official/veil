@@ -266,8 +266,9 @@ extension VeilHostShellApp {
             queue: .main
         ) { _ in
             Task { @MainActor in
-                // Starts the same flow as the Update Tools button; Windows still asks the user to approve.
-                updateGuestTools()
+                // The Update Tools flow, minus bringing Veil forward and switching to the Windows desktop:
+                // a script running it repeatedly kept taking the Mac away from the person using it.
+                updateGuestTools(presentsWindowsDesktop: false)
             }
         }
         DebugViewModeObserver.launchAppToken = DistributedNotificationCenter.default().addObserver(
@@ -535,10 +536,14 @@ extension VeilHostShellApp {
 
     /// Installs the Windows tools this Veil ships into a running Windows whose agent is older:
     /// inserts the tools update disc, runs its U.cmd, waits for the new agent, and ejects the disc.
-    func updateGuestTools() {
+    /// - Parameter presentsWindowsDesktop: Brings Veil forward on the Windows desktop, where an approval
+    ///   prompt would appear. Only the debug script turns it off.
+    func updateGuestTools(presentsWindowsDesktop: Bool = true) {
         Task { @MainActor in
             cancelAutomaticQuietRuntime()
-            activateMainWindow()
+            if presentsWindowsDesktop {
+                activateMainWindow()
+            }
             // Refreshed first: after Veil is relaunched next to a QEMU that kept running, the cached snapshot
             // can still say stopped, and this used to return without a word.
             await vmModel.refreshRuntimeEvidence()
@@ -554,7 +559,9 @@ extension VeilHostShellApp {
             // unanswered prompt left the update to fail without the user ever seeing it. Most updates
             // need no approval now, so a successful one returns to the view the user had.
             let viewModeBeforeUpdate = shellNavigation.viewMode
-            shellNavigation.showsWindowsDesktop = true
+            if presentsWindowsDesktop {
+                shellNavigation.showsWindowsDesktop = true
+            }
             if let refusal = await vmModel.insertGuestToolsUpdateMedia() {
                 VeilLog.runtime.notice("Tools update media refused: \(refusal, privacy: .public)")
                 displayMessage = String(localized: "Windows tools could not be updated: \(refusal)")
