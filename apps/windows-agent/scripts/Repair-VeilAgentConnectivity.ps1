@@ -433,6 +433,57 @@ function Start-VeilAgentAsStandardUser {
     throw "Timed out waiting for the limited interactive VeilAgent task to start $AgentExe."
 }
 
+function Test-VeilFirewallRulesReady {
+    # Reading firewall rules needs no elevation. The program rule names the installed VeilAgent.exe
+    # path, so new files at that path stay covered without touching the rules.
+    try {
+        $ProgramRule = Get-NetFirewallRule -DisplayName "VeilAgent" -ErrorAction Stop |
+            Where-Object { $_.Enabled -eq "True" -and $_.Direction -eq "Inbound" -and $_.Action -eq "Allow" } |
+            Where-Object { ($_ | Get-NetFirewallApplicationFilter).Program -eq $AgentExe } |
+            Select-Object -First 1
+        $PortRule = Get-NetFirewallRule -DisplayName "VeilAgent WebSocket Port" -ErrorAction Stop |
+            Where-Object { $_.Enabled -eq "True" -and $_.Direction -eq "Inbound" -and $_.Action -eq "Allow" } |
+            Where-Object { @(($_ | Get-NetFirewallPortFilter).LocalPort) -contains "$Port" } |
+            Select-Object -First 1
+        return [bool]($ProgramRule -and $PortRule)
+    } catch {
+        return $false
+    }
+}
+
+function Invoke-VeilUnelevatedUpdate {
+    # A tools update only replaces files under %LOCALAPPDATA% and restarts the agent as this user,
+    # which needs no administrator rights once the firewall rules exist. Asking for approval on every
+    # update left it to fail whenever nobody was at the Windows prompt.
+    Start-Transcript -Path $RepairLogPath -Append | Out-Null
+    try {
+        Write-Host "Repair-VeilAgentConnectivity.ps1 started at $(Get-Date -Format o)."
+        Write-Host "InstallRoot=$InstallRoot"
+        Write-Host "Port=$Port"
+        Write-Host "IsAdministrator=False"
+        Write-Host "Firewall rules for $AgentExe and TCP $Port are present; updating without elevation."
+        Write-VeilRepairStatus -Stage "started" -Succeeded $false -Message "Unelevated update started."
+        Sync-VeilInstalledAppBundle | Out-Null
+        Sync-VeilInstalledSupportScripts
+        & $StartScript -InstallRoot $InstallRoot -Port $Port -RequireGuestAddress
+        Write-VeilRepairStatus -Stage "guestAgentHealthSucceeded" -Succeeded $true -Message "VeilAgent was updated without elevation and answered agent.health.response on loopback and guest IPv4."
+        Write-Host "VeilAgent update completed without elevation."
+        return $true
+    } catch {
+        Write-Host "Updating without elevation failed: $($_.Exception.Message)"
+        return $false
+    } finally {
+        Stop-Transcript | Out-Null
+    }
+}
+
+if (-not (Test-VeilAdministrator) -and (Test-Path $AgentExe) -and (Test-VeilFirewallRulesReady)) {
+    if (Invoke-VeilUnelevatedUpdate) {
+        return
+    }
+    Write-Host "Falling back to the elevated repair."
+}
+
 if (-not (Test-VeilAdministrator)) {
     Write-Host "Repair-VeilAgentConnectivity.ps1 started at $(Get-Date -Format o)."
     Write-Host "InstallRoot=$InstallRoot"
