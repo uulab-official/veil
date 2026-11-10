@@ -18,7 +18,17 @@ final class RFBEmbeddedDisplayModel {
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var connectionGeneration = 0
     @ObservationIgnored private var retryDelaySeconds: Double = 1
-    @ObservationIgnored private var lastDeliveredFrameAt = Date.distantPast
+    @ObservationIgnored private var lastPublishedImageAt = Date.distantPast
+    /// Receives every frame without going through observation; see `RFBLiveFrameView`.
+    @ObservationIgnored var frameSink: ((CGImage) -> Void)? {
+        didSet {
+            if let latestFrame {
+                frameSink?(latestFrame)
+            }
+        }
+    }
+    @ObservationIgnored private(set) var latestFrame: CGImage?
+    @ObservationIgnored private var latestFrameSize: (width: Int, height: Int)?
 
     var statusSymbolName: String {
         switch status {
@@ -81,6 +91,8 @@ final class RFBEmbeddedDisplayModel {
 
         if resetFrames {
             image = nil
+            latestFrame = nil
+            latestFrameSize = nil
             frameSequence = nil
         }
         status = .connecting
@@ -100,16 +112,7 @@ final class RFBEmbeddedDisplayModel {
                     return
                 }
 
-                // Raw RFB frames can arrive faster than AppKit can decode and
-                // display them. Drop excess intermediate frames so input handling
-                // never waits behind a backlog of full-frame image conversions.
-                let now = Date()
-                guard now.timeIntervalSince(self.lastDeliveredFrameAt) >= (1.0 / 24.0) else {
-                    return
-                }
-                self.lastDeliveredFrameAt = now
-
-                guard let image = frame.makeNSImage() else {
+                guard let cgImage = frame.makeCGImage() else {
                     self.handleDisplayFailure(
                         "Display frame unavailable",
                         endpoint: endpoint,
@@ -121,8 +124,20 @@ final class RFBEmbeddedDisplayModel {
                 self.retryTask?.cancel()
                 self.retryTask = nil
                 self.retryDelaySeconds = 1
-                self.image = image
-                self.frameSequence = frame.sequence
+                // Every frame goes straight to the layer. The observed image changes only with the
+                // framebuffer size or about once a second (sidebar thumbnail, status), because each
+                // change re-evaluates the SwiftUI views over the desktop: doing that per frame held the
+                // desktop, and the Windows cursor drawn in it, to a fraction of the guest's frame rate.
+                self.latestFrame = cgImage
+                self.frameSink?(cgImage)
+                let now = Date()
+                let sizeChanged = self.latestFrameSize.map { $0.width != frame.width || $0.height != frame.height } ?? true
+                if sizeChanged || self.status != .receiving || now.timeIntervalSince(self.lastPublishedImageAt) >= 1 {
+                    self.lastPublishedImageAt = now
+                    self.latestFrameSize = (frame.width, frame.height)
+                    self.image = NSImage(cgImage: cgImage, size: NSSize(width: frame.width, height: frame.height))
+                    self.frameSequence = frame.sequence
+                }
                 if self.status != .receiving {
                     // First frame of this session: Windows may have turned its display off.
                     self.worker?.wakeDisplay()
@@ -249,7 +264,7 @@ final class RFBEmbeddedDisplayModel {
         retryTask?.cancel()
         retryTask = nil
         retryDelaySeconds = 1
-        lastDeliveredFrameAt = .distantPast
+        lastPublishedImageAt = .distantPast
         connectionGeneration += 1
         worker?.stop()
         worker = nil
@@ -367,6 +382,44 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
     private let queue = DispatchQueue(label: "app.veil.rfb-display", qos: .userInitiated)
     private let lock = NSLock()
     private let writeLock = NSLock()
+    private let deliveryLock = NSLock()
+    private var pendingFrame: RFBRenderedFrame?
+    private var isDeliveryScheduled = false
+
+    /// Hands the newest frame to the main thread, at most one hop in flight. Frames that arrive while
+    /// one is waiting replace it, so the screen shows the latest pixels instead of working through a
+    /// backlog, and no frame is held back by a fixed rate cap.
+    private func takePendingFrame() -> RFBRenderedFrame? {
+        deliveryLock.lock()
+        defer { deliveryLock.unlock() }
+        let next = pendingFrame
+        pendingFrame = nil
+        isDeliveryScheduled = false
+        return next
+    }
+
+    private func deliverLatest(
+        _ frame: RFBRenderedFrame,
+        to onFrame: @escaping @MainActor (RFBRenderedFrame) -> Void
+    ) {
+        deliveryLock.lock()
+        pendingFrame = frame
+        let schedules = !isDeliveryScheduled
+        isDeliveryScheduled = true
+        deliveryLock.unlock()
+        guard schedules else {
+            return
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            if let next = self.takePendingFrame() {
+                onFrame(next)
+            }
+        }
+    }
     private let stateLock = NSLock()
     private var isStopped = false
     private var stream: RFBByteStream?
@@ -628,9 +681,7 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
 
                     do {
                         let frame = try renderer.apply(update)
-                        Task { @MainActor in
-                            onFrame(frame)
-                        }
+                        deliverLatest(frame, to: onFrame)
                     } catch let error as RFBError {
                         guard case .invalidRectangleBounds = error else {
                             throw error
@@ -747,7 +798,7 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
 }
 
 private extension RFBRenderedFrame {
-    func makeNSImage() -> NSImage? {
+    func makeCGImage() -> CGImage? {
         guard width > 0,
               height > 0,
               rgbaPixels.count >= width * height * 4,
@@ -773,6 +824,47 @@ private extension RFBRenderedFrame {
             return nil
         }
 
-        return NSImage(cgImage: image, size: NSSize(width: width, height: height))
+        return image
+    }
+}
+
+/// Shows the live desktop by setting layer contents, aspect-fit and centered like the capture view's
+/// viewport, without SwiftUI touching each frame.
+struct RFBLiveFrameView: NSViewRepresentable {
+    var model: RFBEmbeddedDisplayModel
+
+    func makeNSView(context: Context) -> RFBLiveFrameHostView {
+        let view = RFBLiveFrameHostView()
+        model.frameSink = { [weak view] image in view?.show(image) }
+        return view
+    }
+
+    func updateNSView(_ view: RFBLiveFrameHostView, context: Context) {}
+
+    static func dismantleNSView(_ view: RFBLiveFrameHostView, coordinator: ()) {}
+}
+
+final class RFBLiveFrameHostView: NSView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.contentsGravity = .resizeAspect
+        layer?.magnificationFilter = .linear
+        layer?.minificationFilter = .linear
+        layer?.actions = ["contents": NSNull(), "bounds": NSNull(), "position": NSNull()]
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Input belongs to the capture view above.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func show(_ image: CGImage) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.contents = image
+        CATransaction.commit()
     }
 }

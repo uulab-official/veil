@@ -70,7 +70,9 @@ struct WindowsEmbeddedDisplayPreview: View {
         ZStack {
             Color.black
 
-            if let renderedImage {
+            if surface.kind == .vncLoopback, rfbDisplayModel.isReceiving {
+                RFBLiveFrameView(model: rfbDisplayModel)
+            } else if let renderedImage {
                 Image(nsImage: renderedImage)
                     .resizable()
                     .scaledToFit()
