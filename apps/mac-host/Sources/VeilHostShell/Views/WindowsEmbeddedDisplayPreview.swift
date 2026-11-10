@@ -318,7 +318,9 @@ final class ConsolePreviewInputCaptureNSView: NSView {
         }
         let area = NSTrackingArea(
             rect: .zero,
-            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
+            // Moves are sent even when Veil is not the key window, so the guest pointer is already where
+            // the first click of a window that is coming forward lands.
+            options: [.mouseMoved, .activeAlways, .inVisibleRect],
             owner: self
         )
         addTrackingArea(area)
@@ -375,8 +377,14 @@ final class ConsolePreviewInputCaptureNSView: NSView {
             return true
         }
 
+        let previousButtons = heldButtons
         heldButtons = isDown ? heldButtons | bit : heldButtons & ~bit
-        rfbDisplayModel.sendPointer(x: pixel.x, y: pixel.y, buttonMask: heldButtons)
+        rfbDisplayModel.sendButtonChange(
+            x: pixel.x,
+            y: pixel.y,
+            previousMask: previousButtons,
+            buttonMask: heldButtons
+        )
         return true
     }
 

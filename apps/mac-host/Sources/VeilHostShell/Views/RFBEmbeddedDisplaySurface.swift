@@ -203,6 +203,10 @@ final class RFBEmbeddedDisplayModel {
         worker?.sendWheel(x: x, y: y, buttonMask: buttonMask, notches: notches)
     }
 
+    func sendButtonChange(x: Int, y: Int, previousMask: UInt8, buttonMask: UInt8) {
+        worker?.sendButtonChange(x: x, y: y, previousMask: previousMask, buttonMask: buttonMask)
+    }
+
     /// Keeps the last transport failure visible until the scheduled retry actually starts. Without
     /// this state, a timed-out VM looks indistinguishable from a healthy connection still opening.
     func showConnectionFailure(_ message: String) {
@@ -473,9 +477,20 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
         sendPointerEvents(x: x, y: y, masks: [buttonMask])
     }
 
+    /// Moves to the point with the old buttons first, then changes them. QEMU applies a pointer event's
+    /// buttons before its position, so a press carrying a new position landed where the pointer was
+    /// before: a click on a dialog button could press somewhere else entirely.
+    func sendButtonChange(x: Int, y: Int, previousMask: UInt8, buttonMask: UInt8) {
+        sendPointerEvents(x: x, y: y, masks: [previousMask, buttonMask])
+    }
+
     /// Scrolls by pressing and releasing a wheel button per notch, keeping held buttons held.
     func sendWheel(x: Int, y: Int, buttonMask: UInt8, notches: [UInt8]) {
-        sendPointerEvents(x: x, y: y, masks: notches.flatMap { [buttonMask | $0, buttonMask] })
+        guard !notches.isEmpty else {
+            return
+        }
+        // A plain move first, for the same reason as `sendButtonChange`: the wheel turns where the pointer is.
+        sendPointerEvents(x: x, y: y, masks: [buttonMask] + notches.flatMap { [buttonMask | $0, buttonMask] })
     }
 
     private func sendPointerEvents(x: Int, y: Int, masks: [UInt8]) {
