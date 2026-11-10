@@ -77,4 +77,23 @@ struct GuestWindowLayoutTests {
 
         #expect(fixture == WindowCropSetRequest(requestId: "req_window_crop_1A2B3C4D", windowIds: ["hwnd:000F0254"]))
     }
+
+    @Test func aMovedOrResizedWindowSettlesBeforeCroppingResumes() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let store = GuestWindowLayoutStore(now: { clock })
+        store.apply(layout(sequence: 1))
+        #expect(store.framebufferCrop(windowId: "hwnd:1", framebufferWidth: 1920, framebufferHeight: 1080) != nil)
+
+        clock += 0.05
+        store.apply(layout(sequence: 2, frame: GuestPixelRect(x: 120, y: 80, width: 900, height: 600)))
+        #expect(store.framebufferCrop(windowId: "hwnd:1", framebufferWidth: 1920, framebufferHeight: 1080) == nil)
+
+        clock += 0.2
+        store.apply(layout(sequence: 3, frame: GuestPixelRect(x: 120, y: 80, width: 900, height: 600)))
+        #expect(store.framebufferCrop(windowId: "hwnd:1", framebufferWidth: 1920, framebufferHeight: 1080) == nil)
+
+        clock += 0.11
+        #expect(store.framebufferCrop(windowId: "hwnd:1", framebufferWidth: 1920, framebufferHeight: 1080)
+            == CGRect(x: 120, y: 80, width: 900, height: 600))
+    }
 }

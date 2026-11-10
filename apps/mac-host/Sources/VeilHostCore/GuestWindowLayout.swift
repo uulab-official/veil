@@ -74,8 +74,19 @@ public final class GuestWindowLayoutStore {
 
     public private(set) var latest: WindowLayoutEvent?
     private var observers: [UUID: @MainActor () -> Void] = [:]
+    /// When each window's frame last changed. The framebuffer lags a move or resize: until the app redraws
+    /// and the guest presents, the area a window just took over still shows what was behind it, and
+    /// cropping the new frame put the Windows desktop into the Mac window. See `settleSeconds`.
+    private var frameChangedAt: [String: Date] = [:]
+    private let now: () -> Date
 
-    public init() {}
+    /// How long a moved or resized window keeps its captured frame before cropping resumes; a few guest
+    /// frames at the 25-30 a second the software renderer presents.
+    public static let settleSeconds: TimeInterval = 0.3
+
+    public init(now: @escaping () -> Date = Date.init) {
+        self.now = now
+    }
 
     /// Applies a layout unless it is older than the one already applied.
     @discardableResult
@@ -84,13 +95,37 @@ public final class GuestWindowLayoutStore {
         if let latest, event.sequence <= latest.sequence, event.sequence != 1 {
             return false
         }
+        let changedAt = now()
+        let previousFrames = Dictionary(
+            (latest?.windows ?? []).map { ($0.windowId, $0.frame) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        for window in event.windows where previousFrames[window.windowId].map({ $0 != window.frame }) ?? false {
+            frameChangedAt[window.windowId] = changedAt
+        }
         latest = event
         observers.values.forEach { $0() }
+        if event.windows.contains(where: { isSettling(windowId: $0.windowId) }) {
+            // Nothing else may arrive to end the settle period, so announce its end.
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(Self.settleSeconds + 0.02))
+                self?.observers.values.forEach { $0() }
+            }
+        }
         return true
+    }
+
+    /// True while a window's frame changed less than `settleSeconds` ago.
+    public func isSettling(windowId: String) -> Bool {
+        guard let changedAt = frameChangedAt[windowId] else {
+            return false
+        }
+        return now().timeIntervalSince(changedAt) < Self.settleSeconds
     }
 
     public func reset() {
         latest = nil
+        frameChangedAt = [:]
         observers.values.forEach { $0() }
     }
 
@@ -107,7 +142,7 @@ public final class GuestWindowLayoutStore {
     /// Where a window's pixels are in a framebuffer of the given size, or nil when the window must keep
     /// its captured frames: not fully visible, or a framebuffer that does not match the layout's display.
     public func framebufferCrop(windowId: String, framebufferWidth: Int, framebufferHeight: Int) -> CGRect? {
-        guard let latest else {
+        guard let latest, !isSettling(windowId: windowId) else {
             return nil
         }
         return Self.framebufferCrop(
