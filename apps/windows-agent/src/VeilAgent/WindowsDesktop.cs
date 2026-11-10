@@ -313,20 +313,21 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
     private static WindowRect GetWindowBounds(IntPtr hwnd)
     {
-        if (GetWindowRect(hwnd, out var rect))
+        if (WindowGeometry.Read(hwnd)?.Visible is { } visible)
         {
-            // GetWindowRect returns real physical pixels now that the process is Per-Monitor-V2 DPI
+            // The frame comes back in real physical pixels now that the process is Per-Monitor-V2 DPI
             // aware (see ProcessDpiAwareness), but window.created/window.updated's bounds are a
             // pre-existing wire contract the host's WindowsAppWindowPlacement sizing heuristics
             // already assume are ~96-DPI-equivalent "logical" units. Normalize by the window's real
             // scale here so bounds keeps reporting what it always has, decoupled from
             // GdiWindowFrameCapture's separate real-DPI-scale capture path.
             var scale = GdiWindowFrameCapture.GetWindowScale(hwnd);
+            // The visible frame, like the mirrored surface; see WindowGeometry.
             return new WindowRect(
-                (int)Math.Round(rect.Left / scale),
-                (int)Math.Round(rect.Top / scale),
-                Math.Max(1, (int)Math.Round((rect.Right - rect.Left) / scale)),
-                Math.Max(1, (int)Math.Round((rect.Bottom - rect.Top) / scale))
+                (int)Math.Round(visible.X / scale),
+                (int)Math.Round(visible.Y / scale),
+                Math.Max(1, (int)Math.Round(visible.Width / scale)),
+                Math.Max(1, (int)Math.Round(visible.Height / scale))
             );
         }
 
@@ -387,19 +388,23 @@ public sealed class WindowsDesktop : IWindowsDesktop
 
         if (!TryParseWindowId(input.WindowId, out var hwnd)
             || !IsWindow(hwnd)
-            || !GetWindowRect(hwnd, out var currentRect))
+            || WindowGeometry.Read(hwnd) is not { } geometry)
         {
             return Task.FromResult<WindowRect?>(null);
         }
 
+        // The requested size is the visible frame the host shows; the outer rectangle SetWindowPos takes
+        // also holds the invisible resize borders.
         var scale = GdiWindowFrameCapture.GetWindowScale(hwnd);
-        var physicalWidth = Math.Max(1, (int)Math.Round(input.Width * scale, MidpointRounding.AwayFromZero));
-        var physicalHeight = Math.Max(1, (int)Math.Round(input.Height * scale, MidpointRounding.AwayFromZero));
+        var physicalWidth = Math.Max(1, (int)Math.Round(input.Width * scale, MidpointRounding.AwayFromZero))
+            + geometry.ExtraWidth;
+        var physicalHeight = Math.Max(1, (int)Math.Round(input.Height * scale, MidpointRounding.AwayFromZero))
+            + geometry.ExtraHeight;
         var accepted = SetWindowPos(
             hwnd,
             IntPtr.Zero,
-            currentRect.Left,
-            currentRect.Top,
+            geometry.Outer.X,
+            geometry.Outer.Y,
             physicalWidth,
             physicalHeight,
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER
@@ -799,9 +804,6 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private static extern int GetWindowTextLength(IntPtr hWnd);
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
-
-    [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(
         IntPtr hWnd,
         IntPtr hWndInsertAfter,
@@ -1003,14 +1005,6 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private static extern IntPtr GlobalFree(IntPtr hMem);
 
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-    private struct NativeRect
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
 
     private sealed record WindowCandidate(
         IntPtr Hwnd,

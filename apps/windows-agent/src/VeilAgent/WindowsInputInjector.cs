@@ -238,15 +238,15 @@ internal static class WindowsInputInjector
     {
         pointer = null;
         if (MouseButtonFlags(input.Event) is not { } buttonFlags
-            || !GetWindowRect(hwnd, out var rect))
+            || WindowGeometry.Read(hwnd) is not { } geometry)
         {
             return false;
         }
 
-        // Frames are captured from the window rectangle's top-left in physical pixels, and the host maps
-        // clicks into that same bitmap, so the window rectangle is the right origin here.
-        var screenX = rect.Left + input.X;
-        var screenY = rect.Top + input.Y;
+        // Frames are captured from the visible frame's top-left in physical pixels, and the host maps
+        // clicks into that same bitmap, so the visible frame is the right origin here.
+        var screenX = geometry.Visible.X + input.X;
+        var screenY = geometry.Visible.Y + input.Y;
         var virtualLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
         var virtualTop = GetSystemMetrics(SM_YVIRTUALSCREEN);
         var virtualWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);

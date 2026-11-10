@@ -50,12 +50,13 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
             var diagnostics = FrameCaptureDiagnostics.Shared;
             var total = System.Diagnostics.Stopwatch.StartNew();
             var step = System.Diagnostics.Stopwatch.StartNew();
-            var bounds = GetCaptureBounds(window);
-            var bitmap = ReusableBitmap(window.WindowId, bounds);
-            CaptureInto(bitmap, window, bounds, diagnostics.Strategy);
+            var geometry = GetCaptureGeometry(window);
+            var bounds = geometry.Visible;
+            var bitmap = ReusableBitmap(window.WindowId, geometry.Outer);
+            CaptureInto(bitmap, window, geometry, diagnostics.Strategy);
             diagnostics.Record("capture", step.Elapsed.TotalMilliseconds);
             step.Restart();
-            var pixels = CopyPixels(bitmap);
+            var pixels = CopyPixels(bitmap, VisibleRectangle(geometry));
             diagnostics.Record("copy", step.Elapsed.TotalMilliseconds);
             step.Restart();
             var changed = TakeChangedRegion(window.WindowId, pixels, bounds.Width, bounds.Height, cancellationToken);
@@ -75,7 +76,7 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
             var tileFormat = tileFormatsByWindowId.GetValueOrDefault(window.WindowId, FrameChannelCodec.PngFormat);
             var deflatesTile = tileFormat == FrameChannelCodec.BgraDeflateFormat;
             var fullFrame = includeFullFrame || (isKeyFrame && !deflatesTile)
-                ? EncodeFrame(window, bounds, sequence, bitmap)
+                ? EncodeFrame(window, bounds, sequence, bitmap, VisibleRectangle(geometry))
                 : null;
 
             // A PNG key frame's payload is the whole surface, so reuse the full-frame encode instead of
@@ -84,7 +85,7 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
                 ? EncodeRegionBgraDeflate(pixels, bounds.Width, changed)
                 : isKeyFrame
                     ? fullFrame!.EncodedData
-                    : EncodeRegion(bitmap, changed);
+                    : EncodeRegion(bitmap, changed, geometry.InsetX, geometry.InsetY);
 
             var tile = new WindowFrameTile(
                 WindowId: window.WindowId,
@@ -193,9 +194,9 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
     /// <summary>
     /// Encodes just the changed rectangle as its own PNG.
     /// </summary>
-    private static string EncodeRegion(Bitmap bitmap, WindowFrameTileRect rect)
+    private static string EncodeRegion(Bitmap bitmap, WindowFrameTileRect rect, int offsetX, int offsetY)
     {
-        var cropRectangle = new Rectangle(rect.X, rect.Y, rect.Width, rect.Height);
+        var cropRectangle = new Rectangle(rect.X + offsetX, rect.Y + offsetY, rect.Width, rect.Height);
         using var region = bitmap.Clone(cropRectangle, PixelFormat.Format32bppArgb);
         using var stream = new MemoryStream();
         region.Save(stream, ImageFormat.Png);
@@ -204,9 +205,10 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
 
     private static WindowFrame CaptureUnconditionally(LaunchedWindow window, int sequence)
     {
-        var bounds = GetCaptureBounds(window);
-        using var bitmap = CaptureBitmap(window, bounds);
-        return EncodeFrame(window, bounds, sequence, bitmap);
+        var geometry = GetCaptureGeometry(window);
+        using var bitmap = new Bitmap(geometry.Outer.Width, geometry.Outer.Height, PixelFormat.Format32bppArgb);
+        CaptureInto(bitmap, window, geometry, FrameCaptureDiagnostics.AutomaticStrategy, recordsMethod: false);
+        return EncodeFrame(window, geometry.Visible, sequence, bitmap, VisibleRectangle(geometry));
     }
 
     private readonly Dictionary<string, Bitmap> bitmapsByWindowId = new();
@@ -233,8 +235,18 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         }
     }
 
-    private static void CaptureInto(Bitmap bitmap, LaunchedWindow window, WindowRect bounds, string strategy)
+    /// <summary>
+    /// Fills a bitmap the size of the window's outer rectangle. Only the visible frame inside it is used
+    /// afterwards; see <see cref="WindowGeometry"/>.
+    /// </summary>
+    private static void CaptureInto(
+        Bitmap bitmap,
+        LaunchedWindow window,
+        WindowGeometry geometry,
+        string strategy,
+        bool recordsMethod = true)
     {
+        var visible = geometry.Visible;
         using var graphics = Graphics.FromImage(bitmap);
 
         // PrintWindow makes the app render a fresh copy of itself, which took 50 to 150 ms a frame in the
@@ -245,32 +257,29 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         {
             FrameCaptureDiagnostics.ScreenCopyStrategy => true,
             FrameCaptureDiagnostics.PrintWindowStrategy => false,
-            _ => IsFullyVisibleOnScreen(window.Hwnd, bounds)
+            _ => IsFullyVisibleOnScreen(window.Hwnd, visible)
         };
         if (copiesScreen)
         {
-            graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, new Size(bounds.Width, bounds.Height));
-            FrameCaptureDiagnostics.Shared.RecordMethod(FrameCaptureDiagnostics.ScreenCopyStrategy);
+            // Only the visible frame: the invisible borders around it show the windows behind.
+            graphics.CopyFromScreen(
+                visible.X, visible.Y, geometry.InsetX, geometry.InsetY, new Size(visible.Width, visible.Height));
+            if (recordsMethod)
+            {
+                FrameCaptureDiagnostics.Shared.RecordMethod(FrameCaptureDiagnostics.ScreenCopyStrategy);
+            }
             return;
         }
 
-        FrameCaptureDiagnostics.Shared.RecordMethod(FrameCaptureDiagnostics.PrintWindowStrategy);
-        PrintInto(graphics, window, bounds);
-    }
-
-    private static Bitmap CaptureBitmap(LaunchedWindow window, WindowRect bounds)
-    {
-        var bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
-        using var graphics = Graphics.FromImage(bitmap);
-        if (IsFullyVisibleOnScreen(window.Hwnd, bounds))
+        if (recordsMethod)
         {
-            graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, new Size(bounds.Width, bounds.Height));
-            return bitmap;
+            FrameCaptureDiagnostics.Shared.RecordMethod(FrameCaptureDiagnostics.PrintWindowStrategy);
         }
-
-        PrintInto(graphics, window, bounds);
-        return bitmap;
+        PrintInto(graphics, window, geometry.Outer);
     }
+
+    private static Rectangle VisibleRectangle(WindowGeometry geometry) =>
+        new(geometry.InsetX, geometry.InsetY, geometry.Visible.Width, geometry.Visible.Height);
 
     private static void PrintInto(Graphics graphics, LaunchedWindow window, WindowRect bounds)
     {
@@ -301,15 +310,14 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
     /// Copies row by row because the locked stride can exceed <c>width * 4</c>, and comparing padding
     /// bytes would report spurious changes.
     /// </remarks>
-    private static byte[] CopyPixels(Bitmap bitmap)
+    private static byte[] CopyPixels(Bitmap bitmap, Rectangle rectangle)
     {
-        var rectangle = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
         var data = bitmap.LockBits(rectangle, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
         try
         {
-            var rowBytes = bitmap.Width * 4;
-            var pixels = new byte[rowBytes * bitmap.Height];
-            for (var row = 0; row < bitmap.Height; row++)
+            var rowBytes = rectangle.Width * 4;
+            var pixels = new byte[rowBytes * rectangle.Height];
+            for (var row = 0; row < rectangle.Height; row++)
             {
                 Marshal.Copy(
                     data.Scan0 + row * data.Stride,
@@ -331,11 +339,20 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         LaunchedWindow window,
         WindowRect bounds,
         int sequence,
-        Bitmap bitmap
+        Bitmap bitmap,
+        Rectangle visible
     )
     {
         using var stream = new MemoryStream();
-        bitmap.Save(stream, ImageFormat.Png);
+        if (visible == new Rectangle(0, 0, bitmap.Width, bitmap.Height))
+        {
+            bitmap.Save(stream, ImageFormat.Png);
+        }
+        else
+        {
+            using var cropped = bitmap.Clone(visible, PixelFormat.Format32bppArgb);
+            cropped.Save(stream, ImageFormat.Png);
+        }
 
         return new WindowFrame(
             WindowId: window.WindowId,
@@ -349,17 +366,8 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         );
     }
 
-    private static WindowRect GetCaptureBounds(LaunchedWindow window)
-    {
-        if (GetWindowRect(window.Hwnd, out var rect))
-        {
-            var width = Math.Max(1, rect.Right - rect.Left);
-            var height = Math.Max(1, rect.Bottom - rect.Top);
-            return new WindowRect(rect.Left, rect.Top, width, height);
-        }
-
-        return window.Bounds;
-    }
+    private static WindowGeometry GetCaptureGeometry(LaunchedWindow window) =>
+        WindowGeometry.Read(window.Hwnd) ?? new WindowGeometry(window.Bounds, window.Bounds);
 
     /// <summary>
     /// The window's real DPI scale (1.0 = 100%, 2.0 = 200%, etc). Requires the process to be
@@ -461,9 +469,6 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
     private static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool GetWindowRect(nint hWnd, out NativeRect rect);
-
-    [DllImport("user32.dll", SetLastError = true)]
     private static extern bool PrintWindow(nint hwnd, nint hdcBlt, PrintWindowFlags flags);
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -474,14 +479,5 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
     {
         PW_CLIENTONLY = 0x00000001,
         PW_RENDERFULLCONTENT = 0x00000002
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativeRect
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
     }
 }
