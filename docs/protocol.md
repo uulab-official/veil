@@ -386,6 +386,14 @@ share, and a mismatched name return `invalid_shared_file_path`. A missing file r
 `shared_file_missing`. Successful requests use the same `file.open.response` followed by `window.created`
 contract as an ordinary drop.
 
+## Window Geometry
+
+Window `bounds`, frame surfaces, `input.mouse` coordinates, and `window.resize.request` sizes all describe
+a window's visible frame (`DWMWA_EXTENDED_FRAME_BOUNDS`), not the outer rectangle `GetWindowRect`
+returns. On Windows 10 and 11 the outer rectangle includes invisible resize borders, about 7 px at 100%
+on the left, right, and bottom, that show whatever is behind the window; mirroring them put slivers of
+other windows along a mirrored window's edges. The agent adds those borders back when it resizes.
+
 ## Window Created
 
 Event:
@@ -1048,7 +1056,7 @@ A `scroll` event may carry `deltaX` and `deltaY`, wheel units with 120 per notch
 right and up as Windows counts them. Hosts send trackpad gestures as many small amounts, which Windows
 scrolls smoothly; an event with neither field is one notch up. Other events omit both.
 
-Implementation note: `x` and `y` are pixels in the window's frame bitmap, measured from the window rectangle's top-left. The Windows agent brings the window to the foreground, moves it fully onto its monitor's work area when it fits, and delivers each event as real input with `SendInput` at the matching absolute screen position. Posting window messages to the HWND did not reach XAML and DirectComposition content such as Paint's canvas, and posted moves carried no button state, so drags could not work.
+Implementation note: `x` and `y` are pixels in the window's frame bitmap, measured from the top-left of the window's visible frame. The Windows agent brings the window to the foreground, moves it fully onto its monitor's work area when it fits, and delivers each event as real input with `SendInput` at the matching absolute screen position. Posting window messages to the HWND did not reach XAML and DirectComposition content such as Paint's canvas, and posted moves carried no button state, so drags could not work.
 
 Rules:
 
