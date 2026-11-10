@@ -645,6 +645,16 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
   assert.match(repair, /Start-VeilAgentAsStandardUser\s+-StartScriptPath\s+\$StartScript/);
   assert.match(repair, /guestAgentHealthSucceeded/);
   assert.match(repair, /-RequireGuestAddress/);
+  // With the firewall rules in place, a tools update replaces user-owned files and restarts the agent
+  // as the user, so it must not wait on a Windows approval prompt; the elevated repair stays the fallback.
+  assert.match(repair, /function\s+Test-VeilFirewallRulesReady/);
+  assert.match(repair, /Get-NetFirewallApplicationFilter\)\.Program\s+-eq\s+\$AgentExe/);
+  assert.match(repair, /if\s+\(-not\s+\(Test-VeilAdministrator\)\s+-and\s+\(Test-Path\s+\$AgentExe\)\s+-and\s+\(Test-VeilFirewallRulesReady\)\)/);
+  assert.match(repair, /Falling back to the elevated repair/);
+  assert.ok(
+    repair.indexOf("function Invoke-VeilUnelevatedUpdate") < repair.indexOf("Requesting UAC elevation"),
+    "the unelevated update must be tried before the UAC request"
+  );
   assert.match(bootstrap, /Bootstrap-VeilAgentFromMedia/);
   assert.match(bootstrap, /Install Veil Agent\.cmd/);
   assert.match(bootstrap, /bootstrap\.log/);
