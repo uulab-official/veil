@@ -34,6 +34,7 @@ internal sealed unsafe class DesktopDuplicationCapture
     }
 
     private static readonly TimeSpan RestartPause = TimeSpan.FromSeconds(2);
+    private const uint FirstFrameTimeoutMilliseconds = 100;
     private readonly object gate = new();
     private nint device;
     private nint context;
@@ -65,7 +66,9 @@ internal sealed unsafe class DesktopDuplicationCapture
 
         try
         {
-            if (!EnsureStarted() || !Refresh() || version == 0)
+            // The first frame after starting carries the whole desktop, but may not be ready at once; without
+            // it a desktop that then stays still never yields an image, and every capture fell back to GDI.
+            if (!EnsureStarted() || !Refresh(version == 0 ? FirstFrameTimeoutMilliseconds : 0) || version == 0)
             {
                 return CopyResult.Unavailable;
             }
@@ -108,11 +111,11 @@ internal sealed unsafe class DesktopDuplicationCapture
     }
 
     /// <summary>Takes the newest desktop image, if DWM presented one since the last call.</summary>
-    private bool Refresh()
+    private bool Refresh(uint timeoutMilliseconds)
     {
         FrameInfo info;
         nint resource;
-        var result = Call(duplication, DuplicationAcquireNextFrame, 0u, (nint)(&info), (nint)(&resource));
+        var result = Call(duplication, DuplicationAcquireNextFrame, timeoutMilliseconds, (nint)(&info), (nint)(&resource));
         if (result == DXGI_ERROR_WAIT_TIMEOUT)
         {
             return true;
