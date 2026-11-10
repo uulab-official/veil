@@ -72,6 +72,13 @@ struct WindowsAppFrameSurface: View {
                 } else {
                     statusSurface(assessment)
                 }
+
+                // Covers the captured frame with pixels cropped from the guest display whenever
+                // `window.layout` says the display shows all of this window; empty otherwise.
+                FramebufferCropView(
+                    windowId: presentedSession.id,
+                    pointsPerPixel: WindowFrameViewport.pointsPerPixel(forWindowsScale: session.latestFrame?.scale ?? 1)
+                )
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .help(frameStatusHelp(assessment))

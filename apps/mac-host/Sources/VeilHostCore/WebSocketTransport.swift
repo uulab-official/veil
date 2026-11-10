@@ -166,6 +166,7 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
             || type == MessageType.clipboardImageSet.rawValue
             || type == MessageType.notificationReceived.rawValue
             || type == MessageType.windowFrameUnchanged.rawValue
+            || type == MessageType.windowLayout.rawValue
     }
 
     /// How many undelivered control messages the event stream will hold.

@@ -144,6 +144,10 @@ extension VeilHostShellApp {
                         syncGuestClipboardImageToPasteboard()
                     case .handledWindowsNotification(let notificationId):
                         presentWindowsNotification(notificationId: notificationId)
+                    case .handledWindowLayout:
+                        // Mirrored windows follow the layout store directly; only the shared
+                        // framebuffer connection may need to start.
+                        syncGuestFramebufferSource()
                     case .ignored:
                         return
                     }

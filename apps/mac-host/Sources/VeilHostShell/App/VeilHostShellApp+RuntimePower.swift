@@ -312,6 +312,7 @@ extension VeilHostShellApp {
                 }
 
                 await performFrameStreamMaintenance(automatic: true)
+                syncGuestFramebufferSource()
             }
         }
     }

@@ -28,6 +28,10 @@ final class RFBEmbeddedDisplayModel {
         }
     }
     @ObservationIgnored private(set) var latestFrame: CGImage?
+    /// Moves the guest pointer once on the first frame so a Windows display that turned itself off comes
+    /// back. Off for the Coherence framebuffer source, where moving the pointer would disturb the app the
+    /// user is pointing at.
+    @ObservationIgnored var wakesDisplayOnConnect = true
     @ObservationIgnored private var latestFrameSize: (width: Int, height: Int)?
 
     var statusSymbolName: String {
@@ -138,7 +142,7 @@ final class RFBEmbeddedDisplayModel {
                     self.image = NSImage(cgImage: cgImage, size: NSSize(width: frame.width, height: frame.height))
                     self.frameSequence = frame.sequence
                 }
-                if self.status != .receiving {
+                if self.status != .receiving, self.wakesDisplayOnConnect {
                     // First frame of this session: Windows may have turned its display off.
                     self.worker?.wakeDisplay()
                 }

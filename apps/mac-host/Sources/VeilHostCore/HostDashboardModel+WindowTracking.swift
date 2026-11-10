@@ -82,6 +82,11 @@ extension HostDashboardModel {
             return receiveWindowFrameUnchanged(event)
                 ? .handledWindowFrameUnchanged(windowId: event.windowId)
                 : .ignored
+        case .windowLayout:
+            let event = try decoder.decode(WindowLayoutEvent.self, from: message)
+            return GuestWindowLayoutStore.shared.apply(event)
+                ? .handledWindowLayout(sequence: event.sequence)
+                : .ignored
         case .notificationReceived:
             let notification = try decoder.decode(WindowsNotificationReceivedEvent.self, from: message)
             return receiveWindowsNotification(notification)
@@ -97,6 +102,8 @@ extension HostDashboardModel {
         onMessageHandled: @MainActor (HostProtocolMessageResult) -> Void = { _ in }
     ) async {
         var consecutiveUndecodableMessages = 0
+        // A new connection may be a new agent process; its layouts describe the guest from scratch.
+        GuestWindowLayoutStore.shared.reset()
         do {
             for try await message in source.eventMessages() {
                 // Only ever transitions .reconnecting -> .connected here, never touching .loading/

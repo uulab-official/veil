@@ -278,5 +278,6 @@ public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledClipboardText(sequence: Int)
     case handledClipboardImage(sequence: Int)
     case handledWindowsNotification(notificationId: String)
+    case handledWindowLayout(sequence: Int)
     case ignored
 }

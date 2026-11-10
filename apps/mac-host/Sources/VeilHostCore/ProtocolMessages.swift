@@ -27,6 +27,7 @@ public enum MessageType: String, Codable, Sendable {
     case displayResizeResponse = "display.resize.response"
     case systemShutdownRequest = "system.shutdown.request"
     case systemShutdownResponse = "system.shutdown.response"
+    case windowLayout = "window.layout"
     case clipboardTextSet = "clipboard.text.set"
     case clipboardImageSet = "clipboard.image.set"
     case clipboardFilesSet = "clipboard.files.set"
@@ -124,6 +125,9 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     public var clipboardImage: Bool? = nil
     /// True when the agent can place shared-folder files on the Windows clipboard (`clipboard.files.set`).
     public var clipboardFiles: Bool? = nil
+    /// True when the agent sends `window.layout`, so the host can crop windows out of the guest display.
+    /// Optional so an older agent decodes as `nil` and every window keeps its `window.frame` stream.
+    public var windowLayout: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
