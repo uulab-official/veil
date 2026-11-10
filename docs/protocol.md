@@ -200,7 +200,9 @@ took in the guest, so the host can see where frame time goes without reading gue
 Means are exponentially weighted (factor 0.1), so they follow the current workload. `methods` counts
 captures by method: `duplication` reads the desktop DWM already composed through DXGI Desktop
 Duplication, `screen` copies the screen with GDI, `printWindow` asks the app to render itself. `strategy` is the method in force; see [Frame Capture Strategy](#frame-capture-strategy).
-Hosts must not depend on the phase names, which may change with the capture code.
+Hosts must not depend on the phase names, which may change with the capture code. Two more optional
+strings help diagnose Desktop Duplication: `lastDuplicationFailure` (when and why it last fell back, such as
+`DuplicateOutput 0x80070005`) and `duplicationMode` (the duplicated output's size and refresh rate).
 
 ## App List
 
