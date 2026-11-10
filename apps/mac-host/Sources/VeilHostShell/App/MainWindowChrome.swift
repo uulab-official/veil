@@ -28,6 +28,11 @@ enum MainWindowChrome {
     static func showMainWindow() {
         NSApp.setActivationPolicy(.regular)
         configureAndCompactMainWindow()
+        guard !QuietLaunch.isActive else {
+            // Behind the app in use; the user brings it forward from the Dock.
+            mainWindow?.orderBack(nil)
+            return
+        }
         activateApplication()
         mainWindow?.makeKeyAndOrderFront(nil)
         // AppKit can accept the activation request before the scene's window has become key.

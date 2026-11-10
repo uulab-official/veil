@@ -297,7 +297,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             }
         }
         foregroundWindowId = visibleWindowIds.last
-        NSApp.activate(ignoringOtherApps: true)
+        QuietLaunch.activateApplication()
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -618,6 +618,10 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private func present(_ window: NSWindow, windowId: String) {
         rememberWindowId(windowId)
         foregroundWindowId = windowId
+        if QuietLaunch.isActive {
+            window.orderBack(nil)
+            return
+        }
         MacWindowRestorePolicy.restoreToFront(window)
         NSApp.activate(ignoringOtherApps: true)
     }

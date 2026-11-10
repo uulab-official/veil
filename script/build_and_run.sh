@@ -117,6 +117,11 @@ codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BINARY" >/dev/nul
 codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BUNDLE" >/dev/null
 
 open_app() {
+  # VEIL_LAUNCH_IN_BACKGROUND=1 relaunches without taking the Mac over: no activation, windows behind.
+  if [[ "${VEIL_LAUNCH_IN_BACKGROUND:-0}" == "1" ]]; then
+    /usr/bin/open -g -n "$APP_BUNDLE" --args -VeilLaunchInBackground "$@"
+    return
+  fi
   /usr/bin/open -n "$APP_BUNDLE" --args "$@"
 }
 

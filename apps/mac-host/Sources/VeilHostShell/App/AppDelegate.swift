@@ -23,7 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         appIconSource = applyBundledAppIcon()
         NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        QuietLaunch.begin()
+        QuietLaunch.activateApplication()
         DispatchQueue.main.async {
             MainWindowChrome.showMainWindow()
         }
