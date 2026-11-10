@@ -9,6 +9,7 @@ in place of Homebrew's binary. `qemu-img` and the data files stay Homebrew's.
 |---|---|---|
 | `0001-virtio-balloon-release-discarded-pages-on-darwin.patch` | QEMU 11.1.3 (`qemu-11.1.3.tar.xz`, SHA-256 `5a8289c7…4b22`, the tarball Homebrew pins); also applies cleanly to UTM's `utm-edition` (QEMU 10.0.12) | Built and measured, see below. |
 | `0002-virtio-balloon-track-partial-host-pages-across-the-guest.patch` | QEMU 11.1.3 after 0001 | Built; no regression on Linux. Its effect on Windows is not measured yet (see below). |
+| `0003-ui-add-a-shared-memory-display-listener.patch` | QEMU 11.1.3 after 0002 | Built; an Alpine guest's console arrived in shared memory (1280x800, 42 frames in 8 s of boot). |
 
 ## 0001: the memory balloon gives memory back to macOS
 
@@ -50,3 +51,22 @@ allocates it. In both cases QEMU sees the driver's DMA buffer as first initialis
 values written later. NetKVM, on the same machine, works. Until the ARM64 Balloon driver's buffers
 reach QEMU, the balloon cannot return Windows memory, and `QEMUMemoryBalloonPolicy` leaves Windows
 at full size because it never gets statistics. No public report of this was found.
+
+## 0003: the guest display in shared memory
+
+Adds `-object veil-shm-display,id=veilfb,path=<socket>`. A display change listener on the default console
+copies the surface into a POSIX shared-memory object and copies each dirty rectangle into it as the
+guest flushes. It tells one client over a Unix socket, as newline-terminated JSON, which object holds
+the display (`surface`) and which rectangles changed (`update`). A client that falls behind gets one
+full update once its socket drains.
+
+The point is to replace QEMU's loopback VNC server as the source of the Coherence framebuffer
+(`docs/superpowers/specs/2026-11-10-coherence-framebuffer-design.md`, stage 4). VNC sends on a 30 ms
+refresh tick and copies every frame through a socket.
+
+QEMU's own `-display dbus` already has a shared-map listener interface, but it allocates surfaces with
+`qemu_memfd_alloc`, which is Linux-only, so on macOS it falls back to copying through D-Bus.
+
+The object is declared in `qapi/qom.json`, as every user-creatable type must be, and builds wherever
+pixman does. The host adds it only for a bundled QEMU that carries this patch
+(`QEMUSharedFramebuffer.isSupported`).
