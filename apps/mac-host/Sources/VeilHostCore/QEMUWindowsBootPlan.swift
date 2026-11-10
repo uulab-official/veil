@@ -473,6 +473,9 @@ public struct QEMUWindowsBootPlanner: Sendable {
             "-display", "cocoa"
         ])
         arguments.append(contentsOf: QEMUWindowsDisplayDevices.deviceArguments(for: profile))
+        if profile.attachesMemoryBalloon == true {
+            arguments.append(contentsOf: QEMUMemoryBalloon.deviceArguments)
+        }
         arguments.append(contentsOf: [
             "-device", "usb-kbd",
             "-device", "usb-tablet"

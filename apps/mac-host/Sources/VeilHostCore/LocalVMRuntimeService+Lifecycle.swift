@@ -94,13 +94,14 @@ extension LocalVMRuntimeService {
         guard var profile = try await profileStore.load() else {
             throw VMRuntimeError.bootPrerequisitesMissing
         }
-        // The display devices change only on a real cold boot. A start that finds Windows already
+        // The display devices and the memory balloon change only on a real cold boot. A start that finds Windows already
         // running, or a saved session waiting to resume, must keep the device list QEMU has.
         let isColdBoot = ![.running, .starting, .suspended].contains(snapshot.state)
         if isColdBoot, await suspendedSession() == nil {
             let bootsOnVirtioGPU = QEMUWindowsDisplayDevices.bootsOnVirtioGPU(profile)
-            if profile.bootsOnVirtioGPU != bootsOnVirtioGPU {
+            if profile.bootsOnVirtioGPU != bootsOnVirtioGPU || profile.attachesMemoryBalloon != true {
                 profile.bootsOnVirtioGPU = bootsOnVirtioGPU
+                profile.attachesMemoryBalloon = true
                 try await profileStore.save(profile)
             }
         }

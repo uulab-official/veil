@@ -174,7 +174,29 @@ struct QEMUWindowsBootPlanTests {
         #expect(plan.arguments.contains("virtio-gpu-pci"))
         #expect(plan.arguments.contains("usb-kbd"))
         #expect(plan.arguments.contains("usb-tablet"))
+        #expect(!plan.arguments.contains(where: { $0.hasPrefix("virtio-balloon-pci") }))
         #expect(plan.warnings.isEmpty)
+    }
+
+    @Test("attaches the memory balloon only when the profile's cold start chose it")
+    func attachesMemoryBalloonFromProfile() throws {
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.attachesMemoryBalloon = true
+        profile.installerMediaPath = "/Users/test/Downloads/Win11_25H2_Korean_Arm64_v2.iso"
+        profile.virtualDiskPath = "/Users/test/Virtual Machines/Veil/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+
+        let plan = try QEMUWindowsBootPlanner(
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true
+        ).makePlan(for: profile)
+
+        #expect(plan.arguments.containsSequence([
+            "-device",
+            "virtio-balloon-pci,id=veil-balloon,deflate-on-oom=on,guest-stats-polling-interval=5"
+        ]))
     }
 
     @Test("can select an alternate QEMU network adapter for live compatibility probes")

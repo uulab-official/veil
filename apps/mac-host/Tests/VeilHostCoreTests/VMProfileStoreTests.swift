@@ -2233,6 +2233,21 @@ struct VMProfileStoreTests {
         _ = try await service.start()
 
         #expect(try await store.load()?.bootsOnVirtioGPU == nil)
+        #expect(try await store.load()?.attachesMemoryBalloon == nil)
+    }
+
+    @Test("a cold start attaches the memory balloon; a suspended session keeps its devices")
+    func coldStartAttachesMemoryBalloon() async throws {
+        let (service, store, bootRunner) = try await Self.installedRuntime(currentState: nil)
+
+        _ = try await service.start()
+
+        #expect(bootRunner.startedProfile?.attachesMemoryBalloon == true)
+        #expect(try await store.load()?.attachesMemoryBalloon == true)
+
+        let (suspendedService, suspendedStore, _) = try await Self.installedRuntime(currentState: .suspended)
+        _ = try await suspendedService.start()
+        #expect(try await suspendedStore.load()?.attachesMemoryBalloon == nil)
     }
 
     private static func installedRuntime(

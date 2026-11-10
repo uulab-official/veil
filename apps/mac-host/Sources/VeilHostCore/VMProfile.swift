@@ -104,6 +104,10 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     /// `virtio-gpu-pci`. Set only when a cold start begins, so a suspended session resumes on the device
     /// list its memory state was saved with.
     public var bootsOnVirtioGPU: Bool?
+    /// True when the latest cold start attached the memory balloon (`QEMUMemoryBalloon`). Set only when
+    /// a cold start begins, for the same reason as `bootsOnVirtioGPU`: a session suspended without the
+    /// device must resume without it.
+    public var attachesMemoryBalloon: Bool?
     public var createdAt: Date
 
     public init(
@@ -130,6 +134,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         portForwards: [VMPortForwardRule]? = nil,
         virtioGPUDriverInstalled: Bool? = nil,
         bootsOnVirtioGPU: Bool? = nil,
+        attachesMemoryBalloon: Bool? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -155,6 +160,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         self.portForwards = portForwards
         self.virtioGPUDriverInstalled = virtioGPUDriverInstalled
         self.bootsOnVirtioGPU = bootsOnVirtioGPU
+        self.attachesMemoryBalloon = attachesMemoryBalloon
         self.createdAt = createdAt
     }
 
