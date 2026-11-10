@@ -44,6 +44,9 @@ internal sealed unsafe class DesktopDuplicationCapture
     private WindowRect desktop = new(0, 0, 0, 0);
     private byte[] desktopPixels = [];
     private long version;
+    private bool hasPendingCopy;
+    private long lastPresentTime;
+    private FrameChanges? pendingChanges;
     private DateTime nextStartAttempt = DateTime.MinValue;
 
     /// <summary>
@@ -88,6 +91,7 @@ internal sealed unsafe class DesktopDuplicationCapture
                 return CopyResult.Unchanged;
             }
 
+            var cropTimer = System.Diagnostics.Stopwatch.StartNew();
             var rowBytes = region.Width * 4;
             var desktopRowBytes = desktop.Width * 4;
             for (var row = 0; row < region.Height; row++)
@@ -101,6 +105,7 @@ internal sealed unsafe class DesktopDuplicationCapture
                 );
             }
 
+            FrameCaptureDiagnostics.Shared.Record("duplicationCrop", cropTimer.Elapsed.TotalMilliseconds);
             knownVersion = version;
             return CopyResult.Copied;
         }
@@ -113,6 +118,12 @@ internal sealed unsafe class DesktopDuplicationCapture
     /// <summary>Takes the newest desktop image, if DWM presented one since the last call.</summary>
     private bool Refresh(uint timeoutMilliseconds)
     {
+        // A copy issued on an earlier call may have finished by now.
+        if (hasPendingCopy && !ResolvePendingCopy(wait: false))
+        {
+            return false;
+        }
+
         FrameInfo info;
         nint resource;
         var result = Call(duplication, DuplicationAcquireNextFrame, timeoutMilliseconds, (nint)(&info), (nint)(&resource));
@@ -134,8 +145,33 @@ internal sealed unsafe class DesktopDuplicationCapture
             {
                 return true;
             }
+            if (lastPresentTime != 0 && info.LastPresentTime > lastPresentTime)
+            {
+                // QueryPerformanceCounter ticks between presents, as milliseconds.
+                FrameCaptureDiagnostics.Shared.Record(
+                    "dwmPresentInterval",
+                    (info.LastPresentTime - lastPresentTime) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+            }
+            if (info.LastPresentTime != 0)
+            {
+                lastPresentTime = info.LastPresentTime;
+            }
 
-            return imageInSystemMemory ? ReadMappedDesktop() : ReadThroughStaging(resource);
+            var readTimer = System.Diagnostics.Stopwatch.StartNew();
+            // Copying the whole desktop took 16 ms a frame at Mac-screen resolutions; DWM reports which
+            // parts moved and which changed, so only those are copied once there is an image to update.
+            // The changes are relative to the previous frame, so that one has to be in the image first.
+            if (hasPendingCopy && !ResolvePendingCopy(wait: true))
+            {
+                return false;
+            }
+            var changes = version == 0 ? null : ReadFrameChanges(info.TotalMetadataBufferSize);
+            var usesStaging = staging != 0;
+            var read = usesStaging ? ReadThroughStaging(resource, changes) : ReadMappedDesktop(changes);
+            FrameCaptureDiagnostics.Shared.Record(
+                usesStaging ? "duplicationReadStaging" : "duplicationReadMapped",
+                readTimer.Elapsed.TotalMilliseconds);
+            return read;
         }
         finally
         {
@@ -144,10 +180,13 @@ internal sealed unsafe class DesktopDuplicationCapture
         }
     }
 
-    private bool ReadMappedDesktop()
+    private bool ReadMappedDesktop(FrameChanges? changes)
     {
         MappedRect mapped;
-        if (Call(duplication, DuplicationMapDesktopSurface, (nint)(&mapped)) is var mapResult and < 0)
+        var mapTimer = System.Diagnostics.Stopwatch.StartNew();
+        var mapResult = Call(duplication, DuplicationMapDesktopSurface, (nint)(&mapped));
+        FrameCaptureDiagnostics.Shared.Record("duplicationMap", mapTimer.Elapsed.TotalMilliseconds);
+        if (mapResult < 0)
         {
             Stop();
             return Fail("MapDesktopSurface", mapResult);
@@ -155,7 +194,9 @@ internal sealed unsafe class DesktopDuplicationCapture
 
         try
         {
-            CopyRows((byte*)mapped.Bits, mapped.Pitch);
+            var copyTimer = System.Diagnostics.Stopwatch.StartNew();
+            CopyChanges((byte*)mapped.Bits, mapped.Pitch, changes);
+            FrameCaptureDiagnostics.Shared.Record("duplicationCopy", copyTimer.Elapsed.TotalMilliseconds);
             return true;
         }
         finally
@@ -164,53 +205,226 @@ internal sealed unsafe class DesktopDuplicationCapture
         }
     }
 
-    private bool ReadThroughStaging(nint resource)
+    private bool ReadThroughStaging(nint resource, FrameChanges? changes)
     {
         nint texture;
         var textureId = IID_ID3D11Texture2D;
         if (Call(resource, QueryInterfaceSlot, (nint)(&textureId), (nint)(&texture)) is var queryResult and < 0)
         {
+            if (imageInSystemMemory)
+            {
+                // No texture behind this frame; read the mapped surface from now on.
+                Release(staging);
+                staging = 0;
+                Fail("QueryInterface(ID3D11Texture2D); using MapDesktopSurface", queryResult);
+                return ReadMappedDesktop(changes);
+            }
             Stop();
             return Fail("QueryInterface(ID3D11Texture2D)", queryResult);
         }
 
         try
         {
-            CallVoid(context, ContextCopyResource, staging, texture);
-            MappedSubresource mapped;
-            if (Call(context, ContextMap, staging, 0u, D3D11_MAP_READ, 0u, (nint)(&mapped)) is var stagingResult and < 0)
+            var copyTimer = System.Diagnostics.Stopwatch.StartNew();
+            if (changes is null)
             {
-                Stop();
-                return Fail("Map(staging)", stagingResult);
+                CallVoid(context, ContextCopyResource, staging, texture);
             }
-
-            try
+            else
             {
-                CopyRows((byte*)mapped.Data, (int)mapped.RowPitch);
-                return true;
+                // Only what changed; moved areas are shifted in the kept image instead.
+                foreach (var rect in changes.Dirty)
+                {
+                    if (Clamp(rect) is not { } area)
+                    {
+                        continue;
+                    }
+                    var box = new Box
+                    {
+                        Left = (uint)area.Left,
+                        Top = (uint)area.Top,
+                        Front = 0,
+                        Right = (uint)(area.Left + area.Width),
+                        Bottom = (uint)(area.Top + area.Height),
+                        Back = 1
+                    };
+                    CopySubresourceRegion(staging, (uint)area.Left, (uint)area.Top, texture, (nint)(&box));
+                }
             }
-            finally
-            {
-                CallVoid(context, ContextUnmap, staging, 0u);
-            }
+            FrameCaptureDiagnostics.Shared.Record("duplicationStagingCopy", copyTimer.Elapsed.TotalMilliseconds);
+            hasPendingCopy = true;
+            pendingChanges = changes;
         }
         finally
         {
             Release(texture);
         }
+
+        return ResolvePendingCopy(wait: false);
     }
 
-    private void CopyRows(byte* source, int pitch)
+    /// <summary>
+    /// Reads the copied rectangles out of the staging texture into the kept image.
+    /// </summary>
+    /// <remarks>
+    /// Mapping right after the copy waited about 14 ms a frame for the guest's software renderer to finish
+    /// it. Without <paramref name="wait"/> the map returns at once while the copy is still running, and the
+    /// image is updated on a later call instead, one sampling interval later at most.
+    /// </remarks>
+    private bool ResolvePendingCopy(bool wait)
+    {
+        MappedSubresource mapped;
+        var mapTimer = System.Diagnostics.Stopwatch.StartNew();
+        var result = Call(context, ContextMap, staging, 0u, D3D11_MAP_READ, wait ? 0u : D3D11_MAP_FLAG_DO_NOT_WAIT, (nint)(&mapped));
+        FrameCaptureDiagnostics.Shared.Record(wait ? "duplicationStagingMapWait" : "duplicationStagingMap", mapTimer.Elapsed.TotalMilliseconds);
+        if (result == DXGI_ERROR_WAS_STILL_DRAWING)
+        {
+            return true;
+        }
+        if (result < 0)
+        {
+            Stop();
+            return Fail("Map(staging)", result);
+        }
+
+        try
+        {
+            CopyChanges((byte*)mapped.Data, (int)mapped.RowPitch, pendingChanges);
+            hasPendingCopy = false;
+            pendingChanges = null;
+            return true;
+        }
+        finally
+        {
+            CallVoid(context, ContextUnmap, staging, 0u);
+        }
+    }
+
+    /// <summary>Rectangles DWM reports for the acquired frame, in desktop pixels.</summary>
+    private sealed record FrameChanges(MoveRect[] Moves, NativeRect[] Dirty);
+
+    /// <summary>
+    /// The frame's move and dirty rectangles, or null when they cannot be read and the whole image must
+    /// be copied instead.
+    /// </summary>
+    private FrameChanges? ReadFrameChanges(uint metadataSize)
+    {
+        if (metadataSize == 0)
+        {
+            return new FrameChanges([], []);
+        }
+
+        var moves = new MoveRect[metadataSize / (uint)sizeof(MoveRect) + 1];
+        var dirty = new NativeRect[metadataSize / (uint)sizeof(NativeRect) + 1];
+        uint moveBytes, dirtyBytes;
+        fixed (MoveRect* moveBuffer = moves)
+        fixed (NativeRect* dirtyBuffer = dirty)
+        {
+            if (Call(duplication, DuplicationGetFrameMoveRects,
+                    (uint)(moves.Length * sizeof(MoveRect)), (nint)moveBuffer, (nint)(&moveBytes)) < 0
+                || Call(duplication, DuplicationGetFrameDirtyRects,
+                    (uint)(dirty.Length * sizeof(NativeRect)), (nint)dirtyBuffer, (nint)(&dirtyBytes)) < 0)
+            {
+                return null;
+            }
+        }
+
+        var changes = new FrameChanges(
+            moves[..(int)(moveBytes / (uint)sizeof(MoveRect))],
+            dirty[..(int)(dirtyBytes / (uint)sizeof(NativeRect))]
+        );
+        // Kilopixels changed, reported like a time so it shows in the same table.
+        FrameCaptureDiagnostics.Shared.Record(
+            "duplicationDirtyKilopixels",
+            changes.Dirty.Sum(rect => (double)Math.Max(0, rect.Right - rect.Left) * Math.Max(0, rect.Bottom - rect.Top)) / 1000);
+        return changes;
+    }
+
+    /// <summary>
+    /// Updates the kept desktop image: moved areas first, from the image as it was, then changed areas
+    /// from the new frame, the order the Desktop Duplication sample applies them in. Without
+    /// <paramref name="changes"/> the whole frame is copied.
+    /// </summary>
+    private void CopyChanges(byte* source, int pitch, FrameChanges? changes)
     {
         var rowBytes = desktop.Width * 4;
         fixed (byte* destination = desktopPixels)
         {
-            for (var row = 0; row < desktop.Height; row++)
+            if (changes is null)
             {
-                Buffer.MemoryCopy(source + (long)row * pitch, destination + (long)row * rowBytes, rowBytes, rowBytes);
+                for (var row = 0; row < desktop.Height; row++)
+                {
+                    Buffer.MemoryCopy(source + (long)row * pitch, destination + (long)row * rowBytes, rowBytes, rowBytes);
+                }
+            }
+            else
+            {
+                foreach (var move in changes.Moves)
+                {
+                    ApplyMove(destination, rowBytes, move);
+                }
+                foreach (var rect in changes.Dirty)
+                {
+                    if (Clamp(rect) is not { } area)
+                    {
+                        continue;
+                    }
+                    var (left, top, width, height) = area;
+                    var bytes = width * 4;
+                    for (var row = top; row < top + height; row++)
+                    {
+                        Buffer.MemoryCopy(
+                            source + (long)row * pitch + left * 4,
+                            destination + (long)row * rowBytes + left * 4,
+                            bytes,
+                            bytes);
+                    }
+                }
             }
         }
         version += 1;
+    }
+
+    private void ApplyMove(byte* image, int rowBytes, MoveRect move)
+    {
+        if (Clamp(move.Destination) is not { } area)
+        {
+            return;
+        }
+        var (left, top, width, height) = area;
+        var sourceLeft = move.SourceX;
+        var sourceTop = move.SourceY;
+        if (sourceLeft < 0 || sourceTop < 0
+            || sourceLeft + width > desktop.Width || sourceTop + height > desktop.Height)
+        {
+            return;
+        }
+
+        // Source and destination can overlap, so the moved block goes through a copy first.
+        var bytes = width * 4;
+        var block = new byte[bytes * height];
+        fixed (byte* blockBuffer = block)
+        {
+            for (var row = 0; row < height; row++)
+            {
+                Buffer.MemoryCopy(image + (long)(sourceTop + row) * rowBytes + sourceLeft * 4,
+                    blockBuffer + (long)row * bytes, bytes, bytes);
+            }
+            for (var row = 0; row < height; row++)
+            {
+                Buffer.MemoryCopy(blockBuffer + (long)row * bytes,
+                    image + (long)(top + row) * rowBytes + left * 4, bytes, bytes);
+            }
+        }
+    }
+
+    private (int Left, int Top, int Width, int Height)? Clamp(NativeRect rect)
+    {
+        var left = Math.Max(0, rect.Left);
+        var top = Math.Max(0, rect.Top);
+        var right = Math.Min(desktop.Width, rect.Right);
+        var bottom = Math.Min(desktop.Height, rect.Bottom);
+        return right > left && bottom > top ? (left, top, right - left, bottom - top) : null;
     }
 
     private bool EnsureStarted()
@@ -305,7 +519,12 @@ internal sealed unsafe class DesktopDuplicationCapture
             }
 
             imageInSystemMemory = duplicationDesc.DesktopImageInSystemMemory != 0;
-            if (!imageInSystemMemory)
+            FrameCaptureDiagnostics.Shared.RecordDuplicationMode(
+                $"{width}x{height} @ {duplicationDesc.RefreshNumerator}/{duplicationDesc.RefreshDenominator} Hz, " +
+                $"system memory {imageInSystemMemory}");
+            // Created even for a desktop image in system memory: MapDesktopSurface copies the whole desktop
+            // out on every call (13 ms a frame on a Veil guest), while the staging texture takes just the
+            // changed rectangles.
             {
                 var textureDesc = new Texture2DDesc
                 {
@@ -321,7 +540,11 @@ internal sealed unsafe class DesktopDuplicationCapture
                 nint createdStaging;
                 if (Call(device, DeviceCreateTexture2D, (nint)(&textureDesc), (nint)0, (nint)(&createdStaging)) is var textureResult and < 0)
                 {
-                    return Fail("CreateTexture2D(staging)", textureResult);
+                    if (!imageInSystemMemory)
+                    {
+                        return Fail("CreateTexture2D(staging)", textureResult);
+                    }
+                    createdStaging = 0;
                 }
                 staging = createdStaging;
             }
@@ -355,6 +578,8 @@ internal sealed unsafe class DesktopDuplicationCapture
         Release(device);
         staging = duplication = context = device = 0;
         version = 0;
+        hasPendingCopy = false;
+        pendingChanges = null;
     }
 
     private static void Release(nint unknown)
@@ -396,6 +621,10 @@ internal sealed unsafe class DesktopDuplicationCapture
     private static void CallVoid(nint self, int slot, nint a, nint b) =>
         ((delegate* unmanaged[Stdcall]<nint, nint, nint, void>)Slot(self, slot))(self, a, b);
 
+    private void CopySubresourceRegion(nint destination, uint x, uint y, nint source, nint box) =>
+        ((delegate* unmanaged[Stdcall]<nint, nint, uint, uint, uint, uint, nint, uint, nint, void>)
+            Slot(context, ContextCopySubresourceRegion))(context, destination, 0, x, y, 0, source, 0, box);
+
     private static void CallVoid(nint self, int slot, nint a, uint b) =>
         ((delegate* unmanaged[Stdcall]<nint, nint, uint, void>)Slot(self, slot))(self, a, b);
 
@@ -412,6 +641,8 @@ internal sealed unsafe class DesktopDuplicationCapture
     // IDXGIOutputDuplication
     private const int DuplicationGetDesc = 7;
     private const int DuplicationAcquireNextFrame = 8;
+    private const int DuplicationGetFrameDirtyRects = 9;
+    private const int DuplicationGetFrameMoveRects = 10;
     private const int DuplicationMapDesktopSurface = 12;
     private const int DuplicationUnMapDesktopSurface = 13;
     private const int DuplicationReleaseFrame = 14;
@@ -420,6 +651,7 @@ internal sealed unsafe class DesktopDuplicationCapture
     // ID3D11DeviceContext: ID3D11DeviceChild ends at slot 6.
     private const int ContextMap = 14;
     private const int ContextUnmap = 15;
+    private const int ContextCopySubresourceRegion = 46;
     private const int ContextCopyResource = 47;
 
     private const int DXGI_ERROR_WAIT_TIMEOUT = unchecked((int)0x887A0027);
@@ -431,6 +663,8 @@ internal sealed unsafe class DesktopDuplicationCapture
     private const uint D3D11_USAGE_STAGING = 3;
     private const uint D3D11_CPU_ACCESS_READ = 0x20000;
     private const uint D3D11_MAP_READ = 1;
+    private const uint D3D11_MAP_FLAG_DO_NOT_WAIT = 0x100000;
+    private const int DXGI_ERROR_WAS_STILL_DRAWING = unchecked((int)0x887A000A);
 
     private static readonly Guid IID_IDXGIFactory1 = new("770aae78-f26f-4dba-a829-253c83d1b387");
     private static readonly Guid IID_IDXGIOutput1 = new("00cddea8-939b-4b83-a340-a685226666cc");
@@ -477,6 +711,36 @@ internal sealed unsafe class DesktopDuplicationCapture
         public int AttachedToDesktop;
         public uint Rotation;
         public nint Monitor;
+    }
+
+    /// <summary>D3D11_BOX.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Box
+    {
+        public uint Left;
+        public uint Top;
+        public uint Front;
+        public uint Right;
+        public uint Bottom;
+        public uint Back;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    /// <summary>DXGI_OUTDUPL_MOVE_RECT.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MoveRect
+    {
+        public int SourceX;
+        public int SourceY;
+        public NativeRect Destination;
     }
 
     [StructLayout(LayoutKind.Sequential)]

@@ -263,7 +263,9 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
             && known.Region == visible
                 ? known.Version
                 : -1;
+        var allocationTimer = System.Diagnostics.Stopwatch.StartNew();
         var pixels = new byte[visible.Width * visible.Height * 4];
+        FrameCaptureDiagnostics.Shared.Record("duplicationAllocate", allocationTimer.Elapsed.TotalMilliseconds);
         DesktopDuplicationCapture.CopyResult result;
         try
         {

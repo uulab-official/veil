@@ -26,6 +26,16 @@ public sealed class FrameCaptureDiagnostics
     private readonly Dictionary<string, long> methodCounts = new();
     private string strategy = AutomaticStrategy;
     private string? lastDuplicationFailure;
+    private string? duplicationMode;
+
+    /// <summary>The duplicated output's size and refresh rate, which bounds how often DWM presents.</summary>
+    public void RecordDuplicationMode(string mode)
+    {
+        lock (gate)
+        {
+            duplicationMode = mode;
+        }
+    }
 
     /// <summary>Why Desktop Duplication last fell back, for the health reply.</summary>
     public void RecordDuplicationFailure(string reason)
@@ -120,7 +130,8 @@ public sealed class FrameCaptureDiagnostics
                 ["strategy"] = strategy,
                 ["phases"] = phaseObject,
                 ["methods"] = methodObject,
-                ["lastDuplicationFailure"] = lastDuplicationFailure
+                ["lastDuplicationFailure"] = lastDuplicationFailure,
+                ["duplicationMode"] = duplicationMode
             };
         }
     }
