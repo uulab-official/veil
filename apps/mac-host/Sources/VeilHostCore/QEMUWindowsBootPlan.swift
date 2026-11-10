@@ -1663,6 +1663,13 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
             "-monitor", "unix:\(monitorSocketPath),server,nowait",
             "-qmp", "unix:\(qmpSocketPath),server,nowait"
         ])
+        // Not machine state: the object only mirrors the display, so it is per launch and stays out of
+        // the suspend fingerprint, which is taken from the plan's arguments.
+        if QEMUSharedFramebuffer.isSupported(executablePath: plan.executablePath) {
+            arguments.append(contentsOf: QEMUSharedFramebuffer.objectArguments(
+                socketPath: QEMUSharedFramebuffer.socketPath(forQMPSocketPath: qmpSocketPath)
+            ))
+        }
 
         if let incomingMemoryStatePath {
             arguments.append(contentsOf: [

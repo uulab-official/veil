@@ -2,7 +2,9 @@ import CoreGraphics
 import Foundation
 import VeilHostCore
 
-/// The whole guest display, received over QEMU's loopback VNC server, shared by every mirrored window.
+/// The whole guest display, shared by every mirrored window. It comes from Veil's patched QEMU through
+/// shared memory (`QEMUSharedFramebuffer`) when the launch has it, and otherwise from QEMU's loopback VNC
+/// server, whose 30 ms refresh tick caps it near 33 frames a second.
 ///
 /// Each mirrored window whose `window.layout` entry is fully visible crops its pixels from these frames
 /// instead of waiting for frames the agent captures, diffs, and encodes. The connection is passive: it
@@ -13,6 +15,8 @@ final class GuestFramebufferSource {
     static let shared = GuestFramebufferSource()
 
     private let display = RFBEmbeddedDisplayModel()
+    private var sharedClient: SharedFramebufferClient?
+    private var sharedSocketPath: String?
     private var sinks: [UUID: (CGImage) -> Void] = [:]
     private(set) var latestFrame: CGImage?
 
@@ -23,20 +27,59 @@ final class GuestFramebufferSource {
         }
     }
 
-    /// Connects while `surface` is a live loopback display and `isNeeded` holds, and disconnects otherwise.
-    func update(surface: VMConsoleDisplaySurface?, isNeeded: Bool) {
-        guard isNeeded, let surface, surface.kind == .vncLoopback else {
-            if display.activeEndpoint != nil {
-                display.stop()
+    /// Connects while `isNeeded` holds: to the shared framebuffer socket when there is one, otherwise to
+    /// `surface` when it is a live loopback display. Disconnects otherwise.
+    func update(surface: VMConsoleDisplaySurface?, sharedFramebufferSocketPath: String?, isNeeded: Bool) {
+        guard isNeeded else {
+            stopShared()
+            stopVNC()
+            latestFrame = nil
+            return
+        }
+
+        if let sharedFramebufferSocketPath {
+            stopVNC()
+            guard sharedSocketPath != sharedFramebufferSocketPath else {
+                return
             }
+            stopShared()
+            sharedSocketPath = sharedFramebufferSocketPath
+            let client = SharedFramebufferClient(socketPath: sharedFramebufferSocketPath) { [weak self] image in
+                self?.deliver(image)
+            }
+            sharedClient = client
+            client.start()
+            VeilLog.window.notice("Guest framebuffer from shared memory at \(sharedFramebufferSocketPath, privacy: .public)")
+            return
+        }
+
+        stopShared()
+        guard let surface, surface.kind == .vncLoopback else {
+            stopVNC()
             latestFrame = nil
             return
         }
         display.connectIfNeeded(to: surface)
     }
 
-    var isReceiving: Bool {
-        display.isReceiving
+    /// Which source frames come from, for diagnostics.
+    var sourceName: String {
+        if sharedClient != nil {
+            return "sharedMemory"
+        }
+        return display.activeEndpoint == nil ? "none" : "vnc"
+    }
+
+    private func stopShared() {
+        sharedClient?.stop()
+        sharedClient = nil
+        sharedSocketPath = nil
+    }
+
+    private func stopVNC() {
+        if display.activeEndpoint != nil {
+            display.stop()
+        }
     }
 
     func addSink(_ sink: @escaping (CGImage) -> Void) -> UUID {

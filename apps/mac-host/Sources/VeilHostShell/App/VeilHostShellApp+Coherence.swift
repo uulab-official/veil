@@ -9,8 +9,12 @@ extension VeilHostShellApp {
         let isNeeded = vmModel.snapshot?.state == .running
             && model.health?.capabilities.windowLayout == true
             && !model.mirrorSessions.isEmpty
+        let sharedSocket = vmModel.snapshot?.latestConsoleLaunch?.qmpSocketPath
+            .map(QEMUSharedFramebuffer.socketPath(forQMPSocketPath:))
+            .flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil }
         GuestFramebufferSource.shared.update(
             surface: vmModel.snapshot?.latestConsoleLaunch?.displaySurface,
+            sharedFramebufferSocketPath: sharedSocket,
             isNeeded: isNeeded
         )
         if isNeeded {

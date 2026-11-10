@@ -197,5 +197,5 @@ Documented in `docs/protocol.md` before implementation:
 **Not done**
 
 - Stage 3 z-order and position push for several overlapping apps. A covered window falls back to captured frames, which is correct but slower.
-- Stage 4, the shared-memory QEMU listener.
+- Stage 4, the shared-memory QEMU listener: built and verified against an Alpine guest (patch 0003, `SharedFramebufferClient`). Not yet measured on Windows, which needs a cold start on the rebuilt runtime.
 - Stage 5, GPU scanout.
