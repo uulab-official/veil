@@ -112,7 +112,6 @@ struct VeilHostShellApp: App {
             .task {
                 configureDockMenuBridge()
                 configureShortcutIntentBridge()
-                configureVeilURLBridge()
                 configureWindowsAppWindowCloseBridge()
                 startAgentReconnectPollerIfNeeded()
                 startAutomaticFrameStreamMaintenanceLoopIfNeeded()
@@ -122,6 +121,9 @@ struct VeilHostShellApp: App {
                 async let hostLoad: Void = model.load()
                 async let vmLoad: Void = vmModel.load()
                 _ = await (hostLoad, vmLoad)
+                // After the loads: a veil:// URL that cold-launched Veil is checked against whether Windows is
+                // installed, which is unknown until the VM model has loaded.
+                configureVeilURLBridge()
                 noteLiveAgentConnectionIfPresent()
                 // The event channel is intentionally started after the overview. Otherwise an
                 // early discovery event can create a placeholder window before the model knows
