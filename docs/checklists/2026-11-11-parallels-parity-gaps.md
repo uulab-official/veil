@@ -12,7 +12,7 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
 | 2 | Apps in Dock, Launchpad, Applications; "Open with" | Partial | Dock icons and the Dock menu exist. There are no per-app `.app` launchers and no `CFBundleDocumentTypes`. |
 | 3 | Clipboard and drag and drop | Partial | Text and images go both ways. Files go Mac to Windows only, and drops travel as base64. |
 | 4 | Shared folders | Partial | `C:\VeilShared` is available on the Mac over SMB. Mac folders inside Windows are not. |
-| 5 | Retina | Partial | The resolution follows the window. Windows' scale is never set to 200%, so text is soft on Retina. |
+| 5 | Retina | Implemented (live, agent side) | With Retina resolution, the default once the agent reports `displayScale`, the apps view runs the guest display at twice the screen in points and Windows at 200% (`display.scale.request`). About 5% frame-rate cost. See `2026-11-11-retina-guest-scale.md`. |
 | 6 | Keyboard and IME | Implemented (unit) | Korean input on the live guest is still unchecked. |
 | 7 | Trackpad | Partial | Smooth scrolling works. There are no pinch, swipe, or rotate gestures. |
 | 8 | Printers, camera, USB, audio | Partial | USB works. The printer bridge is research only. Camera is missing. |

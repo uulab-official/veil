@@ -595,8 +595,8 @@
 "Resolution" = "해상도";
 "Scaled" = "크기 조정";
 "Retina resolution" = "Retina 해상도";
-"Sharper on a Retina display. Set Windows Settings > System > Display > Scale to 200% so text is not half size." = "Retina 디스플레이에서 더 선명합니다. 글자가 절반 크기로 보이지 않도록 Windows 설정 > 시스템 > 디스플레이 > 배율을 200%로 바꾸세요.";
-"Windows text and controls appear at their normal size. Takes effect the next time the window changes size." = "Windows 글자와 버튼이 원래 크기로 보입니다. 다음에 창 크기가 바뀔 때 적용됩니다.";
+"Sharper on a Retina display. Veil sets Windows' display scale to 200% to match, so text keeps its size." = "Retina 디스플레이에서 더 선명합니다. Veil이 Windows 디스플레이 배율을 200%로 맞추므로 글자 크기는 그대로입니다.";
+"Windows uses one pixel per Mac point and its own display scale, so text is softer on a Retina display." = "Windows가 Mac 포인트당 한 픽셀과 자체 디스플레이 배율을 쓰므로 Retina 디스플레이에서는 글자가 덜 선명합니다.";
 
 /* Mirrored app screen status */
 "Opening %@" = "%@ 여는 중";
