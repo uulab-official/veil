@@ -638,6 +638,20 @@ struct VeilHostClientTests {
         #expect(response.height == 1080)
     }
 
+    @Test("sends display.scale.request and reads back the scale Windows reports")
+    func clientSendsScaleRequest() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"display.scale.response","requestId":"req_display_scale_200","accepted":true,"scalePercent":125}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let response = try await client.setDisplayScale(scalePercent: 200)
+
+        #expect(transport.sentTypes == ["display.scale.request"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(response.scalePercent == 125)
+    }
+
     @Test("asks the agent to shut Windows down, also through the fallback service")
     func sendsSystemShutdownRequest() async throws {
         let transport = RecordingTransport(responses: [

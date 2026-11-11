@@ -102,7 +102,8 @@ extension VeilHostShellApp {
                     width: width,
                     height: height,
                     macScreenWidth: Int(screenSize.width),
-                    macScreenHeight: Int(screenSize.height)
+                    macScreenHeight: Int(screenSize.height),
+                    pixelsPerPoint: GuestFramebufferSource.shared.coherencePixelsPerPoint
                 )
             }
         }

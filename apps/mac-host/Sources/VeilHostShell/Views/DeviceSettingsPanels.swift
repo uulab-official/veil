@@ -243,7 +243,8 @@ struct KeyboardMappingPanel: View {
 
 /// Parallels' Graphics > Resolution choice: scaled for normal-size text, or Retina for full pixels.
 struct DisplayResolutionPanel: View {
-    @AppStorage(DisplayResolutionPreference.retinaResolutionKey) private var retinaResolution = false
+    @AppStorage(DisplayResolutionPreference.retinaResolutionKey)
+    private var retinaResolution = DisplayResolutionPreference.retinaResolutionDefault
 
     var body: some View {
         ShellPanel(spacing: 12) {

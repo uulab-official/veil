@@ -17,6 +17,9 @@ extension VeilHostShellApp {
             sharedFramebufferSocketPath: sharedSocket,
             isNeeded: isNeeded
         )
+        if shellNavigation.viewMode != .apps {
+            restoreUserScaleOutsideAppsView()
+        }
         if isNeeded {
             matchGuestDisplayToMacScreen()
             fitMirroredWindowsOntoGuestDisplay()
@@ -36,21 +39,85 @@ extension VeilHostShellApp {
         }
     }
 
-    /// Makes the guest display the size of the Mac screen in points while app windows are shown, so the
-    /// guest layout can be the Mac layout (`CoherencePlacement`). The desktop view sizes the display to
-    /// its own window instead, so this only runs in the apps view. Requested once per target size.
+    /// Makes the guest display the Mac screen's size while app windows are shown, so the guest layout can be
+    /// the Mac layout (`CoherencePlacement`). With Retina resolution on a Retina Mac it is twice the screen
+    /// in points and Windows runs at 200%, so windows keep their size in points and get four times the
+    /// pixels (`CoherenceDisplayScale`). The desktop view sizes the display to its own window instead, so
+    /// this only runs in the apps view. Each size and scale is requested once.
     private func matchGuestDisplayToMacScreen() {
+        let source = GuestFramebufferSource.shared
         guard shellNavigation.viewMode == .apps,
               model.health?.capabilities.displayResize == true,
+              !source.isApplyingDisplayScale,
               let layout = GuestWindowLayoutStore.shared.latest,
-              let screen = NSScreen.main?.frame,
-              let target = CoherencePlacement.displayMatching(screenFrame: screen),
-              layout.display.width != target.width || layout.display.height != target.height,
-              GuestFramebufferSource.shared.recordDisplayRequest(target) else {
+              let screen = NSScreen.main,
+              let target = CoherenceDisplayScale.target(
+                screenFrame: screen.frame,
+                backingScale: Double(screen.backingScaleFactor),
+                retinaEnabled: DisplayResolutionPreference.isRetinaResolutionEnabled(),
+                agentCanScale: model.canSetDisplayScale,
+                scaleRefused: source.scaleRefused
+              ) else {
             return
         }
+
+        let wantedScale = GuestFramebufferSource.RequestedScale(percent: target.scalePercent)
+        let changesScale = model.canSetDisplayScale && source.requestedScale != wantedScale
+        let resizes = (layout.display.width != target.display.width || layout.display.height != target.display.height)
+            && source.recordDisplayRequest(target.display)
+        guard changesScale || resizes else {
+            source.coherencePixelsPerPoint = target.pixelsPerPoint
+            return
+        }
+
+        source.isApplyingDisplayScale = true
+        let resizesFirst = CoherenceDisplayScale.resizesDisplayFirst(
+            fromScalePercent: source.reportedScalePercent,
+            toScalePercent: target.scalePercent
+        )
         Task { @MainActor in
-            _ = await model.resizeDisplay(width: target.width, height: target.height)
+            defer {
+                source.isApplyingDisplayScale = false
+            }
+            if resizes, resizesFirst {
+                _ = await model.resizeDisplay(width: target.display.width, height: target.display.height)
+            }
+            if changesScale {
+                let reported = await model.setDisplayScale(scalePercent: target.scalePercent)
+                source.requestedScale = wantedScale
+                source.reportedScalePercent = reported
+                if let wanted = target.scalePercent, reported != wanted {
+                    // Windows did not take it: go back to one pixel per point on the next layout.
+                    VeilLog.window.notice("Windows did not take \(wanted, privacy: .public)% scale; staying at one pixel per point")
+                    source.scaleRefused = true
+                }
+            }
+            if resizes, !resizesFirst {
+                _ = await model.resizeDisplay(width: target.display.width, height: target.display.height)
+            }
+            source.coherencePixelsPerPoint = source.scaleRefused ? 1 : target.pixelsPerPoint
+        }
+    }
+
+    /// Outside the apps view the guest display follows the desktop view's window, so Windows gets the
+    /// user's own scale back unless Retina resolution asks the desktop view for full pixels too. Raising
+    /// the scale is left to the apps view, which also sizes the display for it.
+    private func restoreUserScaleOutsideAppsView() {
+        let source = GuestFramebufferSource.shared
+        source.coherencePixelsPerPoint = 1
+        guard model.canSetDisplayScale,
+              !source.isApplyingDisplayScale,
+              DisplayResolutionPreference.guestPixelsPerPoint(screenScale: NSScreen.main?.backingScaleFactor) < 2,
+              source.requestedScale != GuestFramebufferSource.RequestedScale(percent: nil) else {
+            return
+        }
+        source.isApplyingDisplayScale = true
+        Task { @MainActor in
+            defer {
+                source.isApplyingDisplayScale = false
+            }
+            source.reportedScalePercent = await model.setDisplayScale(scalePercent: nil)
+            source.requestedScale = GuestFramebufferSource.RequestedScale(percent: nil)
         }
     }
 
@@ -114,7 +181,8 @@ extension VeilHostShellApp {
                     width: width,
                     height: height,
                     macScreenWidth: Int(screen.width),
-                    macScreenHeight: Int(screen.height)
+                    macScreenHeight: Int(screen.height),
+                    pixelsPerPoint: GuestFramebufferSource.shared.coherencePixelsPerPoint
                 )
             }
         }

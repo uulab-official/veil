@@ -69,6 +69,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.resizeDisplay(width: width, height: height)
     }
 
+    public func setDisplayScale(scalePercent: Int?) async throws -> DisplayScaleResponse {
+        try await primary.setDisplayScale(scalePercent: scalePercent)
+    }
+
     public func requestSystemShutdown() async throws -> SystemShutdownResponse {
         try await primary.requestSystemShutdown()
     }
