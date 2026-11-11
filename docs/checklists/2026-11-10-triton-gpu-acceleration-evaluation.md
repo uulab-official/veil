@@ -2,11 +2,14 @@
 
 Date: 2026-11-10
 
-Status: **interim**. Licensing, source analysis and the host-side build are done, and the built
-QEMU passes a headless smoke test. Booting the existing VM on it, installing the guest driver and
-the present-rate measurements are **not done yet**: they need a short stop of the user's VM, which
-the user is told about first. (The build was first refused by the session's permission policy and
-ran after the user allowed it.)
+Updated: 2026-11-11
+
+Status: **measured**. The existing Veil VM was snapshotted, booted on the Triton QEMU, given the
+v0.5 `viogpu3d` driver and measured; it was then **reverted to the snapshot** and is running on
+Veil's normal bundled QEMU again. Result: Triton roughly triples the mirrored frame rate (23.5 →
+72 fps, DWM capped by the 75 Hz mode), but Windows can no longer shut down with the driver
+installed, and the driver leaves the guest without a display on Veil's default runtime. See
+[Recommendation](#recommendation).
 
 Source: <https://blog.getutm.app/2026/introducing-triton-directx-11-driver-for-qemu/> (2026-07-24).
 
@@ -122,96 +125,132 @@ attestation signing through a Microsoft Partner Center account. The INF (`Driver
       touched. Caveat: the disk was cloned while that VM was writing to it, so the copy is
       crash-consistent at best; Windows may run a disk check on first boot.
 
-### 5. Boot the copy with Triton devices
+### 5. Boot the existing VM with Triton devices
 
-- [ ] Not done (no Triton QEMU binary). Planned command, isolated from the user's VM:
-
-  ```text
-  DYLD_FALLBACK_LIBRARY_PATH=$PREFIX/lib:$ANGLE_LIB ANGLE_DEFAULT_PLATFORM=metal NPT_BACKEND=dxmt \
-  $PREFIX/bin/qemu-system-aarch64 -machine virt,highmem=on -accel hvf,ipa-granule-size=0x1000 \
-    -cpu host -smp 8 -m 8192 -nodefaults \
-    -drive if=pflash,format=raw,readonly=on,file=<Veil Runtime>/share/qemu/edk2-aarch64-secure-code.fd \
-    -drive if=pflash,format=raw,file=~/VeilTriton/vm/uefi-vars.fd \
-    -chardev socket,id=chrtpm,path=~/VeilTriton/vm/tpm/swtpm.sock \
-    -tpmdev emulator,id=tpm0,chardev=chrtpm -device tpm-tis-device,tpmdev=tpm0,ppi=off \
-    -drive driver=raw,file=~/VeilTriton/vm/win.img,if=none,id=system -device nvme,drive=system,serial=veil-system \
-    -device virtio-ramfb-gl,hostmem=8G,blob=true,venus=false,neptune=true \
-    -netdev user,id=net0,hostfwd=tcp:127.0.0.1:28444-:18444 -device virtio-net-pci,netdev=net0 \
-    -device qemu-xhci,id=usb0 -device usb-kbd -device usb-tablet \
-    -display <see below> -vnc 127.0.0.1:7 -qmp unix:<short path>,server,nowait
-  ```
-
-- **Open problem found by reading the source: there is no headless GL display on macOS.**
-  `virtio-gpu-gl` refuses to realize unless the display backend has OpenGL
-  (`hw/display/virtio-gpu-gl.c:134`). In the fork, `egl-headless` needs `gbm`
-  (`ui/meson.build:73`), which macOS lacks; `dbus` exports GL scanouts only with GBM or on Win32
-  (`ui/dbus-listener.c:211`). The remaining
-  GL backends are `cocoa,gl=es` (opens a Mac window, which this experiment must not do) and SPICE
-  with the fork's Metal/IOSurface path (`ui/spice-display-metal.m`, the way UTM itself runs
-  headless). The measurement run should use `-spice unix=on,addr=<sock>,disable-ticketing=on,gl=on`
-  with no client attached, and VNC alone for setup. If SPICE GL without a client does not drive
-  scanout, the fallback is a Cocoa window, which needs the user's go-ahead.
+- [x] Booted the **existing** VM (not the copy; see [Decision](#decision-apply-to-the-existing-vm-after-a-snapshot))
+      with `~/VeilTriton/run-triton-existing-vm.sh` (the install variant adds a driver ISO as a USB
+      CD-ROM). It uses Veil's disk, UEFI variables, TPM state, firmware, port forwards and balloon
+      device, plus `-accel hvf,ipa-granule-size=0x1000`,
+      `-device virtio-ramfb-gl,hostmem=8G,blob=true,venus=false,neptune=true` and
+      `-display egl-headless,gl=es -vnc 127.0.0.1:7`. No Mac window was opened.
+- Fixes needed against the fork's QEMU 10.0.12 base:
+  - `tpm-tis-device` has no `ppi` property there; drop `,ppi=off`.
+  - `nohup` is SIP-protected and strips `DYLD_*`, so ANGLE's `libEGL.dylib` was not found; start
+    QEMU without it.
+- **Headless display, second patch.** The first patch made `egl-headless` start, but every
+  screendump was black. Three causes, all fixed in `~/VeilTriton/qemu-egl-headless-darwin.patch`
+  (now 5 files, +282 lines):
+  1. Before the driver, scanouts are GL textures. The stock readback blits into a BGRA texture
+     (`glTexImage2D(GL_RGBA, …, GL_BGRA)`, invalid on GLES) and reads with `GL_BGRA`, which ANGLE
+     rejects (`GL_INVALID_FRAMEBUFFER_OPERATION`/`GL_INVALID_OPERATION`). The darwin path now reads
+     the guest framebuffer directly as RGBA and swaps and flips it on the CPU.
+  2. FBOs are per-context, and the display callbacks run with virgl's context current. The darwin
+     path makes the display context current around each GL call and restores the previous one.
+  3. After the driver, Neptune scanouts are Metal textures (`SCANOUT_TEXTURE_NATIVE_TYPE_METAL`).
+     A new `ui/egl-headless-metal.m` blits the texture into a shared `MTLBuffer` on the display
+     refresh tick (only when a flush marked it dirty) and copies it into the console surface, so
+     VNC and `screendump` work.
+  This readback is for setup and diagnostics only; Veil would not mirror through it (see below).
 
 ### 6. Guest drivers
 
-- [ ] Not done. Plan: download `viogpu3d-arm64x-signed.zip` v0.5 on the host, check the `.cat`/`.sys`
-      signer, serve it to the copy (user networking, host `10.0.2.2`), install with
-      `pnputil /add-driver viogpu3d.inf /install` from an elevated prompt. Input into the copy goes
-      through its own VNC/QMP (`input-send-event`) or the copy's agent `input.*` messages, never the
-      Mac. The Veil agent has no command-execution message (by design), so driver install needs
-      guest keyboard input.
+- [x] v0.5 `viogpu3d-arm64x-signed.zip` (SHA-256 `155695ab…506d5`, as in section 3) served as an
+      ISO. The Veil agent has no command execution by design, so the install went through guest
+      keyboard input over QMP: Run dialog → `powershell -w h -c "start -verb runas D:\install.cmd"`
+      → UAC consent answered with Alt+Y (a consent prompt; **no credentials were typed**).
+      `install.cmd` runs `pnputil /add-driver viogpu3d.inf /install`. Result, read back through the
+      agent's Notepad frame capture: published as `oem7.inf`, installed on three
+      `PCI\VEN_1AF4&DEV_1050&SUBSYS_11001AF4` instances, exit code 0, no reboot required.
+- [x] Neptune live right after install: scanouts switch to Metal, `virgl_render_server` processes
+      start (`npt: loaded D3D11 library: libdxmt-native.dylib`, `backend library: directx-native
+      ABI 1`, `Neptune renderer initialized`), and DXGI Desktop Duplication reports
+      `system memory False`.
+- Signals seen: `npt: failed to load D3D12CreateDevice` (DXMT has no D3D12; harmless for D3D11),
+  `warn: Failed to open D3DKMT adapter` (from a render-server process; no visible effect).
 
 ### 7. Measurements
 
-- [ ] DWM composition accelerated: **not measured.**
-- [ ] DWM presents/s while drawing in Paint under Triton: **not measured.**
-- [ ] Desktop Duplication under Triton: **not measured.**
-- [x] Baseline reference read from the user's running agent (`agent.health.request`, read-only,
-      agent `0.1.0+62bc0e017111`, idle, no drawing): `methods.duplication 16475`, `capture` mean
-      0.35 ms, `changedTotal` mean 11.11 ms (n=48), `encode` 9.38 ms, `duplicationMode`
-      `1184x848 @ 4294967294/4294967294 Hz, system memory True`. `dwmPresentInterval` was ~60 s
-      because the desktop was idle; the 25-28 presents/s figure while drawing comes from the
-      earlier session.
+Method: `paintbench.mjs` (scratch script, not committed) opens Paint through the agent
+(`app.launch.request`), subscribes to its frames on the `/frames` binary channel with
+`bgra-deflate` tiles, draws circles with `input.mouse` at ~110 moves/s, counts delivered frames,
+then reads the agent's `frameCapture` diagnostics. Guest-only input; nothing touched the Mac.
+Agent `0.1.0+0fec7d5e1b54` (WARP rows on the Retina-session agent `a8f235dbec78` / `0fec7d5e1b54`).
 
-What to expect, from the agent code (`apps/windows-agent/src/VeilAgent/DesktopDuplicationCapture.cs`
-on `refactor/split-large-files`):
+| Run | Display | App frames/s | Frame gap p50 / p90 / p99 (ms) | DWM present interval mean | Changed frame (agent) | Encode | Duplication surface |
+|---|---|---|---|---|---|---|---|
+| WARP (bundled QEMU 11.1.3, viogpudo), before | 2048x1280 | **23.5** | 44.2 / 58.7 / 67.2 | 40.6 ms (~25/s) | 8.96 ms | 7.95 ms | system memory |
+| WARP, after revert, 20 s | 2048x1280 | **24.6** | 41.7 / 58.6 / 71.2 | 40.0 ms | 13.85 ms | 12.21 ms | system memory |
+| Triton QEMU, viogpudo (no driver yet) | 800x600 | 30.0 | — | 25.2 ms | — | — | system memory |
+| Triton + viogpu3d | 1024x768 | **72.2** | 15.4 / 23.7 / 27.8 | 13.6 ms (~73/s) | 1.95 ms | 0.73 ms | GPU texture |
+| Triton + viogpu3d | 1920x1200 | **70.8** | 15.8 / 23.5 / 28.0 | 13.6 ms | 1.99 ms | 0.75 ms | GPU texture |
+| Triton + viogpu3d, 60 s soak | 1920x1200 | **71.5** (4289 frames) | 15.7 / 24.2 / 27.6 | 13.7 ms | 1.83 ms | — | GPU texture |
 
-- Today DXGI reports `DesktopImageInSystemMemory = true` (no GPU), so the agent uses
-  `MapDesktopSurface`. With Triton the desktop image becomes a GPU texture; the agent then takes the
-  `QueryInterface(ID3D11Texture2D)` → `CopyResource`/`CopySubresourceRegion` → staging `Map` path
-  (lines ~214-251). Its own `D3D11CreateDevice` would also go through Triton/Neptune, so every
-  staging `Map` becomes a host GPU→shared-memory readback plus a guest wait. That path has never run
-  against a real GPU in this guest; its cost is the most important number to measure, because it
-  could cancel the gain from faster DWM.
-- Faster DWM is plausible: composition moves off WARP onto Metal. But each DWM frame depends on the
-  CPU spin-poll fence emulation across render-server processes, so 60 Hz is not guaranteed and
-  120 Hz is unproven.
+- DWM composition **is accelerated**: the present interval drops from ~40 ms to ~13.6 ms, i.e.
+  the 75 Hz the driver's mode reports (`1920x1200 @ 75/1 Hz`). 60 fps is reached; **120 Hz is
+  not**: the driver offers no faster mode, and the agent's `display.resize.request` sets only size.
+- The feared readback cost did not appear: the agent's GPU path (`CopySubresourceRegion` →
+  staging `Map`) costs 0.27-0.41 ms per map, and a changed frame costs ~2 ms in total instead of
+  9-14 ms on WARP.
+- Host CPU while drawing (5 s samples): Triton, QEMU plus render servers, 154-198 % (about 165 %);
+  WARP, QEMU alone, 133-258 %. About the same CPU for three times the frames.
+- `display.resize.request` with viogpu3d: 1920x1200, 1920x1080, 1680x1050, 1600x1200 and 1280x800
+  are accepted; **2048x1280 is refused** (`display_mode_not_supported`), so Veil's Retina-sized
+  modes need the driver's mode list extended.
 
-## Interim Recommendation
+#### Stability
 
-Do **not** adopt Triton in Veil's runtime now. Finish the measurement first, and treat it as an
-opt-in experiment even if it pays off.
+- 60 s continuous drawing and repeated runs: no crash, no hang, no lost frames reported.
+- **Windows does not shut down with viogpu3d installed.** Before the driver, all four agent-requested
+  shutdowns on the Triton QEMU powered the VM off (PSCI SYSTEM_OFF) in 30-60 s. After it,
+  `system.shutdown.request` (twice), the ACPI power button and the sign-in screen's own
+  "시스템 종료" all end at the lock screen or an idle black screen with the VM still running
+  (vCPUs idle, one QEMU thread at ~12 %). The VM had to be stopped with QMP `quit`.
+  (Pending Windows updates were offered; "Shut down" without updates was chosen.)
+- **The driver breaks Veil's default runtime.** The same disk booted on Veil's bundled QEMU with
+  plain `virtio-gpu-pci` shows "Display output is not active", and the agent's capture fails with
+  `EnumAdapters (no adapter with an output) 0x887A0002` (0 fps). viogpu3d binds the same PCI ID as
+  viogpudo, so the driver cannot be installed unless the VM always runs on the Triton runtime.
 
-1. Product risk: the upstream author calls the drivers very unstable; a GPU hang takes down the
-   Windows desktop that Veil mirrors. Veil would also have to replace bundled QEMU 11.1.3 with the
-   UTM fork plus virglrenderer, libepoxy, ANGLE, DXMT and a render server, and rebase on every UTM
-   change until it is upstream.
-2. Display model: Veil runs QEMU with `-display none` and talks to the guest through VNC and the
-   agent. Triton requires a GL-capable display backend, which on macOS means a Cocoa window or the
-   SPICE + Metal/IOSurface path. Adopting it means adding a SPICE (or similar) client to Veil, not
-   just new arguments in `QEMUWindowsBootPlan.swift`.
-3. Signing: Veil cannot ship test-signed drivers to users. It needs its own attestation-signed
-   `viogpu3d` build.
-4. Capture path: Veil's mirroring copies pixels inside the guest. With Triton, the cheaper path may
-   be to take the composed scanout on the host (the IOSurface/blob the SPICE path already
-   produces) and crop it by the window rectangles the agent reports, instead of reading the GPU
-   texture back into the guest. That is a design change and should wait for the numbers.
+## Recommendation
 
-If the measurement shows DWM at or above 60 presents/s and a Desktop Duplication changed-frame cost
-under ~8 ms, the next step is a separate design doc for an opt-in "GPU acceleration (experimental)"
-VM setting: a second QEMU binary in `Runtime/` (keep 11.1.3 as default), the SPICE GL display
-backend, `virtio-gpu-gl-pci` with `blob=true,hostmem=…,neptune=true` after a driver-installed flag
-(mirroring `QEMUWindowsDisplayDevices`), and LGPL/GPL notices for DXMT and the fork.
+**Do not bundle Triton in Veil's default runtime.** Keep it as a tracked experiment, and build an
+opt-in "GPU acceleration (experimental)" VM mode only after the two blockers below are fixed
+upstream or by us.
+
+Why it is worth pursuing: it is the only measured way past the WARP ceiling. Mirrored Paint goes
+from ~24 to ~71 fps with DWM at the display's 75 Hz and a 5-7x cheaper changed-frame path in the
+agent, at the same host CPU. That is the "Parallels-grade" target for 60 Hz content.
+
+Blockers before any user sees it:
+
+1. **Shutdown.** A VM that cannot shut down cleanly risks lost work and interrupted updates, and
+   Veil's stop path relies on `system.shutdown.request`. Report it upstream
+   (`osy/kvm-guest-drivers-windows`) with this repro; retest each driver release.
+2. **Driver lock-in.** viogpu3d takes over `DEV_1050` and leaves no display on the 2D device.
+   Switching a VM between runtimes would need driver swapping (`pnputil /delete-driver oem<N>.inf
+   /uninstall` back to viogpudo) inside the guest, elevated, every time. The opt-in must therefore
+   be per VM and effectively one-way, with a snapshot taken by Veil before the driver goes in.
+3. **Mode list.** No 2048x1280 or high-refresh mode; 120 Hz needs driver work.
+4. **Signing.** The v0.5 binaries are attestation-signed by Microsoft for osy's build. Veil can
+   only redistribute them as-is or get its own attestation signing for a patched build.
+
+Licensing, if it ships (from section 3): **DXMT only**, as a separate, replaceable
+`libdxmt-native.dylib` loaded by the render server, with the LGPL-2.1 text and corresponding
+source for the exact build; GPL-2.0 source offer for the UTM QEMU fork plus Veil's patches
+(balloon patch, the headless patch above); MIT/BSD notices for virglrenderer, libepoxy and ANGLE;
+Apache-2.0 notice for LLVM 15 (statically linked into DXMT). **Never D3DMetal**: Apple's Game
+Porting Toolkit license forbids redistribution, and DXMT is what was measured here.
+
+Architecture notes for the opt-in mode:
+
+- Second QEMU binary in `Runtime/` (UTM fork + Veil patches), the default stays 11.1.3.
+- Veil needs a GL display backend it can run windowless. The patched `egl-headless` works, but
+  its CPU readback is for diagnostics. For mirroring, the agent's in-guest Desktop Duplication
+  already costs only ~2 ms per changed frame under Triton, so the existing frame channel can stay;
+  a host-side IOSurface path (crop the Metal scanout by the agent's window rectangles) is an
+  optimisation, not a prerequisite.
+- `veil-shm-display` (Veil's shared-memory scanout object) is a QEMU 11.1.3 patch and would need a
+  port to the fork, or the mirror must run purely on the agent frame channel.
 
 ## Decision: Apply to the Existing VM, After a Snapshot
 
@@ -237,6 +276,7 @@ Revert (VM shut down; restores disk, UEFI variables and TPM state together, sinc
 Windows Hello may be sealed to the TPM):
 
 ```text
+V=~/"Virtual Machines/Veil"; SNAP="$V/snapshots/pre-triton-20261111-1506"   # the snapshot actually taken
 cp -c "$SNAP/Windows 11 Arm.img" "$V/Windows 11 Arm.img"
 cp "$SNAP/uefi-vars.fd" "$V/uefi-vars.fd"
 cp "$SNAP/tpm/tpm2-00.permall" "$V/tpm/tpm2-00.permall"
@@ -246,12 +286,14 @@ Then start the VM again with Veil's normal bundled QEMU 11.1.3 and `virtio-gpu-p
 
 Consequences for the plan:
 
-- The Triton QEMU still has to be built first; without it there is nothing to apply.
+- (Done: the Triton QEMU was built on 2026-11-10 and applied on 2026-11-11; see
+  [What Was Done](#what-was-done-to-the-users-vm-2026-11-11).)
 - The existing VM is launched by Veil.app's boot plan. Running it on the Triton QEMU means a manual
   launch with the same disk, firmware, TPM socket and port forwards as pid 21548, plus the Neptune
   device and a GL display backend (section 5). Veil's own launcher would not know about that QEMU.
 - Installing `viogpu3d` needs an elevated prompt in Windows. If UAC asks for credentials, the
-  install stops there and the user has to approve it in the guest.
+  install stops there and the user has to approve it in the guest. (On this VM UAC showed a
+  consent prompt only, answered with Alt+Y.)
 - `~/VeilTriton/vm` (the earlier copy, cloned while the VM was running) stays only as a spare; the
   snapshot above is the restore point.
 
@@ -265,12 +307,35 @@ Consequences for the plan:
   (on `refactor/split-large-files` @`e7110fde`). It applies to the fork's
   `hw/virtio/virtio-balloon.c` without fuzz (`patch -p1 --dry-run`).
 
-## To Resume
+## What Was Done to the User's VM (2026-11-11)
 
-1. Allow the build (or run it yourself): LLVM 15.0.7 per `~/VeilTriton/src/dxmt/docs/DEVELOPMENT.md`
-   (arm64) into `~/VeilTriton/llvm15`, then ANGLE, libepoxy, DXMT (`-Dnative_llvm_path`),
-   virglrenderer arm64, QEMU, all with `--prefix=~/VeilTriton/prefix`.
-2. Boot `~/VeilTriton/vm` with the command in section 5, SPICE GL, VNC on `127.0.0.1:7`.
-3. Install v0.5 drivers, confirm `viogpu3d` in Device Manager and a non-WARP adapter in `dxdiag`.
-4. Deploy the `refactor/split-large-files` agent to the copy, draw in Paint through the agent's
-   `input.mouse`, read `frameCapture` from `ws://127.0.0.1:28444/`.
+- 15:02 Veil app quit (`pkill -x veil-host-shell`; QEMU kept running), `system.shutdown.request`
+  accepted; VM idle and black for 20+ s, then QEMU stopped over QMP.
+- 15:06 Snapshot `~/Virtual Machines/Veil/snapshots/pre-triton-20261111-1506` (APFS clone of the
+  disk, `uefi-vars.fd` SHA-1 `1374e679…`, `tpm2-00.permall` SHA-1 `5c0148df…`).
+- 15:07-16:15 Triton boots, driver install, measurements.
+- 16:17 Triton state kept as `snapshots/post-triton-20261111-1617` (crash-consistent, taken
+  after a forced stop because the guest would not shut down). Booting it needs the Triton QEMU.
+- 16:18-16:21 Compatibility boot on bundled QEMU (no display, see Stability), forced stop.
+- 16:21 **Reverted** to `pre-triton-20261111-1506` with the revert commands above (hashes match).
+- 16:22 Veil restarted from the main checkout with `VEIL_LAUNCH_IN_BACKGROUND=1
+  ./script/build_and_run.sh`; agent `0.1.0+0fec7d5e1b54` reconnected, interactive, back on
+  `2048x1280 … system memory True` (WARP).
+
+To go back to the Triton state later (VM shut down first):
+
+```text
+V=~/"Virtual Machines/Veil"; POST="$V/snapshots/post-triton-20261111-1617"
+cp -c "$POST/Windows 11 Arm.img" "$V/Windows 11 Arm.img"
+cp "$POST/uefi-vars.fd" "$V/uefi-vars.fd"; cp "$POST/tpm/tpm2-00.permall" "$V/tpm/tpm2-00.permall"
+~/VeilTriton/run-triton-existing-vm.sh
+```
+
+Do not open that disk with Veil's normal runtime: it will have no display.
+
+## Reproduce
+
+Host build: section 2, then apply `~/VeilTriton/qemu-egl-headless-darwin.patch` to the fork and
+rebuild. Scripts outside the repo: `~/VeilTriton/run-triton-existing-vm.sh` (Triton boot),
+`~/VeilTriton/run-triton-install.sh` (same plus the driver ISO), `~/VeilTriton/run-compat-bundled.sh`
+(bundled QEMU, headless, for compatibility checks). Logs land in `~/VeilTriton/run/`.
