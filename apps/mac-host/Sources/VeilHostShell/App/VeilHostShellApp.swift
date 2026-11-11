@@ -50,6 +50,9 @@ struct VeilHostShellApp: App {
     @AppStorage(ClipboardSharingPreferences.sharingEnabledKey) var clipboardSharingEnabled = true
     @AppStorage(ClipboardSharingPreferences.filePasteEnabledKey) var clipboardFilePasteEnabled = true
     @AppStorage(ClipboardSharingPreferences.guestFileCopyEnabledKey) var clipboardGuestFileCopyEnabled = true
+    @State var guestStateSync = GuestStateSyncCoordinator()
+    @State var macHostStateObserver = MacHostStateObserver()
+    @AppStorage(GuestStateSyncSettings.matchMacAppearanceKey) var matchMacAppearanceInWindows = true
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
@@ -133,6 +136,8 @@ struct VeilHostShellApp: App {
                 // Started after the health response has landed, since the capability decides whether
                 // the endpoint exists at all.
                 startFrameChannelPumpIfNeeded()
+                startMacHostStateObservation()
+                await flushGuestStateSync()
                 await restorePreviousWindowsAppWindowAfterLaunchIfNeeded()
                 syncLauncherWindowVisibility()
                 await recordGuestAgentInstallEvidenceIfNeeded()
@@ -165,9 +170,13 @@ struct VeilHostShellApp: App {
                 // A guest that reports an icon or a new name after the window opened refreshes its launcher.
                 syncWindowsAppLaunchers()
             }
-            .onChange(of: vmModel.snapshot?.state) {
+            .onChange(of: vmModel.snapshot?.state) { oldState, newState in
                 syncDockTileRuntimeStatus()
                 scheduleAutomaticQuietRuntimeIfNeeded()
+                noteGuestRuntimeStateChange(from: oldState, to: newState)
+            }
+            .onChange(of: matchMacAppearanceInWindows) { _, isOn in
+                matchMacAppearanceSettingChanged(isOn: isOn)
             }
             .onChange(of: vmModel.phase) {
                 scheduleAutomaticQuietRuntimeIfNeeded()

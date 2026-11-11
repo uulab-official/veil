@@ -40,6 +40,10 @@ public enum MessageType: String, Codable, Sendable {
     case notificationReceived = "notification.received"
     case sharedFolderRequest = "shared.folder.request"
     case sharedFolderResponse = "shared.folder.response"
+    case timeSyncRequest = "time.sync.request"
+    case timeSyncResponse = "time.sync.response"
+    case appearanceSetRequest = "appearance.set.request"
+    case appearanceSetResponse = "appearance.set.response"
     case inputText = "input.text"
     case inputMouse = "input.mouse"
     case inputKey = "input.key"
@@ -135,6 +139,11 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// True when the agent sends `window.layout`, so the host can crop windows out of the guest display.
     /// Optional so an older agent decodes as `nil` and every window keeps its `window.frame` stream.
     public var windowLayout: Bool? = nil
+    /// True when the agent understands `time.sync.request`. Optional so an older agent decodes as `nil`
+    /// and is never sent a message it would answer with `unknown_message_type`.
+    public var timeSync: Bool? = nil
+    /// True when the agent understands `appearance.set.request`. Optional for the same reason.
+    public var appearanceSync: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
@@ -263,6 +272,160 @@ public struct WindowsSharedFolderResponse: Codable, Equatable, Sendable {
     public var requestId: String
     public var protocolVersion: Int
     public var sharedFolder: WindowsSharedFolderStatus
+}
+
+/// Why the host is asking the guest to check its clock. Diagnostic only: the guest applies one policy.
+public enum GuestTimeSyncReason: String, Codable, Equatable, Sendable {
+    case agentConnected = "agent-connected"
+    case macWake = "mac-wake"
+    case vmResume = "vm-resume"
+    case manual
+}
+
+/// Tells the guest what time it is. Windows keeps its own clock after boot, so a resumed session or a
+/// long Mac sleep otherwise leaves it stale.
+public struct TimeSyncRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    /// ISO 8601 UTC with milliseconds and a `Z` suffix, which is the only shape the guest accepts.
+    public var hostUtc: String
+    public var reason: GuestTimeSyncReason
+
+    public init(requestId: String, hostUtc: Date, reason: GuestTimeSyncReason, protocolVersion: Int = 1) {
+        self.type = .timeSyncRequest
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.hostUtc = Self.format(hostUtc)
+        self.reason = reason
+    }
+
+    public static func format(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        return formatter.string(from: date)
+    }
+}
+
+public enum GuestTimeSyncOutcome: String, Codable, Equatable, Sendable {
+    case inSync = "in-sync"
+    case corrected
+    case resyncRequested = "resync-requested"
+    case failed
+    case unsupported
+    case invalidRequest = "invalid-request"
+}
+
+public struct GuestTimeSyncStatus: Codable, Equatable, Sendable {
+    public var isSupported: Bool
+    public var guestUtcBefore: String?
+    /// `hostUtc - guestUtcBefore`. Positive means Windows was behind.
+    public var skewMilliseconds: Int?
+    public var thresholdMilliseconds: Int
+    public var outcome: GuestTimeSyncOutcome
+    public var method: String
+    public var requiresElevation: Bool
+    public var recommendedAction: String
+    public var message: String?
+
+    public init(
+        isSupported: Bool,
+        guestUtcBefore: String? = nil,
+        skewMilliseconds: Int? = nil,
+        thresholdMilliseconds: Int = 2000,
+        outcome: GuestTimeSyncOutcome,
+        method: String,
+        requiresElevation: Bool = false,
+        recommendedAction: String = "none",
+        message: String? = nil
+    ) {
+        self.isSupported = isSupported
+        self.guestUtcBefore = guestUtcBefore
+        self.skewMilliseconds = skewMilliseconds
+        self.thresholdMilliseconds = thresholdMilliseconds
+        self.outcome = outcome
+        self.method = method
+        self.requiresElevation = requiresElevation
+        self.recommendedAction = recommendedAction
+        self.message = message
+    }
+}
+
+public struct TimeSyncResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var timeSync: GuestTimeSyncStatus
+
+    public init(requestId: String, protocolVersion: Int = 1, timeSync: GuestTimeSyncStatus) {
+        self.type = .timeSyncResponse
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.timeSync = timeSync
+    }
+}
+
+public enum GuestAppearanceTheme: String, Codable, Equatable, Sendable {
+    case light
+    case dark
+}
+
+/// Makes Windows follow the Mac's light or dark appearance.
+public struct AppearanceSetRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var theme: GuestAppearanceTheme
+
+    public init(requestId: String, theme: GuestAppearanceTheme, protocolVersion: Int = 1) {
+        self.type = .appearanceSetRequest
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.theme = theme
+    }
+}
+
+public struct GuestAppearanceStatus: Codable, Equatable, Sendable {
+    public var isSupported: Bool
+    public var theme: GuestAppearanceTheme
+    public var appsUseLightTheme: Bool
+    public var systemUsesLightTheme: Bool
+    public var changed: Bool
+    public var broadcast: Bool
+    public var message: String?
+
+    public init(
+        isSupported: Bool,
+        theme: GuestAppearanceTheme,
+        appsUseLightTheme: Bool,
+        systemUsesLightTheme: Bool,
+        changed: Bool,
+        broadcast: Bool,
+        message: String? = nil
+    ) {
+        self.isSupported = isSupported
+        self.theme = theme
+        self.appsUseLightTheme = appsUseLightTheme
+        self.systemUsesLightTheme = systemUsesLightTheme
+        self.changed = changed
+        self.broadcast = broadcast
+        self.message = message
+    }
+}
+
+public struct AppearanceSetResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var appearance: GuestAppearanceStatus
+
+    public init(requestId: String, protocolVersion: Int = 1, appearance: GuestAppearanceStatus) {
+        self.type = .appearanceSetResponse
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.appearance = appearance
+    }
 }
 
 public struct AppListRequest: Codable, Equatable, Sendable {
