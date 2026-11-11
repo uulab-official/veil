@@ -1,13 +1,13 @@
 import Foundation
 
-/// Sends text input one message at a time, in the order the keys were pressed.
+/// Sends keyboard input, text, pastes, and clicks one message at a time, in the order the user made them.
 ///
 /// Each keystroke of an IME composition corrects what the previous one typed in the guest (`input.text` with
-/// `replaceLength`), so two messages applied out of order would delete the wrong characters. A separate
-/// `Task` per message did not guarantee that order.
+/// `replaceLength`), and every message travels on its own connection. Sent from separate tasks, a Backspace
+/// or a click could overtake a pending correction, which then deleted characters the user had already typed.
 @MainActor
-final class OrderedTextInput {
-    static let shared = OrderedTextInput()
+final class OrderedGuestInput {
+    static let shared = OrderedGuestInput()
 
     private var tail: Task<Void, Never>?
 

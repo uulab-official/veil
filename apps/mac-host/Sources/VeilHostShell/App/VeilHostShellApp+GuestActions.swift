@@ -75,12 +75,22 @@ extension VeilHostShellApp {
             }
         }
         windowsAppWindowPresenter.onMouseInput = { windowId, event, x, y in
+            // A click moves the caret, so it keeps its place among the keys, and so does a drag that selects
+            // text. A plain hover is too frequent to queue behind them.
+            guard event == "move", NSEvent.pressedMouseButtons == 0 else {
+                OrderedGuestInput.shared.enqueue {
+                    await model.sendMouseInput(windowId: windowId, event: event, x: x, y: y)
+                }
+                return
+            }
             Task { @MainActor in
                 await model.sendMouseInput(windowId: windowId, event: event, x: x, y: y)
             }
         }
         windowsAppWindowPresenter.onKeyInput = { windowId, event, key, windowsVirtualKey, modifiers in
-            Task { @MainActor in
+            // Same queue as text: a Backspace that overtook a pending composition correction deleted
+            // characters the user had already typed.
+            OrderedGuestInput.shared.enqueue {
                 await model.sendKeyInput(
                     windowId: windowId,
                     event: event,
@@ -159,7 +169,7 @@ extension VeilHostShellApp {
         }
         windowsAppWindowPresenter.onTextInput = { windowId, text, replaceLength in
             // In order: a composition correction applied out of turn would delete the wrong characters.
-            OrderedTextInput.shared.enqueue {
+            OrderedGuestInput.shared.enqueue {
                 await model.sendTextInput(windowId: windowId, text: text, replaceLength: replaceLength)
             }
         }
@@ -167,7 +177,7 @@ extension VeilHostShellApp {
             model.supportsTextComposition
         }
         windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, content in
-            Task { @MainActor in
+            OrderedGuestInput.shared.enqueue {
                 // Ctrl+V does not fail when the clipboard write did. It pastes whatever Windows had before,
                 // into the user's document, with nothing to indicate the content is stale. So a clipboard write
                 // that could not be delivered cancels the paste instead of completing it with wrong content.
