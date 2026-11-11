@@ -23,6 +23,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
     private const int ENUM_CURRENT_SETTINGS = -1;
     private const uint DM_PELSWIDTH = 0x00080000;
     private const uint DM_PELSHEIGHT = 0x00100000;
+    private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
     private const uint SWP_NOOWNERZORDER = 0x0200;
@@ -417,6 +418,29 @@ public sealed class WindowsDesktop : IWindowsDesktop
         }
 
         return Task.FromResult<WindowRect?>(accepted ? GetWindowBounds(hwnd) : null);
+    }
+
+    public bool MoveWindow(string windowId, int x, int y)
+    {
+        if (!OperatingSystem.IsWindows()
+            || !TryParseWindowId(windowId, out var hwnd)
+            || !IsWindow(hwnd)
+            || WindowGeometry.Read(hwnd) is not { } geometry)
+        {
+            return false;
+        }
+
+        // The host places the visible frame; SetWindowPos takes the outer rectangle, which starts the
+        // invisible resize borders earlier.
+        return SetWindowPos(
+            hwnd,
+            IntPtr.Zero,
+            x - geometry.InsetX,
+            y - geometry.InsetY,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER
+        );
     }
 
     public Task<DisplayResizeResult?> ResizeDisplayAsync(DisplayResizeInput input, CancellationToken cancellationToken)

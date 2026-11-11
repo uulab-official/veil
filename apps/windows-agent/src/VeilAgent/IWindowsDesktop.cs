@@ -30,6 +30,12 @@ public interface IWindowsDesktop
     Task<DisplayResizeResult?> ResizeDisplayAsync(DisplayResizeInput input, CancellationToken cancellationToken) =>
         Task.FromResult<DisplayResizeResult?>(null);
 
+    /// <summary>
+    /// Moves a tracked HWND so its visible frame starts at (x, y) in display pixels, without resizing,
+    /// activating, or reordering it. Returns false when the window is gone or Windows refused.
+    /// </summary>
+    bool MoveWindow(string windowId, int x, int y) => false;
+
     Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken);
 
     /// <summary>

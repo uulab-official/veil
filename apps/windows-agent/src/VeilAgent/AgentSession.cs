@@ -119,6 +119,7 @@ public sealed class AgentSession
                 MessageTypes.SystemShutdownRequest => HandleSystemShutdown(requestId),
                 MessageTypes.FrameCaptureStrategySet => HandleFrameCaptureStrategySet(request, requestId),
                 MessageTypes.WindowCropSet => HandleWindowCropSet(request, requestId),
+                MessageTypes.WindowMoveRequest => HandleWindowMove(request, requestId),
                 MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputText => await HandleTextInputAsync(request, requestId, cancellationToken),
@@ -1070,6 +1071,36 @@ public sealed class AgentSession
         }
 
         return AgentReplies.Direct(OperationAck(requestId));
+    }
+
+    /// <summary>
+    /// Places a tracked window where the host shows it, so the guest layout matches the Mac's and
+    /// overlapping mirrored windows cover each other the same way in both (<c>window.move.request</c>).
+    /// </summary>
+    private AgentReplies HandleWindowMove(JsonObject request, string? requestId)
+    {
+        var windowId = request["windowId"]?.GetValue<string>();
+        int? x = request["x"] is JsonValue xValue && xValue.TryGetValue<int>(out var xInt) ? xInt : null;
+        int? y = request["y"] is JsonValue yValue && yValue.TryGetValue<int>(out var yInt) ? yInt : null;
+        if (string.IsNullOrWhiteSpace(windowId)
+            || x is null or < -16_384 or > 16_384
+            || y is null or < -16_384 or > 16_384)
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "invalid_message",
+                "window.move.request requires a windowId and x and y between -16384 and 16384."
+            ));
+        }
+
+        if (!TryGetTrackedWindow(windowId, out _))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "window_not_tracked", $"Window {windowId} is not tracked."));
+        }
+
+        return desktop.MoveWindow(windowId, x.Value, y.Value)
+            ? AgentReplies.Direct(OperationAck(requestId))
+            : AgentReplies.Direct(ErrorResponse(requestId, "window_move_failed", $"Window {windowId} could not be moved."));
     }
 
     private AgentReplies HandleWindowCropSet(JsonObject request, string? requestId)
