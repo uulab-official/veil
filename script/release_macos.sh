@@ -147,12 +147,19 @@ stage_release_app() {
   swift build --configuration release --package-path "$PACKAGE_DIR" --product "$APP_EXECUTABLE"
   local build_binary
   build_binary="$(swift build --configuration release --package-path "$PACKAGE_DIR" --show-bin-path)/$APP_EXECUTABLE"
+  # The program inside every Windows app launcher Veil writes to ~/Applications/Veil Apps.
+  swift build --configuration release --package-path "$PACKAGE_DIR" --product veil-app-launcher
+  local launcher_binary
+  launcher_binary="$(swift build --configuration release --package-path "$PACKAGE_DIR" --show-bin-path)/veil-app-launcher"
 
   rm -rf "$APP_BUNDLE"
   rm -f "$ARCHIVE_PATH" "$NOTARY_RESULT" "$NOTARY_LOG" "$RELEASE_REPORT"
   mkdir -p "$APP_MACOS" "$APP_RESOURCES"
   cp "$build_binary" "$APP_BINARY"
   chmod +x "$APP_BINARY"
+  mkdir -p "$APP_CONTENTS/Helpers"
+  cp "$launcher_binary" "$APP_CONTENTS/Helpers/veil-app-launcher"
+  chmod +x "$APP_CONTENTS/Helpers/veil-app-launcher"
   swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
   cp -R "$PACKAGE_DIR/Resources/"*.lproj "$APP_RESOURCES/"
   # Without Metadata.appintents a released Veil would carry its App Intents but show none in Shortcuts.
@@ -195,6 +202,18 @@ stage_release_app() {
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <!-- veil:// URLs; see docs/protocol.md "Mac Integration URLs". -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>org.uulab.veil.open</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>veil</string>
+      </array>
+    </dict>
+  </array>
   <key>NSMicrophoneUsageDescription</key>
   <string>Windows apps in Veil can use your microphone, for example in calls or voice recording.</string>
   <key>NSHumanReadableCopyright</key>
@@ -207,6 +226,9 @@ PLIST
 }
 
 sign_release_app() {
+  # Signed for notarization here; each launcher Veil builds from it is re-signed ad hoc on the user's Mac.
+  codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" \
+    "$APP_CONTENTS/Helpers/veil-app-launcher"
   codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" \
     --entitlements "$RELEASE_ENTITLEMENTS" "$APP_BINARY"
   codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" \

@@ -112,6 +112,7 @@ struct VeilHostShellApp: App {
             .task {
                 configureDockMenuBridge()
                 configureShortcutIntentBridge()
+                configureVeilURLBridge()
                 configureWindowsAppWindowCloseBridge()
                 startAgentReconnectPollerIfNeeded()
                 startAutomaticFrameStreamMaintenanceLoopIfNeeded()
@@ -153,6 +154,13 @@ struct VeilHostShellApp: App {
                 syncDockTileRuntimeStatus()
                 scheduleAutomaticQuietRuntimeIfNeeded()
                 syncLauncherWindowVisibility()
+                if count > previousCount {
+                    syncWindowsAppLaunchers()
+                }
+            }
+            .onChange(of: model.apps) {
+                // A guest that reports an icon or a new name after the window opened refreshes its launcher.
+                syncWindowsAppLaunchers()
             }
             .onChange(of: vmModel.snapshot?.state) {
                 syncDockTileRuntimeStatus()

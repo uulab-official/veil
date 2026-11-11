@@ -392,6 +392,75 @@ share, and a mismatched name return `invalid_shared_file_path`. A missing file r
 `shared_file_missing`. Successful requests use the same `file.open.response` followed by `window.created`
 contract as an ordinary drop.
 
+## Mac Integration URLs
+
+These are not guest messages. They are how other Mac software asks the host to act, and the host turns them
+into the guest messages above. Veil registers the `veil` URL scheme (`CFBundleURLTypes` in the app's
+Info.plist).
+
+| URL | Effect |
+| --- | --- |
+| `veil://open-app?id=<appId>` | Opens the Windows app as a Mac window, starting or resuming Windows first. Same path as the launcher list's one-click open, ending in `app.launch.request`. |
+| `veil://launcher-request?id=<uuid>` | Runs a request a Windows app launcher wrote (below). |
+
+Rules:
+
+- `id` for `open-app` must be 1–128 ASCII letters, digits, `_`, `-` or `.`, and must name an app in the
+  latest `app.list.response` (or the built-in catalog of inbox apps while the guest is not connected).
+  Anything else is ignored before it reaches the guest.
+- The scheme is reachable from any app and from web pages, so **no URL names a host file**. A URL can only
+  ask for what a user could do from Veil's own menus. There is deliberately no `open-file?path=` form.
+- Unknown hosts and malformed URLs are ignored and logged under the `integration` category.
+
+### Windows app launchers
+
+The first time a Windows app opens as a Mac window through the guest agent, Veil writes a small launcher for
+it to `~/Applications/Veil Apps/<App Name>.app`. That folder is indexed by Spotlight and listed in Launchpad,
+and a launcher can be kept in the Dock like any app. Each launcher is generated on the user's Mac:
+
+- its program is a copy of `Veil.app/Contents/Helpers/veil-app-launcher`;
+- its icon is the `iconPngBase64` the guest reported, with Veil's badge (Veil's own icon when there is none),
+  so no Microsoft icon is stored in this repository or shipped in Veil;
+- it is signed ad hoc (`codesign --sign -`) and registered with Launch Services;
+- its Info.plist carries `VeilWindowsAppID`, `VeilWindowsAppName` and `VeilLauncherFingerprint`, and its
+  bundle identifier is `org.uulab.veil.winapp.<appId>`. Veil only replaces or removes bundles with these
+  keys, so an app the user put in the folder is never touched. The fingerprint covers the app id and name,
+  the icon, the launcher program and Veil's version; a launcher is rebuilt only when it changes.
+
+Launchers for apps Veil knows declare document types with `LSHandlerRank` `Alternate`, so Finder lists them
+under **Open With** without making them the default app: Notepad for `public.plain-text`,
+`public.comma-separated-values-text`, `public.json` and `public.xml`; Paint for PNG, JPEG, BMP, GIF and TIFF.
+Other apps get a launcher without document types.
+
+Opening a launcher with no files sends `veil://open-app?id=<appId>`. Opening Mac files with it writes a
+request instead:
+
+```json
+{
+  "version": 1,
+  "appId": "winapp_notepad",
+  "filePaths": ["/Users/me/Desktop/report.txt"],
+  "createdAt": "2026-11-11T09:30:00Z"
+}
+```
+
+to `~/Library/Application Support/Veil/Launcher Requests/<uuid>.json` (folder `0700`, file `0600`), and
+sends `veil://launcher-request?id=<uuid>`. Only a local process that can already read the user's files can
+write that folder, which is what keeps file paths out of the URL. The host:
+
+- deletes the request as it reads it, so the same URL cannot be replayed;
+- refuses requests older than 120 seconds, an unknown `version`, an invalid `appId`, or a relative path;
+- refuses more than eight files, the same limit as one drag and drop;
+- starts or resumes Windows and waits for the guest agent when needed;
+- sends each file exactly as if it had been dropped on the app's window: the same 50 MB limit, Windows-safe
+  name rewriting and `file.open.request`, so the guest's own checks still apply. Refusals are shown in Veil's
+  main window.
+
+Launcher creation can be turned off with
+`defaults write org.uulab.veil.host-shell VeilCreatesWindowsAppLaunchers -bool NO`; deleting
+`~/Applications/Veil Apps` removes the launchers, and they come back the next time an app opens unless the
+setting is off.
+
 ## Window Geometry
 
 Window `bounds`, frame surfaces, `input.mouse` coordinates, and `window.resize.request` sizes all describe

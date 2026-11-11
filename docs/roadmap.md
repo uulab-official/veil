@@ -198,6 +198,9 @@ Exit criteria:
   with a generic fallback when the guest does not provide a valid PNG. This improves app identity without
   pretending Veil has separate per-app Dock bundles; Parallels' per-app Dock entries remain a packaging decision,
   not a drawing-only fix. Live verification with real Windows icons and multiple windows is still open.
+  Per-app launchers now exist (2026-11-11): Veil generates an ad-hoc-signed `.app` per opened Windows app in
+  `~/Applications/Veil Apps`, so Windows apps appear in Launchpad, Spotlight and the Dock and in Finder's Open
+  With for Notepad and Paint file types. See "Mac Integration URLs" in `docs/protocol.md`.
 - Drag and drop. **Already shipped**, and again understated here. Dropping a file on a mirrored window sends
   it to the guest, which writes it into a per-request directory, opens it with the target app, and deletes
   the copy after five minutes.

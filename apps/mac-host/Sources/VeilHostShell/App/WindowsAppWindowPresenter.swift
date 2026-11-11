@@ -783,7 +783,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     /// Every case carries plain values and nothing else. That is the point: it can cross back to the main actor
     /// without dragging a closure or a SwiftUI view with it, which is what let the six separate main-actor hops
     /// this replaced collapse into one.
-    private enum DroppedFileOutcome: Sendable {
+    enum DroppedFileOutcome: Sendable, Equatable {
         case ready(fileName: String, contentBase64: String)
         case refused(WindowsAppFileDropRefusal)
     }
@@ -818,6 +818,12 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             return .refused(.unreadableItem)
         }
 
+        return droppedFileOutcome(forFileAt: url)
+    }
+
+    /// The same rules for a file named by URL rather than dragged: used when Finder opens Mac files with a
+    /// Windows app launcher, so both ways into a Windows app refuse and rename files identically.
+    nonisolated static func droppedFileOutcome(forFileAt url: URL) -> DroppedFileOutcome {
         let fileName = url.lastPathComponent
         let byteCount = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
 

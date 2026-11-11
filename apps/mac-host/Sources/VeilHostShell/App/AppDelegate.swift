@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import VeilHostCore
+import VeilLauncherSupport
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -10,6 +11,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Runs before Veil quits, for example to suspend Windows. A second Quit while it runs exits at once.
     var terminationHandler: (@MainActor () async -> Void)?
     private var isRunningTerminationHandler = false
+    /// Handles `veil://` URLs once the main scene has configured itself. URLs that arrive earlier, such as the
+    /// one that cold-launched Veil from a Windows app launcher, wait in `pendingURLs` until then.
+    var urlHandler: ((URL) -> Void)? {
+        didSet {
+            guard let urlHandler else {
+                return
+            }
+            let queued = pendingURLs
+            pendingURLs = []
+            queued.forEach(urlHandler)
+        }
+    }
+    private var pendingURLs: [URL] = []
     private let launchVerificationReportURL = LaunchVerificationArguments.reportURL(
         from: ProcessInfo.processInfo.arguments
     )
@@ -60,6 +74,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Always presenting the main scene gives a Finder/Dock launch the same deterministic entry point.
     func applicationShouldRestoreState(_ app: NSApplication) -> Bool {
         false
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme?.lowercased() == VeilURLRoute.scheme {
+            if let urlHandler {
+                urlHandler(url)
+            } else {
+                pendingURLs.append(url)
+            }
+        }
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {

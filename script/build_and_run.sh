@@ -26,11 +26,17 @@ pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
 
 swift build --package-path "$PACKAGE_DIR" --product "$APP_EXECUTABLE"
 BUILD_BINARY="$(swift build --package-path "$PACKAGE_DIR" --show-bin-path)/$APP_EXECUTABLE"
+# The program inside every Windows app launcher Veil writes to ~/Applications/Veil Apps.
+swift build --package-path "$PACKAGE_DIR" --product veil-app-launcher
+LAUNCHER_BINARY="$(swift build --package-path "$PACKAGE_DIR" --show-bin-path)/veil-app-launcher"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
+mkdir -p "$APP_CONTENTS/Helpers"
+cp "$LAUNCHER_BINARY" "$APP_CONTENTS/Helpers/veil-app-launcher"
+chmod +x "$APP_CONTENTS/Helpers/veil-app-launcher"
 swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
 # UI translations; SwiftUI looks string literals up in these Localizable.strings tables.
 cp -R "$ROOT_DIR/apps/mac-host/Resources/"*.lproj "$APP_RESOURCES/"
@@ -101,6 +107,18 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <!-- veil:// URLs; see docs/protocol.md "Mac Integration URLs". -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>org.uulab.veil.open</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>veil</string>
+      </array>
+    </dict>
+  </array>
   <key>NSMicrophoneUsageDescription</key>
   <string>Windows apps in Veil can use your microphone, for example in calls or voice recording.</string>
 </dict>
@@ -113,6 +131,7 @@ PLIST
 # quarantine marker before signing; do not remove any other extended attributes.
 xattr -dr com.apple.quarantine "$APP_BUNDLE" 2>/dev/null || true
 
+codesign --force --sign - "$APP_CONTENTS/Helpers/veil-app-launcher" >/dev/null
 codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BINARY" >/dev/null
 codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BUNDLE" >/dev/null
 

@@ -16,4 +16,6 @@ public enum VeilLog {
     public static let runtime = Logger(subsystem: subsystem, category: "runtime")
     public static let agent = Logger(subsystem: subsystem, category: "agent")
     public static let window = Logger(subsystem: subsystem, category: "window")
+    /// Mac integration: `veil://` URLs and the Windows app launchers in `~/Applications/Veil Apps`.
+    public static let integration = Logger(subsystem: subsystem, category: "integration")
 }

@@ -23,6 +23,10 @@ let package = Package(
         .executable(
             name: "veil-vmctl",
             targets: ["VeilVMControl"]
+        ),
+        .executable(
+            name: "veil-app-launcher",
+            targets: ["VeilAppLauncher"]
         )
     ],
     targets: [
@@ -33,9 +37,18 @@ let package = Package(
             name: "VeilHostProbe",
             dependencies: ["VeilHostCore"]
         ),
+        // Shared by Veil and the per-app launchers it generates; kept free of VeilHostCore so each
+        // launcher binary stays small.
+        .target(
+            name: "VeilLauncherSupport"
+        ),
+        .executableTarget(
+            name: "VeilAppLauncher",
+            dependencies: ["VeilLauncherSupport"]
+        ),
         .executableTarget(
             name: "VeilHostShell",
-            dependencies: ["VeilHostCore"],
+            dependencies: ["VeilHostCore", "VeilLauncherSupport"],
             resources: [
                 .copy("Resources/VeilAppIcon.icns")
             ]
@@ -53,7 +66,7 @@ let package = Package(
         ),
         .testTarget(
             name: "VeilHostShellTests",
-            dependencies: ["VeilHostCore", "VeilHostShell"]
+            dependencies: ["VeilHostCore", "VeilHostShell", "VeilLauncherSupport"]
         )
     ]
 )
