@@ -1458,10 +1458,14 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
-    public func setCroppedWindows(windowIds: [String]) async throws {
+    public func setCroppedWindows(windowIds: [String], hidesDesktop: Bool) async throws {
         try await sendAcknowledged(
             encoder.encode(
-                WindowCropSetRequest(requestId: "req_window_crop_\(UUID().uuidString.prefix(8))", windowIds: windowIds)
+                WindowCropSetRequest(
+                    requestId: "req_window_crop_\(UUID().uuidString.prefix(8))",
+                    windowIds: windowIds,
+                    hidesDesktop: hidesDesktop
+                )
             )
         )
     }

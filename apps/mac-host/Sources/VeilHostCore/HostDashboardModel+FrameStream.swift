@@ -482,12 +482,12 @@ extension HostDashboardModel {
     /// Tells the agent which windows the host shows by cropping the guest framebuffer, so it captures
     /// them only about once a second (`window.crop.set`). A failure only costs guest CPU, so it is logged
     /// rather than shown.
-    public func setCroppedWindows(windowIds: [String]) async {
+    public func setCroppedWindows(windowIds: [String], hidesDesktop: Bool = false) async {
         guard hasLiveAgentConnection, health?.capabilities.windowLayout == true else {
             return
         }
         do {
-            try await service.setCroppedWindows(windowIds: windowIds)
+            try await service.setCroppedWindows(windowIds: windowIds, hidesDesktop: hidesDesktop)
         } catch {
             VeilLog.window.error("Failed to report cropped windows: \(String(describing: error), privacy: .public)")
         }

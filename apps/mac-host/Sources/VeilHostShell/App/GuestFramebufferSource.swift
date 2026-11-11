@@ -138,7 +138,7 @@ final class GuestFramebufferSource {
     }
     /// Windows whose view currently shows the cropped framebuffer instead of captured frames.
     private(set) var croppingWindowIds: Set<String> = []
-    private var lastReportedCrop: (windowIds: Set<String>, at: Date)?
+    private var lastReportedCrop: (windowIds: Set<String>, hidesDesktop: Bool, at: Date)?
 
     func setCropping(windowId: String, _ isCropping: Bool) {
         if isCropping {
@@ -150,13 +150,14 @@ final class GuestFramebufferSource {
 
     /// The crop list to send the agent now, or nil when it was sent recently and has not changed. The agent
     /// lets a list lapse after six seconds, so it is repeated every two.
-    func cropListToReport(now: Date = Date()) -> [String]? {
+    func cropListToReport(hidesDesktop: Bool, now: Date = Date()) -> [String]? {
         if let lastReportedCrop,
            lastReportedCrop.windowIds == croppingWindowIds,
+           lastReportedCrop.hidesDesktop == hidesDesktop,
            now.timeIntervalSince(lastReportedCrop.at) < 2 {
             return nil
         }
-        lastReportedCrop = (croppingWindowIds, now)
+        lastReportedCrop = (croppingWindowIds, hidesDesktop, now)
         return croppingWindowIds.sorted()
     }
 

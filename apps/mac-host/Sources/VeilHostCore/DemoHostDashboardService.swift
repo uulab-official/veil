@@ -109,8 +109,8 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.unsubscribeWindowFrames(windowId: windowId)
     }
 
-    public func setCroppedWindows(windowIds: [String]) async throws {
-        try await primary.setCroppedWindows(windowIds: windowIds)
+    public func setCroppedWindows(windowIds: [String], hidesDesktop: Bool) async throws {
+        try await primary.setCroppedWindows(windowIds: windowIds, hidesDesktop: hidesDesktop)
     }
 
     public func moveWindow(windowId: String, x: Int, y: Int) async throws {

@@ -26,10 +26,12 @@ extension VeilHostShellApp {
                 placeGuestWindow(windowId: placement.windowId, contentFrame: placement.contentFrame, screenFrame: placement.screenFrame)
             }
         }
+        // The Windows taskbar is hidden while apps show as their own windows, and back in the desktop view.
+        let hidesDesktop = isNeeded && shellNavigation.viewMode == .apps
         if model.health?.capabilities.windowLayout == true,
-           let windowIds = GuestFramebufferSource.shared.cropListToReport() {
+           let windowIds = GuestFramebufferSource.shared.cropListToReport(hidesDesktop: hidesDesktop) {
             Task { @MainActor in
-                await model.setCroppedWindows(windowIds: windowIds)
+                await model.setCroppedWindows(windowIds: windowIds, hidesDesktop: hidesDesktop)
             }
         }
     }

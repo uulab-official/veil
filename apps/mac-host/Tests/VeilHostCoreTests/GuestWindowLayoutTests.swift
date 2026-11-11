@@ -75,7 +75,7 @@ struct GuestWindowLayoutTests {
             .appendingPathComponent("harness/protocol-fixtures/window.crop.set.json")
         let fixture = try JSONDecoder.veilProtocol.decode(WindowCropSetRequest.self, from: Data(contentsOf: url))
 
-        #expect(fixture == WindowCropSetRequest(requestId: "req_window_crop_1A2B3C4D", windowIds: ["hwnd:000F0254"]))
+        #expect(fixture == WindowCropSetRequest(requestId: "req_window_crop_1A2B3C4D", windowIds: ["hwnd:000F0254"], hidesDesktop: true))
     }
 
     @Test func aMovedOrResizedWindowSettlesBeforeCroppingResumes() {

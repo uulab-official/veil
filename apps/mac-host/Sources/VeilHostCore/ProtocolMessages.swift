@@ -583,11 +583,14 @@ public struct WindowCropSetRequest: Codable, Equatable, Sendable {
     public var type: MessageType
     public var requestId: String
     public var windowIds: [String]
+    /// True while the host shows apps as their own windows, so the agent hides the Windows taskbar.
+    public var hidesDesktop: Bool?
 
-    public init(requestId: String, windowIds: [String]) {
+    public init(requestId: String, windowIds: [String], hidesDesktop: Bool? = nil) {
         self.type = .windowCropSet
         self.requestId = requestId
         self.windowIds = windowIds
+        self.hidesDesktop = hidesDesktop
     }
 }
 
