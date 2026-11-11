@@ -1221,7 +1221,7 @@ public sealed class AgentSession
 
         if (!GuestImeMode.IsValid(mode))
         {
-            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.ime.set mode must be native or alphanumeric."));
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.ime.set mode must be native, alphanumeric, or unmanaged."));
         }
 
         imeModeSink(mode!);
@@ -1233,7 +1233,9 @@ public sealed class AgentSession
             ["openBefore"] = last.OpenBefore,
             ["openAfter"] = last.OpenAfter,
             ["conversionAfter"] = last.ConversionAfter,
-            ["windowClass"] = last.WindowClass
+            ["windowClass"] = last.WindowClass,
+            ["hangulToggledBefore"] = last.HangulToggledBefore,
+            ["hangulToggledAfter"] = last.HangulToggledAfter
         };
         return AgentReplies.Direct(reply);
     }

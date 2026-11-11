@@ -25,9 +25,15 @@ public sealed class GuestImeModeTests
             ["requestId"] = "req_ime",
             ["mode"] = "alphanumeric"
         });
+        await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.InputImeSet,
+            ["requestId"] = "req_ime_release",
+            ["mode"] = "unmanaged"
+        });
 
         Assert.Equal(MessageTypes.OperationAck, Assert.Single(replies.DirectReplies)["type"]!.GetValue<string>());
-        Assert.Equal(["alphanumeric"], applied);
+        Assert.Equal(["alphanumeric", "unmanaged"], applied);
     }
 
     [Fact]
