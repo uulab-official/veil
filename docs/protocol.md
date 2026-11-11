@@ -1488,11 +1488,15 @@ Windows turned the same keys into jamo.
 - The agent applies it to the foreground window through that window's default IME window
   (`WM_IME_CONTROL` with `IMC_SETOPENSTATUS` and `IMC_SETCONVERSIONMODE`), and again whenever another
   window comes to the foreground, so the mode holds as the user moves between apps.
-- **Apps view:** the host sends `alphanumeric`. macOS composes and sends finished text (§ Input Text), so a
-  Windows IME must not compose the same keys a second time.
-- **Desktop view:** keys reach Windows as scancodes and the Windows IME composes. The host sends `native`
+- **Both views:** with an agent that reports `imeMode`, keys reach Windows by position (`input.key` with the
+  virtual key for the Mac key code, ANSI layout) and the Windows IME composes, as UTM and Parallels do. The
+  composition shows inline in the app because the host crops the guest display. The host sends `native`
   when the macOS input source is Korean, Japanese, or Chinese and `alphanumeric` otherwise, on every input
-  source change and whenever the desktop view becomes the key view.
+  source change, view change, and agent reconnect. Caps Lock and the modifier keys are not sent: on a Mac
+  they switch the input source, and modifiers travel with each key.
+- Composing on the Mac and correcting the guest's text with `input.text` `replaceLength` (§ Input Text)
+  swapped and duplicated syllables when the guest's caret and the host's record of the composition drifted
+  apart. It remains only for an agent without `imeMode`.
 - The reply is `operation.ack`. An unknown `mode` is rejected with `invalid_message`.
 
 ## Clipboard Text
