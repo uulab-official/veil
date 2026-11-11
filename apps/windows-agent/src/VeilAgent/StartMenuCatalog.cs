@@ -27,7 +27,11 @@ internal sealed record StartMenuShortcut(
     string TargetPath,
     string Arguments,
     string? WorkingDirectory,
-    string Publisher
+    string Publisher,
+    // The names Explorer shows, localized through desktop.ini (명령 프롬프트 for Command Prompt.lnk). Null off
+    // Windows or when Windows has none; the file names are used then.
+    string? DisplayName = null,
+    string? FolderDisplayName = null
 );
 
 /// <summary>
@@ -202,10 +206,12 @@ public sealed class StartMenuCatalog : IStartMenuCatalogSource
         var apps = new List<WindowsAppDescriptor>();
         foreach (var shortcut in shortcuts)
         {
-            var name = WindowsFileNameWithoutExtension(shortcut.ShortcutPath);
+            var fileName = WindowsFileNameWithoutExtension(shortcut.ShortcutPath);
+            var name = string.IsNullOrWhiteSpace(shortcut.DisplayName) ? fileName : shortcut.DisplayName.Trim();
             var target = shortcut.TargetPath.Trim();
             if (name.Length == 0
                 || !target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                || IsExcludedShortcut(fileName, target)
                 || IsExcludedShortcut(name, target)
                 || !fileExists(target))
             {
@@ -228,7 +234,7 @@ public sealed class StartMenuCatalog : IStartMenuCatalogSource
                 WindowDiscoveryTimeoutOverride: WindowDiscoveryTimeout,
                 ShortcutArguments: string.IsNullOrWhiteSpace(shortcut.Arguments) ? null : shortcut.Arguments.Trim(),
                 WorkingDirectory: string.IsNullOrWhiteSpace(shortcut.WorkingDirectory) ? null : shortcut.WorkingDirectory,
-                Folder: FolderFor(shortcut.ProgramsRoot, shortcut.ShortcutPath)
+                Folder: shortcut.FolderDisplayName ?? FolderFor(shortcut.ProgramsRoot, shortcut.ShortcutPath)
             ));
         }
 

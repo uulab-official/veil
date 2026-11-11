@@ -63,6 +63,54 @@ internal static class StartMenuDiscovery
         }
     }
 
+    /// <summary>The name Explorer and the Start menu show, which desktop.ini localizes.</summary>
+    private static string? ShellDisplayName(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+        var info = new ShFileInfo();
+        return SHGetFileInfo(path, 0, ref info, (uint)Marshal.SizeOf<ShFileInfo>(), ShgfiDisplayName) != IntPtr.Zero
+            && !string.IsNullOrWhiteSpace(info.DisplayName)
+            ? info.DisplayName
+            : null;
+    }
+
+    /// <summary>Each folder between Programs and the shortcut, by its shown name, joined with <c>/</c>.</summary>
+    private static string? FolderDisplayName(string root, string shortcutPath)
+    {
+        if (StartMenuCatalog.FolderFor(root, shortcutPath) is not { } relative)
+        {
+            return null;
+        }
+        var current = root.TrimEnd('\\');
+        var names = new List<string>();
+        foreach (var segment in relative.Split('/'))
+        {
+            current = current + "\\" + segment;
+            names.Add(ShellDisplayName(current) ?? segment);
+        }
+        return string.Join("/", names);
+    }
+
+    private const uint ShgfiDisplayName = 0x000000200;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct ShFileInfo
+    {
+        public IntPtr Icon;
+        public int IconIndex;
+        public uint Attributes;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string DisplayName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
+        public string TypeName;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SHGetFileInfo(string path, uint attributes, ref ShFileInfo info, uint size, uint flags);
+
     private static StartMenuShortcut? TryReadShortcut(string root, string shortcutPath)
     {
         if (!OperatingSystem.IsWindows())
@@ -105,7 +153,9 @@ internal static class StartMenuDiscovery
                 TargetPath: targetPath,
                 Arguments: arguments.ToString(),
                 WorkingDirectory: Environment.ExpandEnvironmentVariables(workingDirectory.ToString()),
-                Publisher: CompanyName(targetPath)
+                Publisher: CompanyName(targetPath),
+                DisplayName: ShellDisplayName(shortcutPath),
+                FolderDisplayName: FolderDisplayName(root, shortcutPath)
             );
         }
         catch (Exception error) when (error is COMException or InvalidCastException or ArgumentException or IOException or UnauthorizedAccessException)
