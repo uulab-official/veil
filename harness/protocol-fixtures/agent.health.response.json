@@ -25,6 +25,7 @@
     "timeSync": true,
     "appearanceSync": true,
     "textComposition": true,
+    "imeMode": true,
     "packageIdentity": false
   },
   "packageIdentityStatus": {

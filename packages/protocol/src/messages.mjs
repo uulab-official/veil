@@ -40,6 +40,7 @@ export const MessageType = Object.freeze({
   InputMouse: "input.mouse",
   InputKey: "input.key",
   InputText: "input.text",
+  InputImeSet: "input.ime.set",
   OperationAck: "operation.ack",
   Error: "error"
 });
@@ -146,7 +147,7 @@ export function validateAgentHealthResponse(response) {
   // Optional so an older agent keeps image and file clipboards on the Mac instead of receiving a message
   // it cannot route. timeSync and appearanceSync are optional for the same reason: without them the host
   // never sends time.sync.request or appearance.set.request.
-  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync", "textComposition"]) {
+  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync", "textComposition", "imeMode"]) {
     if (response.capabilities[field] !== undefined && typeof response.capabilities[field] !== "boolean") {
       throw new TypeError(`Agent health response field 'capabilities.${field}' must be a boolean.`);
     }
@@ -1108,6 +1109,21 @@ export function validateInputKey(input) {
 // key map -- every Hangul syllable, kana, and Han character -- have no representation there. macOS
 // owns the IME. With `capabilities.textComposition` the composition is typed as ordinary text and
 // corrected in place: `replaceLength` code units are deleted with Backspace before `text` is typed.
+// Keeps the Windows IME in step with the macOS input source: off in the apps view, where macOS composes, and
+// following the Mac's Korean/English state in the desktop view, where Windows composes.
+export const InputImeModes = Object.freeze(["native", "alphanumeric"]);
+
+export function validateInputImeSet(input) {
+  if (!input || input.type !== MessageType.InputImeSet) {
+    throw new TypeError("IME mode must use type input.ime.set.");
+  }
+  requireNonEmptyString(input.requestId, "requestId", "IME mode");
+  if (!InputImeModes.includes(input.mode)) {
+    throw new TypeError(`IME mode field 'mode' must be one of ${InputImeModes.join(", ")}.`);
+  }
+  return input;
+}
+
 export function validateInputText(input) {
   if (!input || input.type !== MessageType.InputText) {
     throw new TypeError("Text input must use type input.text.");

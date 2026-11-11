@@ -21,6 +21,7 @@ import {
   validateInputKey,
   validateInputMouse,
   validateInputText,
+  validateInputImeSet,
   validateNotificationListenerRequest,
   validateNotificationListenerResponse,
   validateNotificationReceived,
@@ -90,6 +91,7 @@ test("parses every stable fixture", async () => {
     "input.text.json",
     "input.text.acknowledged.json",
     "input.text.composition.json",
+    "input.ime.set.json",
     "operation.ack.json",
     "clipboard.text.set.host.json",
     "clipboard.text.set.guest.json",
@@ -980,4 +982,13 @@ test("rejects an appearance response that broadcast without a change", async () 
   response.appearance.changed = false;
 
   assert.throws(() => validateAppearanceSetResponse(response), /broadcast/);
+});
+
+test("accepts the two IME modes and nothing else", async () => {
+  assert.equal(validateInputImeSet(await readFixture("input.ime.set.json")).mode, "native");
+  assert.equal(
+    validateInputImeSet({ type: MessageType.InputImeSet, requestId: "r", mode: "alphanumeric" }).mode,
+    "alphanumeric"
+  );
+  assert.throws(() => validateInputImeSet({ type: MessageType.InputImeSet, requestId: "r", mode: "hangul" }), /mode/);
 });

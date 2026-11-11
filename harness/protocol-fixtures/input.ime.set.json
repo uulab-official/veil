@@ -1,0 +1,5 @@
+{
+  "type": "input.ime.set",
+  "requestId": "req_ime_1",
+  "mode": "native"
+}

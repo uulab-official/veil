@@ -85,6 +85,7 @@ Response:
     "timeSync": true,
     "appearanceSync": true,
     "textComposition": true,
+    "imeMode": true,
     "packageIdentity": false
   },
   "sharedFolder": {
@@ -1466,6 +1467,33 @@ Rules:
   keep the `input.key` path, and while an IME composition is open they are consumed by the macOS input
   method instead of being sent at all.
 - Failures inside the guest are reported as `input_text_failed`.
+
+## Input IME Mode
+
+Host to guest, for an agent that reports `capabilities.imeMode`:
+
+```json
+{
+  "type": "input.ime.set",
+  "requestId": "req_ime_1",
+  "mode": "native"
+}
+```
+
+On a Mac, Korean and English switch with the macOS input source (Caps Lock, Control-Space). Windows has
+its own Korean IME with its own Hangul/English state, and the two disagreed: the Mac showed English while
+Windows turned the same keys into jamo.
+
+- `mode` is `native` (Windows IME on, for example Hangul) or `alphanumeric` (IME off).
+- The agent applies it to the foreground window through that window's default IME window
+  (`WM_IME_CONTROL` with `IMC_SETOPENSTATUS` and `IMC_SETCONVERSIONMODE`), and again whenever another
+  window comes to the foreground, so the mode holds as the user moves between apps.
+- **Apps view:** the host sends `alphanumeric`. macOS composes and sends finished text (§ Input Text), so a
+  Windows IME must not compose the same keys a second time.
+- **Desktop view:** keys reach Windows as scancodes and the Windows IME composes. The host sends `native`
+  when the macOS input source is Korean, Japanese, or Chinese and `alphanumeric` otherwise, on every input
+  source change and whenever the desktop view becomes the key view.
+- The reply is `operation.ack`. An unknown `mode` is rejected with `invalid_message`.
 
 ## Clipboard Text
 
