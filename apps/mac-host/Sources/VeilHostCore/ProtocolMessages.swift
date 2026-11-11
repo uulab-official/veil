@@ -25,6 +25,8 @@ public enum MessageType: String, Codable, Sendable {
     case windowResizeResponse = "window.resize.response"
     case displayResizeRequest = "display.resize.request"
     case displayResizeResponse = "display.resize.response"
+    case displayScaleRequest = "display.scale.request"
+    case displayScaleResponse = "display.scale.response"
     case systemShutdownRequest = "system.shutdown.request"
     case systemShutdownResponse = "system.shutdown.response"
     case windowLayout = "window.layout"
@@ -96,6 +98,9 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// True when the guest agent can ask Windows to change the active desktop display mode.
     /// Optional so older agents keep the RFB aspect-fit fallback.
     public var displayResize: Bool? = nil
+    /// True when the agent accepts `display.scale.request`, so Windows can run at the Mac's backing scale.
+    /// Optional so an older agent decodes as `nil` and the guest display stays at one pixel per point.
+    public var displayScale: Bool? = nil
     /// True when Windows has the virtio-win VirtIO GPU display driver (`viogpudo`) installed, so the
     /// VM can boot on `virtio-gpu-pci` alone. Optional so an older agent decodes as `nil` and the VM keeps
     /// the `ramfb` display it boots with today.
@@ -787,6 +792,44 @@ public struct DisplayResizeResponse: Codable, Equatable, Sendable {
         self.accepted = accepted
         self.width = width
         self.height = height
+        self.reason = reason
+    }
+}
+
+/// `display.scale.request`: sets Windows' display scale, or gives back the user's own. See docs/protocol.md.
+public struct DisplayScaleRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var scalePercent: Int?
+    public var restoresUserScale: Bool?
+
+    public init(type: MessageType = .displayScaleRequest, requestId: String, scalePercent: Int?) {
+        self.type = type
+        self.requestId = requestId
+        self.scalePercent = scalePercent
+        self.restoresUserScale = scalePercent == nil ? true : nil
+    }
+}
+
+public struct DisplayScaleResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var accepted: Bool
+    /// The scale Windows reports after the request, which can differ from the one asked for.
+    public var scalePercent: Int?
+    public var reason: String?
+
+    public init(
+        type: MessageType = .displayScaleResponse,
+        requestId: String,
+        accepted: Bool,
+        scalePercent: Int? = nil,
+        reason: String? = nil
+    ) {
+        self.type = type
+        self.requestId = requestId
+        self.accepted = accepted
+        self.scalePercent = scalePercent
         self.reason = reason
     }
 }

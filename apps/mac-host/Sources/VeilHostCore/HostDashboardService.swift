@@ -30,6 +30,8 @@ public protocol HostDashboardService: Sendable {
     func closeWindow(windowId: String) async throws -> WindowCloseResponse
     func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse
     func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse
+    /// Sets Windows' display scale to `scalePercent`, or gives back the user's own scale when it is nil.
+    func setDisplayScale(scalePercent: Int?) async throws -> DisplayScaleResponse
     func requestSystemShutdown() async throws -> SystemShutdownResponse
     func sendMouseInput(_ input: InputMouseEvent) async throws
     /// Sends a mouse event and returns where the guest cursor ended up, when the agent reports it.
@@ -95,6 +97,14 @@ public extension HostDashboardService {
             requestId: "unsupported_display_resize",
             accepted: false,
             reason: "display_resize_unsupported"
+        )
+    }
+
+    func setDisplayScale(scalePercent: Int?) async throws -> DisplayScaleResponse {
+        DisplayScaleResponse(
+            requestId: "unsupported_display_scale",
+            accepted: false,
+            reason: "display_scale_unsupported"
         )
     }
 

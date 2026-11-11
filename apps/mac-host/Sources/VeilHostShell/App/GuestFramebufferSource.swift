@@ -95,6 +95,25 @@ final class GuestFramebufferSource {
         sinks[token] = nil
     }
 
+    /// Guest pixels per Mac point in the apps view once the display and Windows' scale both match it; 2 on
+    /// a Retina Mac with Retina resolution on. See `CoherenceDisplayScale`.
+    var coherencePixelsPerPoint = 1
+    /// The last scale asked of Windows (`percent` nil is the user's own), so it is asked once per change. The
+    /// desktop view also records the display size it asked at.
+    var requestedScale: RequestedScale?
+    /// The scale Windows last reported, or nil before the first answer.
+    var reportedScalePercent: Int?
+    /// Set when Windows answered an apps-view scale request with a different scale; the apps view then
+    /// stays at one pixel per point until Veil restarts.
+    var scaleRefused = false
+    /// True while a display size and scale change is in flight, so the next layout does not start another.
+    var isApplyingDisplayScale = false
+
+    struct RequestedScale: Equatable {
+        var percent: Int?
+        var display: GuestDisplaySize?
+    }
+
     private var fitAttempts: [String: GuestPixelRect] = [:]
     private var requestedDisplay: GuestDisplaySize?
     private var pendingPlacements: [String: (x: Int, y: Int)] = [:]
@@ -181,7 +200,11 @@ final class GuestFramebufferSource {
             "source": sourceName,
             "framesLast5s": recent.count,
             "framesPerSecond": Double(recent.count) / 5,
-            "croppingWindowIds": croppingWindowIds.sorted()
+            "croppingWindowIds": croppingWindowIds.sorted(),
+            "frameWidth": latestFrame?.width ?? 0,
+            "frameHeight": latestFrame?.height ?? 0,
+            "pixelsPerPoint": coherencePixelsPerPoint,
+            "windowsScalePercent": reportedScalePercent ?? 0
         ]
     }
 

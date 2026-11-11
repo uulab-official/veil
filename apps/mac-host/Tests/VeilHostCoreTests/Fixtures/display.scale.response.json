@@ -1,0 +1,6 @@
+{
+  "type": "display.scale.response",
+  "requestId": "req_display_scale_200",
+  "accepted": true,
+  "scalePercent": 200
+}

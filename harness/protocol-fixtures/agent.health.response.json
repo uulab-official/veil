@@ -17,6 +17,7 @@
     "clipboardText": true,
     "windowResize": true,
     "displayResize": true,
+    "displayScale": true,
     "virtioGpuDisplay": true,
     "operationAcks": true,
     "clipboardImage": true,
