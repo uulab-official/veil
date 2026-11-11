@@ -27,9 +27,4 @@ struct MacPhysicalKeyMapTests {
         #expect(MacPhysicalKeyMap.windowsVirtualKey(forMacKeyCode: 55) == nil) // Command
     }
 
-    @Test("Windows composes whenever the Mac input source is Korean, in either view")
-    func imeFollowsMac() {
-        #expect(GuestImeMode.desired(macInputSourceLanguages: ["ko"], macInputSourceIsInputMode: true) == .native)
-        #expect(GuestImeMode.desired(macInputSourceLanguages: ["en"], macInputSourceIsInputMode: false) == .alphanumeric)
-    }
 }

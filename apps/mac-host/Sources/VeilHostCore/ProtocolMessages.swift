@@ -371,19 +371,16 @@ public struct TimeSyncResponse: Codable, Equatable, Sendable {
     }
 }
 
-/// The Windows IME state the host asks for: on (`native`, for example Hangul) or off.
+/// The Windows IME state the host asks for: on (`native`), off (`alphanumeric`), or left to the user.
 public enum GuestImeMode: String, Codable, Equatable, Sendable {
     case native
     case alphanumeric
+    case unmanaged
+}
 
-    /// Windows composes from the keys in both views, as UTM and Parallels do, so its IME is on exactly when
-    /// the macOS input source is a composing one.
-    public static func desired(macInputSourceLanguages: [String], macInputSourceIsInputMode: Bool) -> GuestImeMode {
-        isComposingLanguage(macInputSourceLanguages, isInputMode: macInputSourceIsInputMode) ? .native : .alphanumeric
-    }
-
-    /// A Korean, Japanese, or Chinese input method, as opposed to a plain keyboard layout such as ABC.
-    static func isComposingLanguage(_ languages: [String], isInputMode: Bool) -> Bool {
+/// Whether the macOS input source composes text (Korean, Japanese, Chinese) rather than being a plain layout.
+public enum MacInputSourceKind {
+    public static func isComposing(languages: [String], isInputMode: Bool) -> Bool {
         guard isInputMode, let primary = languages.first?.lowercased() else {
             return false
         }

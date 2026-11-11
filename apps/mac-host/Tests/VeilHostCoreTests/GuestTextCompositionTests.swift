@@ -73,8 +73,9 @@ struct GuestTextCompositionTests {
 struct GuestImeModeTests {
     @Test("a plain keyboard layout that lists Korean is still not an input method")
     func layoutIsNotInputMethod() {
-        #expect(GuestImeMode.desired(macInputSourceLanguages: ["ko"], macInputSourceIsInputMode: false) == .alphanumeric)
-        #expect(GuestImeMode.desired(macInputSourceLanguages: ["ja", "en"], macInputSourceIsInputMode: true) == .native)
+        #expect(!MacInputSourceKind.isComposing(languages: ["ko"], isInputMode: false))
+        #expect(MacInputSourceKind.isComposing(languages: ["ja", "en"], isInputMode: true))
+        #expect(MacInputSourceKind.isComposing(languages: ["ko"], isInputMode: true))
     }
 
     @Test("input.ime.set encodes the documented shape")

@@ -71,6 +71,16 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         windowOrder.filter { windowsById[$0] != nil }
     }
 
+    /// Presses the Windows Hangul key in the mirrored window that is key on the Mac, if one is.
+    func pressWindowsHangulKeyInKeyWindow() {
+        guard let keyWindow = NSApp.keyWindow,
+              let windowId = keyWindow.identifier?.rawValue,
+              windowsById[windowId] === keyWindow else {
+            return
+        }
+        WindowsHangulKey.press(windowId: windowId, send: onKeyInput)
+    }
+
     /// Fires after a mirrored window is created or removed, on whatever path did it, so the Veil window can
     /// hide behind the apps or come back. A relaunch reattaches windows without the launch path that used to
     /// hide it, which left the Veil window up behind the app.
@@ -1403,8 +1413,29 @@ private final class InputCaptureNSView: NSView {
         }
     }
 
+    /// The right Command key pressed on its own, which switches Korean/English in Windows only.
+    private var rightCommandAlone = false
+
+    override func flagsChanged(with event: NSEvent) {
+        // kVK_RightCommand. Its device-dependent flag tells a press from a release.
+        if event.keyCode == 54 {
+            let isDown = event.modifierFlags.rawValue & UInt(NX_DEVICERCMDKEYMASK) != 0
+            if isDown {
+                rightCommandAlone = true
+            } else if rightCommandAlone, keysPassThrough?() == true, let session {
+                rightCommandAlone = false
+                WindowsHangulKey.press(windowId: session.id, send: onKeyInput)
+                return
+            }
+        } else {
+            rightCommandAlone = false
+        }
+        super.flagsChanged(with: event)
+    }
+
     override func keyDown(with event: NSEvent) {
         didCommitTextForCurrentKeyPress = false
+        rightCommandAlone = false
 
         // Like UTM and Parallels: the key goes to Windows by position and the Windows IME composes, which it
         // shows inline in the app itself. Its Korean/English state follows the macOS input source
@@ -1783,5 +1814,16 @@ enum MirroredWindowDrag {
 
     static func isMouseButtonDown() -> Bool {
         NSEvent.pressedMouseButtons & 1 != 0
+    }
+}
+
+/// The Windows Hangul key (VK_HANGUL), which switches the Windows IME between Korean and English.
+@MainActor
+enum WindowsHangulKey {
+    static let virtualKey = 0x15
+
+    static func press(windowId: String, send: ((String, String, String, Int, [String]) -> Void)?) {
+        send?(windowId, "keyDown", "hangul", virtualKey, [])
+        send?(windowId, "keyUp", "hangul", virtualKey, [])
     }
 }

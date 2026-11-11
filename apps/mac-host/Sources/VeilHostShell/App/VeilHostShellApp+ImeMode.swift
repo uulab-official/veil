@@ -1,3 +1,4 @@
+import AppKit
 import Carbon
 import Foundation
 import VeilHostCore
@@ -56,14 +57,11 @@ enum GuestAutomatedTyping {
 }
 
 extension VeilHostShellApp {
-    /// Keeps the Windows IME on or off with the Mac's input source: Windows composes from the keys in both views.
+    /// Leaves the Windows IME to the user, except while Veil types its own commands into Windows. See
+    /// docs/protocol.md § Input IME Mode for why the host cannot set it in TSF apps such as Notepad.
     @MainActor
     func syncGuestImeMode() async {
-        let source = MacInputSource.current()
-        let mode = GuestAutomatedTyping.isActive
-            ? GuestImeMode.alphanumeric
-            : GuestImeMode.desired(macInputSourceLanguages: source.languages, macInputSourceIsInputMode: source.isInputMode)
-        await model.syncGuestImeMode(mode)
+        await model.syncGuestImeMode(GuestAutomatedTyping.isActive ? .alphanumeric : .unmanaged)
     }
 
     @MainActor
@@ -77,8 +75,12 @@ extension VeilHostShellApp {
                 await syncGuestImeMode()
             }
         }
+        // Switching the Mac input source while a Windows app is in front switches Windows too, with its Hangul key.
         MacInputSource.observeChanges {
-            Task { @MainActor in await syncGuestImeMode() }
+            guard NSApp.isActive, model.hasLiveAgentConnection, model.health?.capabilities.imeMode == true else {
+                return
+            }
+            windowsAppWindowPresenter.pressWindowsHangulKeyInKeyWindow()
         }
     }
 }
