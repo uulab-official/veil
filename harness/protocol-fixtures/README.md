@@ -45,6 +45,12 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `notification.listener.request.json`
 - `notification.listener.response.json`
 - `notification.received.json`
+- `shared.folder.request.json`
+- `shared.folder.response.json`
+- `time.sync.request.json`
+- `time.sync.response.json`
+- `appearance.set.request.json`
+- `appearance.set.response.json`
 - `error.app_not_found.json`
 
 ## Validation Rule

@@ -33,6 +33,10 @@ export const MessageType = Object.freeze({
   NotificationReceived: "notification.received",
   SharedFolderRequest: "shared.folder.request",
   SharedFolderResponse: "shared.folder.response",
+  TimeSyncRequest: "time.sync.request",
+  TimeSyncResponse: "time.sync.response",
+  AppearanceSetRequest: "appearance.set.request",
+  AppearanceSetResponse: "appearance.set.response",
   InputMouse: "input.mouse",
   InputKey: "input.key",
   InputText: "input.text",
@@ -140,8 +144,9 @@ export function validateAgentHealthResponse(response) {
   }
 
   // Optional so an older agent keeps image and file clipboards on the Mac instead of receiving a message
-  // it cannot route.
-  for (const field of ["clipboardImage", "clipboardFiles"]) {
+  // it cannot route. timeSync and appearanceSync are optional for the same reason: without them the host
+  // never sends time.sync.request or appearance.set.request.
+  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync"]) {
     if (response.capabilities[field] !== undefined && typeof response.capabilities[field] !== "boolean") {
       throw new TypeError(`Agent health response field 'capabilities.${field}' must be a boolean.`);
     }
@@ -286,6 +291,180 @@ function validateSharedFolderStatus(status, context = "Agent health response") {
       `${context} field 'sharedFolder.isSupported' must be true when the guest reports a share or a listening server.`
     );
   }
+}
+
+const timeSyncReasons = new Set(["agent-connected", "mac-wake", "vm-resume", "manual"]);
+const timeSyncOutcomes = new Set(["in-sync", "corrected", "resync-requested", "failed", "unsupported", "invalid-request"]);
+const timeSyncMethods = new Set(["none", "set-system-time", "resync-task"]);
+const timeSyncRecommendedActions = new Set([
+  "none",
+  "install-time-sync-task-elevated",
+  "wait-for-network-time",
+  "invalid-request",
+  "unsupported-on-this-host"
+]);
+const appearanceThemes = new Set(["light", "dark"]);
+const isoUtcPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?Z$/;
+
+function requireIsoUtc(value, field, context) {
+  requireNonEmptyString(value, field, context);
+  if (!isoUtcPattern.test(value) || Number.isNaN(Date.parse(value))) {
+    throw new TypeError(`${context} field '${field}' must be an ISO 8601 UTC timestamp ending in Z.`);
+  }
+}
+
+export function validateTimeSyncRequest(request) {
+  if (!request || request.type !== MessageType.TimeSyncRequest) {
+    throw new TypeError("Time sync request must use type time.sync.request.");
+  }
+
+  const context = "Time sync request";
+  requireNonEmptyString(request.requestId, "requestId", context);
+  requirePositiveInteger(request.protocolVersion, "protocolVersion", context);
+  requireIsoUtc(request.hostUtc, "hostUtc", context);
+
+  // A host clock outside this window is far more likely to be broken than right. Refusing it here
+  // stops a dead host RTC from being copied into Windows.
+  const year = new Date(request.hostUtc).getUTCFullYear();
+  if (year < 2020 || year > 2100) {
+    throw new TypeError("Time sync request field 'hostUtc' must fall between the years 2020 and 2100.");
+  }
+
+  if (!timeSyncReasons.has(request.reason)) {
+    throw new TypeError(
+      "Time sync request field 'reason' must be agent-connected, mac-wake, vm-resume, or manual."
+    );
+  }
+
+  return request;
+}
+
+export function validateTimeSyncResponse(response) {
+  if (!response || response.type !== MessageType.TimeSyncResponse) {
+    throw new TypeError("Time sync response must use type time.sync.response.");
+  }
+
+  const context = "Time sync response";
+  requireNonEmptyString(response.requestId, "requestId", context);
+  requirePositiveInteger(response.protocolVersion, "protocolVersion", context);
+
+  const status = response.timeSync;
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError(`${context} field 'timeSync' must be an object.`);
+  }
+
+  for (const field of ["isSupported", "requiresElevation"]) {
+    if (typeof status[field] !== "boolean") {
+      throw new TypeError(`${context} field 'timeSync.${field}' must be a boolean.`);
+    }
+  }
+  if (!timeSyncOutcomes.has(status.outcome)) {
+    throw new TypeError(`${context} field 'timeSync.outcome' is not a known outcome.`);
+  }
+  if (!timeSyncMethods.has(status.method)) {
+    throw new TypeError(`${context} field 'timeSync.method' is not a known method.`);
+  }
+  if (!timeSyncRecommendedActions.has(status.recommendedAction)) {
+    throw new TypeError(`${context} field 'timeSync.recommendedAction' is not a known action.`);
+  }
+  if (!Number.isInteger(status.thresholdMilliseconds) || status.thresholdMilliseconds < 0) {
+    throw new TypeError(`${context} field 'timeSync.thresholdMilliseconds' must be a non-negative integer.`);
+  }
+  if (status.message !== undefined && status.message !== null) {
+    requireNonEmptyString(status.message, "timeSync.message", context);
+  }
+
+  if (!status.isSupported) {
+    // A stub agent must not look like it corrected anything.
+    if (status.outcome !== "unsupported" || status.method !== "none") {
+      throw new TypeError(`${context} field 'timeSync.isSupported' is false, so outcome must be unsupported and method none.`);
+    }
+    return response;
+  }
+
+  if (status.outcome !== "invalid-request") {
+    requireIsoUtc(status.guestUtcBefore, "timeSync.guestUtcBefore", context);
+    if (!Number.isInteger(status.skewMilliseconds)) {
+      throw new TypeError(`${context} field 'timeSync.skewMilliseconds' must be an integer.`);
+    }
+  }
+
+  // Each outcome is only reachable through one method. Mismatches would hide which path ran.
+  const expectedMethod = {
+    "in-sync": "none",
+    corrected: "set-system-time",
+    "resync-requested": "resync-task",
+    failed: "none",
+    unsupported: "none",
+    "invalid-request": "none"
+  }[status.outcome];
+  if (status.method !== expectedMethod) {
+    throw new TypeError(`${context} field 'timeSync.method' must be ${expectedMethod} when outcome is ${status.outcome}.`);
+  }
+  if (status.outcome === "in-sync" && Math.abs(status.skewMilliseconds) > status.thresholdMilliseconds) {
+    throw new TypeError(`${context} reports in-sync with a skew larger than thresholdMilliseconds.`);
+  }
+  if (status.outcome === "failed" && status.requiresElevation && status.recommendedAction !== "install-time-sync-task-elevated") {
+    throw new TypeError(`${context} field 'timeSync.recommendedAction' must be install-time-sync-task-elevated when elevation is required.`);
+  }
+
+  return response;
+}
+
+export function validateAppearanceSetRequest(request) {
+  if (!request || request.type !== MessageType.AppearanceSetRequest) {
+    throw new TypeError("Appearance set request must use type appearance.set.request.");
+  }
+
+  const context = "Appearance set request";
+  requireNonEmptyString(request.requestId, "requestId", context);
+  requirePositiveInteger(request.protocolVersion, "protocolVersion", context);
+  if (!appearanceThemes.has(request.theme)) {
+    throw new TypeError("Appearance set request field 'theme' must be light or dark.");
+  }
+
+  return request;
+}
+
+export function validateAppearanceSetResponse(response) {
+  if (!response || response.type !== MessageType.AppearanceSetResponse) {
+    throw new TypeError("Appearance set response must use type appearance.set.response.");
+  }
+
+  const context = "Appearance set response";
+  requireNonEmptyString(response.requestId, "requestId", context);
+  requirePositiveInteger(response.protocolVersion, "protocolVersion", context);
+
+  const status = response.appearance;
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError(`${context} field 'appearance' must be an object.`);
+  }
+
+  for (const field of ["isSupported", "appsUseLightTheme", "systemUsesLightTheme", "changed", "broadcast"]) {
+    if (typeof status[field] !== "boolean") {
+      throw new TypeError(`${context} field 'appearance.${field}' must be a boolean.`);
+    }
+  }
+  if (!appearanceThemes.has(status.theme)) {
+    throw new TypeError(`${context} field 'appearance.theme' must be light or dark.`);
+  }
+  if (status.message !== undefined && status.message !== null) {
+    requireNonEmptyString(status.message, "appearance.message", context);
+  }
+
+  if (status.isSupported) {
+    const light = status.theme === "light";
+    if (status.appsUseLightTheme !== light || status.systemUsesLightTheme !== light) {
+      throw new TypeError(`${context} read-back values must agree with appearance.theme.`);
+    }
+  } else if (status.changed || status.broadcast) {
+    throw new TypeError(`${context} cannot report a change from an unsupported guest.`);
+  }
+  if (status.broadcast && !status.changed) {
+    throw new TypeError(`${context} field 'appearance.broadcast' cannot be true when nothing changed.`);
+  }
+
+  return response;
 }
 
 export function validateNotificationListenerRequest(request) {

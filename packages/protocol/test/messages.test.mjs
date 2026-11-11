@@ -26,6 +26,10 @@ import {
   validateNotificationReceived,
   validateOperationAck,
   validateSharedFolderRequest,
+  validateAppearanceSetRequest,
+  validateAppearanceSetResponse,
+  validateTimeSyncRequest,
+  validateTimeSyncResponse,
   validateSharedFolderResponse,
   validateWindowClosed,
   validateWindowCloseRequest,
@@ -95,6 +99,10 @@ test("parses every stable fixture", async () => {
     "notification.received.json",
     "shared.folder.request.json",
     "shared.folder.response.json",
+    "time.sync.request.json",
+    "time.sync.response.json",
+    "appearance.set.request.json",
+    "appearance.set.response.json",
     "error.app_not_found.json"
   ];
 
@@ -837,4 +845,100 @@ test("rejects a non-boolean operationAcks capability", async () => {
   health.capabilities.operationAcks = "true";
 
   assert.throws(() => validateAgentHealthResponse(health), /capabilities\.operationAcks/);
+});
+
+test("validates time sync request and response fixtures", async () => {
+  const request = validateTimeSyncRequest(await readFixture("time.sync.request.json"));
+  const response = validateTimeSyncResponse(await readFixture("time.sync.response.json"));
+
+  assert.equal(request.reason, "vm-resume");
+  assert.equal(response.timeSync.outcome, "corrected");
+  assert.equal(
+    response.timeSync.skewMilliseconds,
+    Date.parse(request.hostUtc) - Date.parse(response.timeSync.guestUtcBefore)
+  );
+});
+
+test("rejects a time sync request whose host clock is not plausible UTC", async () => {
+  for (const hostUtc of ["", "2026-11-11T09:30:00+09:00", "yesterday", "1970-01-01T00:00:00Z", "2200-01-01T00:00:00Z"]) {
+    const request = await readFixture("time.sync.request.json");
+    request.hostUtc = hostUtc;
+
+    assert.throws(() => validateTimeSyncRequest(request), TypeError, hostUtc);
+  }
+});
+
+test("rejects a time sync request with an unknown reason", async () => {
+  const request = await readFixture("time.sync.request.json");
+  request.reason = "because";
+
+  assert.throws(() => validateTimeSyncRequest(request), /reason/);
+});
+
+test("rejects a time sync response whose method does not match its outcome", async () => {
+  const response = await readFixture("time.sync.response.json");
+  response.timeSync.outcome = "resync-requested";
+
+  assert.throws(() => validateTimeSyncResponse(response), /must be resync-task/);
+});
+
+test("rejects a time sync response claiming in-sync with a large skew", async () => {
+  const response = await readFixture("time.sync.response.json");
+  response.timeSync.outcome = "in-sync";
+  response.timeSync.method = "none";
+
+  assert.throws(() => validateTimeSyncResponse(response), /in-sync/);
+});
+
+test("accepts a time sync response that needs an elevated install", async () => {
+  const response = await readFixture("time.sync.response.json");
+  Object.assign(response.timeSync, {
+    outcome: "failed",
+    method: "none",
+    requiresElevation: true,
+    recommendedAction: "install-time-sync-task-elevated"
+  });
+
+  validateTimeSyncResponse(response);
+  response.timeSync.recommendedAction = "none";
+  assert.throws(() => validateTimeSyncResponse(response), /install-time-sync-task-elevated/);
+});
+
+test("rejects an unsupported time sync guest that claims a correction", async () => {
+  const response = await readFixture("time.sync.response.json");
+  response.timeSync.isSupported = false;
+
+  assert.throws(() => validateTimeSyncResponse(response), /unsupported/);
+});
+
+test("validates appearance set request and response fixtures", async () => {
+  const request = validateAppearanceSetRequest(await readFixture("appearance.set.request.json"));
+  const response = validateAppearanceSetResponse(await readFixture("appearance.set.response.json"));
+
+  assert.equal(request.theme, "dark");
+  assert.equal(response.appearance.appsUseLightTheme, false);
+  assert.equal(response.appearance.systemUsesLightTheme, false);
+});
+
+test("rejects an appearance request for a theme Windows does not have", async () => {
+  for (const theme of ["", "auto", "Dark", null]) {
+    const request = await readFixture("appearance.set.request.json");
+    request.theme = theme;
+
+    assert.throws(() => validateAppearanceSetRequest(request), TypeError, String(theme));
+  }
+});
+
+test("rejects an appearance response whose read-back disagrees with the theme", async () => {
+  const response = await readFixture("appearance.set.response.json");
+  response.appearance.systemUsesLightTheme = true;
+
+  assert.throws(() => validateAppearanceSetResponse(response), /read-back/);
+});
+
+test("rejects an appearance response that broadcast without a change", async () => {
+  const response = await readFixture("appearance.set.response.json");
+  response.appearance.changed = false;
+
+  assert.throws(() => validateAppearanceSetResponse(response), /broadcast/);
 });

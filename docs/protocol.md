@@ -82,6 +82,8 @@ Response:
     "sharedFolder": true,
     "clipboardImage": true,
     "clipboardFiles": true,
+    "timeSync": true,
+    "appearanceSync": true,
     "packageIdentity": false
   },
   "sharedFolder": {
@@ -1727,6 +1729,7 @@ to a user nor pre-empt them:
 | `clipboard_image_failed` | The guest could not read, convert, or write an image on the Windows clipboard. |
 | `clipboard_image_too_large` | A `clipboard.image.set` exceeded the byte or pixel bounds in Clipboard Image. |
 | `clipboard_files_failed` | The guest could not place the shared-folder files on the Windows clipboard. |
+| `appearance_set_failed` | `appearance.set.request` could not write the per-user theme values. See "Guest Appearance". |
 | `clipboard_text_failed` | The guest could not take the Windows clipboard. Routine rather than exotic: the guest retries `OpenClipboard` for 250 ms and any clipboard manager or Office instance can hold it longer. |
 
 The fire-and-forget observation and silent `false`-return gaps recorded in
@@ -1848,3 +1851,146 @@ Turning the shared folder on or off does **not** invalidate a suspended Windows 
 forwarding is excluded from the suspend/resume machine fingerprint, because a `hostfwd` rule is slirp-side
 plumbing: the guest sees an identical NIC with an identical MAC and address either way, and QEMU migration
 does not serialize forwarding rules. Device topology is a different question and stays fingerprinted.
+
+## Guest Time Sync
+
+Windows keeps its own clock once it has booted. When Veil restores a suspended session
+(`QEMUVMSuspension`) or the Mac sleeps for a long time, the guest resumes with the clock it had when
+it stopped, and nothing inside Windows notices. The host therefore tells the guest what time it is.
+
+Host request:
+
+```json
+{
+  "type": "time.sync.request",
+  "requestId": "req_time_sync",
+  "protocolVersion": 1,
+  "hostUtc": "2026-11-11T09:30:00.000Z",
+  "reason": "vm-resume"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "time.sync.response",
+  "requestId": "req_time_sync",
+  "protocolVersion": 1,
+  "timeSync": {
+    "isSupported": true,
+    "guestUtcBefore": "2026-11-10T22:12:41.118Z",
+    "skewMilliseconds": 40638882,
+    "thresholdMilliseconds": 2000,
+    "outcome": "corrected",
+    "method": "set-system-time",
+    "requiresElevation": false,
+    "recommendedAction": "none",
+    "message": "Windows clock was 40638882 ms behind macOS and has been set from the host."
+  }
+}
+```
+
+Rules:
+
+- `hostUtc` is required, must be an ISO 8601 UTC timestamp ending in `Z`, and must fall between the
+  years 2020 and 2100. A host clock outside that window is far more likely to be broken than right, and
+  the guest refuses rather than propagating it.
+- `reason` is one of `agent-connected`, `mac-wake`, `vm-resume`, or `manual`. It is diagnostic only; the
+  guest applies the same policy for every reason.
+- `skewMilliseconds` is `hostUtc - guestUtcBefore`. Positive means Windows was behind.
+- Within `thresholdMilliseconds` (2000) the guest reports `outcome: "in-sync"` and changes nothing. Message
+  transit time stays well inside that band on the loopback forward, so sending this on every agent
+  connection is safe.
+- `outcome` is one of `in-sync`, `corrected`, `resync-requested`, `failed`, `unsupported`, or
+  `invalid-request`. `method` is one of `none`, `set-system-time`, or `resync-task`.
+- The guest agent runs as the interactive user with a limited token (`Install-VeilAgent.ps1` registers it
+  with `-RunLevel Limited`), and setting the Windows clock needs `SeSystemtimePrivilege`, which a UAC-
+  filtered token does not hold. The guest therefore tries, in order:
+  1. `SetSystemTime` from `hostUtc`, after enabling `SeSystemtimePrivilege`. This works only when the agent
+     happens to be elevated. `outcome: "corrected"`.
+  2. Starting the `VeilTimeSync` scheduled task, which an elevated `Install-VeilAgent.ps1` registers to run
+     as SYSTEM and grants the installing user permission to start. It runs `Sync-VeilGuestTime.ps1`, which starts W32Time and calls `w32tm /resync`.
+     `outcome: "resync-requested"`: the guest only knows the task started, not that NTP answered, so it
+     never reports this as `corrected`. The host checks by sending another `time.sync.request` later.
+  3. Otherwise `outcome: "failed"`, `requiresElevation: true`, and
+     `recommendedAction: "install-time-sync-task-elevated"`.
+- The SYSTEM task deliberately does **not** take the host's time as input. Passing `hostUtc` into a
+  SYSTEM process would let any program running as the user set the system clock to anything. `w32tm`
+  takes no caller-controlled input, at the cost of needing the Mac to be online for NTP to answer.
+- An elevated install also raises W32Time's `MaxPosPhaseCorrection`/`MaxNegPhaseCorrection` to unlimited.
+  The standalone-machine defaults reject corrections over 15 hours, which is exactly the long-sleep case.
+- `recommendedAction` is one of `none`, `install-time-sync-task-elevated`, `wait-for-network-time`,
+  `invalid-request`, or `unsupported-on-this-host`.
+- `isSupported: false` is only for a non-Windows agent (the test harness). It must come with
+  `outcome: "unsupported"` and `method: "none"`.
+- `agent.health.response.capabilities.timeSync: true` advertises the message. A host must not send it to an
+  agent that does not advertise it.
+
+Host triggers: the macOS host sends `time.sync.request` when the agent connection becomes live, after
+`NSWorkspace.didWakeNotification`, and after a suspended session is resumed. Wake and resume set a pending
+flag that is flushed as soon as the agent is reachable, because the agent socket is usually still
+reconnecting at that moment.
+
+## Guest Appearance
+
+Makes Windows follow the Mac's light or dark appearance.
+
+Host request:
+
+```json
+{
+  "type": "appearance.set.request",
+  "requestId": "req_appearance_set",
+  "protocolVersion": 1,
+  "theme": "dark"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "appearance.set.response",
+  "requestId": "req_appearance_set",
+  "protocolVersion": 1,
+  "appearance": {
+    "isSupported": true,
+    "theme": "dark",
+    "appsUseLightTheme": false,
+    "systemUsesLightTheme": false,
+    "changed": true,
+    "broadcast": true,
+    "message": null
+  }
+}
+```
+
+Rules:
+
+- `theme` is `light` or `dark`. Anything else is answered with an `error` whose code is `invalid_message`.
+- The guest writes the per-user DWORDs `AppsUseLightTheme` and `SystemUsesLightTheme` under
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize` (1 for light, 0 for dark), then
+  broadcasts `WM_SETTINGCHANGE` with `lParam = "ImmersiveColorSet"` using `SendMessageTimeout` and
+  `SMTO_ABORTIFHUNG`, so a hung window cannot stall the agent. Running apps that listen for that broadcast
+  repaint; others pick the theme up on their next launch. HKCU needs no elevation.
+- These two values are what Windows' own Settings > Personalization > Colors writes. They are not a
+  documented API; Microsoft documents them only indirectly (see
+  `docs/research/guest-host-state-sync.md`). The guest therefore reports what it read back rather than
+  what it intended.
+- `changed` is false when both values already matched, in which case the broadcast is skipped and
+  `broadcast` is false.
+- `appsUseLightTheme` and `systemUsesLightTheme` are the values read back after the write and must agree
+  with `theme` when `isSupported` is true.
+- A registry write failure is answered with an `error` whose code is `appearance_set_failed`.
+- `agent.health.response.capabilities.appearanceSync: true` advertises the message.
+
+Host behaviour: "Match Mac appearance in Windows" is a host setting, on by default
+(`UserDefaults` key `veil.guestSync.matchMacAppearance`). While it is on, the host sends the current Mac
+appearance when the agent connection becomes live and whenever the Mac appearance changes. Turning it off
+stops sending; it does not revert the Windows theme.
+
+## Battery
+
+Not synced. QEMU's `virt` machine exposes no ACPI battery or AC adapter device, so Windows has no battery
+to report. See `docs/research/guest-host-state-sync.md` for what was checked.

@@ -22,6 +22,8 @@
     "operationAcks": true,
     "clipboardImage": true,
     "clipboardFiles": true,
+    "timeSync": true,
+    "appearanceSync": true,
     "packageIdentity": false
   },
   "packageIdentityStatus": {
