@@ -342,7 +342,7 @@ internal static class WindowsInputInjector
     {
         var sequence = KeySequence(input.Event, input.WindowsVirtualKey, input.Modifiers);
         return sequence.Count > 0
-            && Send(sequence.Select(step => KeyboardInput((ushort)step.VirtualKey, 0, step.KeyUp)).ToList());
+            && Send(sequence.Select(step => KeyboardInput((ushort)step.VirtualKey, ScanCode(step.VirtualKey), step.KeyUp)).ToList());
     }
 
     /// <summary>
@@ -365,6 +365,18 @@ internal static class WindowsInputInjector
         }
         return Send(inputs);
     }
+
+    /// <summary>
+    /// The scan code for a virtual key. The Windows IME composes Hangul from keys the host passes through, and
+    /// some IMEs and apps read the scan code rather than the virtual key; zero looked like no key at all.
+    /// </summary>
+    private static ushort ScanCode(int virtualKey) =>
+        OperatingSystem.IsWindows() ? (ushort)MapVirtualKey((uint)virtualKey, MAPVK_VK_TO_VSC) : (ushort)0;
+
+    private const uint MAPVK_VK_TO_VSC = 0;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint MapVirtualKey(uint code, uint mapType);
 
     private static NativeInput KeyboardInput(ushort virtualKey, ushort scanCode, bool keyUp, bool unicode = false)
     {
