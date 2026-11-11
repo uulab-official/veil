@@ -113,6 +113,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.setCroppedWindows(windowIds: windowIds)
     }
 
+    public func moveWindow(windowId: String, x: Int, y: Int) async throws {
+        try await primary.moveWindow(windowId: windowId, x: x, y: y)
+    }
+
     public func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport {
         await primary.waitForAgentConnection(endpoint: endpoint, timeoutSeconds: timeoutSeconds)
     }

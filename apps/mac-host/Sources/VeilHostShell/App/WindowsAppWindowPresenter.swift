@@ -60,6 +60,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     var onWindowResize: ((String, Int, Int, CGSize?) -> Void)?
     /// A mirrored window became the Mac's key window.
     var onWindowBecameKey: ((String) -> Void)?
+    /// Where a mirrored window's content sits on its screen, both in screen points, after it moved or
+    /// changed size; the guest window is moved to match (`window.move.request`).
+    var onWindowPlacement: ((String, CGRect, CGRect) -> Void)?
 
     var visibleWindowIds: [String] {
         windowOrder.filter { windowsById[$0] != nil }
@@ -554,6 +557,36 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
         lastLiveResizeReportAt[windowId] = nil
         reportContentSize(contentView.bounds.size, windowId: windowId, screen: window.screen)
+        reportPlacement(of: window, windowId: windowId)
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              let windowId = window.identifier?.rawValue,
+              windowsById[windowId] != nil else {
+            return
+        }
+        reportPlacement(of: window, windowId: windowId)
+    }
+
+    /// Every visible mirrored window's content frame and screen frame, for placing the guest windows after
+    /// the guest display or the connection changed.
+    func currentPlacements() -> [(windowId: String, contentFrame: CGRect, screenFrame: CGRect)] {
+        windowsById.compactMap { windowId, window in
+            guard window.isVisible, let contentView = window.contentView, let screen = window.screen else {
+                return nil
+            }
+            let content = window.convertToScreen(contentView.convert(contentView.bounds, to: nil))
+            return (windowId, content, screen.frame)
+        }
+    }
+
+    private func reportPlacement(of window: NSWindow, windowId: String) {
+        guard let contentView = window.contentView, let screen = window.screen else {
+            return
+        }
+        let content = window.convertToScreen(contentView.convert(contentView.bounds, to: nil))
+        onWindowPlacement?(windowId, content, screen.frame)
     }
 
     /// Keeps the Windows app resizing along with the Mac window while its edge is dragged, instead of
@@ -574,6 +607,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
         lastLiveResizeReportAt[windowId] = now
         reportContentSize(contentView.bounds.size, windowId: windowId, screen: window.screen)
+        reportPlacement(of: window, windowId: windowId)
     }
 
     /// Zooming, from the Windows maximize button or a caption double-click, is not a live resize. The target

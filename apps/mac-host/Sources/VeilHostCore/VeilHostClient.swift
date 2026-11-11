@@ -1445,6 +1445,19 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    public func moveWindow(windowId: String, x: Int, y: Int) async throws {
+        try await sendAcknowledged(
+            encoder.encode(
+                WindowMoveRequest(
+                    requestId: "req_window_move_\(requestIdSuffix(for: windowId))",
+                    windowId: windowId,
+                    x: x,
+                    y: y
+                )
+            )
+        )
+    }
+
     public func setCroppedWindows(windowIds: [String]) async throws {
         try await sendAcknowledged(
             encoder.encode(

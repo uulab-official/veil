@@ -18,13 +18,56 @@ extension VeilHostShellApp {
             isNeeded: isNeeded
         )
         if isNeeded {
+            matchGuestDisplayToMacScreen()
             fitMirroredWindowsOntoGuestDisplay()
+            // Repeated placements are dropped by the scheduler, so this only sends windows that are
+            // somewhere else in the guest, such as after a reconnect or a display change.
+            for placement in windowsAppWindowPresenter.currentPlacements() {
+                placeGuestWindow(windowId: placement.windowId, contentFrame: placement.contentFrame, screenFrame: placement.screenFrame)
+            }
         }
         if model.health?.capabilities.windowLayout == true,
            let windowIds = GuestFramebufferSource.shared.cropListToReport() {
             Task { @MainActor in
                 await model.setCroppedWindows(windowIds: windowIds)
             }
+        }
+    }
+
+    /// Makes the guest display the size of the Mac screen in points while app windows are shown, so the
+    /// guest layout can be the Mac layout (`CoherencePlacement`). The desktop view sizes the display to
+    /// its own window instead, so this only runs in the apps view. Requested once per target size.
+    private func matchGuestDisplayToMacScreen() {
+        guard shellNavigation.viewMode == .apps,
+              model.health?.capabilities.displayResize == true,
+              let layout = GuestWindowLayoutStore.shared.latest,
+              let screen = NSScreen.main?.frame,
+              let target = CoherencePlacement.displayMatching(screenFrame: screen),
+              layout.display.width != target.width || layout.display.height != target.height,
+              GuestFramebufferSource.shared.recordDisplayRequest(target) else {
+            return
+        }
+        Task { @MainActor in
+            _ = await model.resizeDisplay(width: target.width, height: target.height)
+        }
+    }
+
+    /// Moves a mirrored window in Windows to where its Mac window is. Called on every move and live-resize
+    /// step; only the newest placement per window is sent, at most every 80 ms.
+    func placeGuestWindow(windowId: String, contentFrame: CGRect, screenFrame: CGRect) {
+        guard model.health?.capabilities.windowLayout == true,
+              let layout = GuestWindowLayoutStore.shared.latest,
+              let origin = CoherencePlacement.guestOrigin(contentFrame: contentFrame, screenFrame: screenFrame, display: layout.display),
+              model.mirrorSessions.first(where: { $0.id == windowId })?.window.isPopup == false else {
+            return
+        }
+        // Already there: nothing to send.
+        if let frame = layout.windows.first(where: { $0.windowId == windowId })?.frame,
+           frame.x == origin.x, frame.y == origin.y {
+            return
+        }
+        GuestFramebufferSource.shared.schedulePlacement(windowId: windowId, x: origin.x, y: origin.y) { windowId, x, y in
+            await model.moveMirrorSession(windowId: windowId, x: x, y: y)
         }
     }
 

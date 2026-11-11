@@ -96,6 +96,46 @@ final class GuestFramebufferSource {
     }
 
     private var fitAttempts: [String: GuestPixelRect] = [:]
+    private var requestedDisplay: GuestDisplaySize?
+    private var pendingPlacements: [String: (x: Int, y: Int)] = [:]
+    private var placementFlushScheduled = false
+
+    /// True the first time this display size is requested, so a guest that cannot take it is not asked
+    /// again on every layout.
+    func recordDisplayRequest(_ size: GuestDisplaySize) -> Bool {
+        guard requestedDisplay != size else {
+            return false
+        }
+        requestedDisplay = size
+        return true
+    }
+
+    /// Keeps the newest placement per window and sends them together after a short delay, so a window
+    /// dragged across the screen costs a handful of requests instead of one per mouse event.
+    func schedulePlacement(
+        windowId: String,
+        x: Int,
+        y: Int,
+        send: @escaping @MainActor (String, Int, Int) async -> Void
+    ) {
+        pendingPlacements[windowId] = (x, y)
+        guard !placementFlushScheduled else {
+            return
+        }
+        placementFlushScheduled = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(80))
+            guard let self else {
+                return
+            }
+            self.placementFlushScheduled = false
+            let placements = self.pendingPlacements
+            self.pendingPlacements = [:]
+            for (windowId, origin) in placements {
+                await send(windowId, origin.x, origin.y)
+            }
+        }
+    }
     /// Windows whose view currently shows the cropped framebuffer instead of captured frames.
     private(set) var croppingWindowIds: Set<String> = []
     private var lastReportedCrop: (windowIds: Set<String>, at: Date)?

@@ -493,3 +493,20 @@ extension HostDashboardModel {
         }
     }
 }
+
+extension HostDashboardModel {
+    /// Moves a mirrored window in Windows to where its Mac window is (`window.move.request`). A failure
+    /// only means the guest layout lags, so it is logged rather than shown.
+    public func moveMirrorSession(windowId: String, x: Int, y: Int) async {
+        guard hasLiveAgentConnection,
+              health?.capabilities.windowLayout == true,
+              mirrorSessions.contains(where: { $0.id == windowId }) else {
+            return
+        }
+        do {
+            try await service.moveWindow(windowId: windowId, x: x, y: y)
+        } catch {
+            VeilLog.window.error("Failed to move window \(windowId, privacy: .public): \(String(describing: error), privacy: .public)")
+        }
+    }
+}

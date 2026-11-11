@@ -96,4 +96,23 @@ struct GuestWindowLayoutTests {
         #expect(store.framebufferCrop(windowId: "hwnd:1", framebufferWidth: 1920, framebufferHeight: 1080)
             == CGRect(x: 120, y: 80, width: 900, height: 600))
     }
+
+    @Test func placesAMacWindowAtTheSameSpotOnAMatchingGuestDisplay() throws {
+        // A 1512x982-point screen and a guest display of the same size.
+        let screen = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let display = GuestPixelRect(x: 0, y: 0, width: 1512, height: 982)
+        // Content 120 points from the left and 100 points below the top of the screen.
+        let content = CGRect(x: 120, y: 982 - 100 - 600, width: 800, height: 600)
+
+        let origin = try #require(CoherencePlacement.guestOrigin(contentFrame: content, screenFrame: screen, display: display))
+        #expect(origin.x == 120 && origin.y == 100)
+
+        // A second screen to the right maps its own top-left to the display's.
+        let second = CGRect(x: 1512, y: 0, width: 1512, height: 982)
+        let onSecond = try #require(CoherencePlacement.guestOrigin(
+            contentFrame: content.offsetBy(dx: 1512, dy: 0), screenFrame: second, display: display))
+        #expect(onSecond.x == 120 && onSecond.y == 100)
+
+        #expect(CoherencePlacement.displayMatching(screenFrame: screen) == GuestDisplaySize(width: 1512, height: 982))
+    }
 }

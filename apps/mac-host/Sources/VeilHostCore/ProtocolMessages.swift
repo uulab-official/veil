@@ -29,6 +29,7 @@ public enum MessageType: String, Codable, Sendable {
     case systemShutdownResponse = "system.shutdown.response"
     case windowLayout = "window.layout"
     case windowCropSet = "window.crop.set"
+    case windowMoveRequest = "window.move.request"
     case clipboardTextSet = "clipboard.text.set"
     case clipboardImageSet = "clipboard.image.set"
     case clipboardFilesSet = "clipboard.files.set"
@@ -557,6 +558,23 @@ public struct WindowFrameSubscribeRequest: Codable, Equatable, Sendable {
         self.windowId = windowId
         self.format = format
         self.tileFormat = tileFormat
+    }
+}
+
+/// `window.move.request`: places a window's visible frame at a point on the guest display.
+public struct WindowMoveRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var windowId: String
+    public var x: Int
+    public var y: Int
+
+    public init(requestId: String, windowId: String, x: Int, y: Int) {
+        self.type = .windowMoveRequest
+        self.requestId = requestId
+        self.windowId = windowId
+        self.x = x
+        self.y = y
     }
 }
 

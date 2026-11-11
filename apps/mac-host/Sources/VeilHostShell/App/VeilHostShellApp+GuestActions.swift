@@ -105,6 +105,11 @@ extension VeilHostShellApp {
                 )
             }
         }
+        windowsAppWindowPresenter.onWindowPlacement = { windowId, contentFrame, screenFrame in
+            Task { @MainActor in
+                placeGuestWindow(windowId: windowId, contentFrame: contentFrame, screenFrame: screenFrame)
+            }
+        }
         windowsAppWindowPresenter.onWindowBecameKey = { windowId in
             Task { @MainActor in
                 await raiseGuestWindowForCrop(windowId: windowId)

@@ -192,3 +192,34 @@ public enum CoherenceDisplayFit {
             || window.y + window.height > display.y + display.height - MirroredWindowDisplayFit.taskbarAllowance
     }
 }
+
+/// Where a mirrored window belongs on the guest display, from where its Mac window's content is.
+///
+/// The guest display stands for the Mac screen the window is on: its top-left is the screen's top-left,
+/// scaled by display pixels per screen point. When the two are the same size (`displayMatching`), the
+/// guest layout is the Mac layout, so overlapping windows cover each other the same way in both.
+public enum CoherencePlacement {
+    /// The guest point for a window's visible frame. `contentFrame` and `screenFrame` are AppKit screen
+    /// coordinates (bottom-left origin, points).
+    public static func guestOrigin(contentFrame: CGRect, screenFrame: CGRect, display: GuestPixelRect) -> (x: Int, y: Int)? {
+        guard screenFrame.width > 0, screenFrame.height > 0, display.width > 0, display.height > 0 else {
+            return nil
+        }
+        let scaleX = Double(display.width) / screenFrame.width
+        let scaleY = Double(display.height) / screenFrame.height
+        let x = display.x + Int(((contentFrame.minX - screenFrame.minX) * scaleX).rounded())
+        let y = display.y + Int(((screenFrame.maxY - contentFrame.maxY) * scaleY).rounded())
+        return (x, y)
+    }
+
+    /// The guest display size that makes the guest layout the Mac layout: the screen in points, which
+    /// is how big mirrored windows already are in guest pixels at Windows' 100% scale.
+    public static func displayMatching(screenFrame: CGRect) -> GuestDisplaySize? {
+        let width = Int(screenFrame.width.rounded())
+        let height = Int(screenFrame.height.rounded())
+        guard DisplayResizeRequest.isPlausible(width: width, height: height) else {
+            return nil
+        }
+        return GuestDisplaySize(width: width, height: height)
+    }
+}
