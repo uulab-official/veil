@@ -1,5 +1,6 @@
 {
   "type": "window.crop.set",
   "requestId": "req_window_crop_1A2B3C4D",
-  "windowIds": ["hwnd:000F0254"]
+  "windowIds": ["hwnd:000F0254"],
+  "hidesDesktop": true
 }

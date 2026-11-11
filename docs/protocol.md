@@ -539,7 +539,8 @@ Request (host → agent), sent when the agent advertises `capabilities.windowLay
 {
   "type": "window.crop.set",
   "requestId": "req_window_crop_1A2B3C4D",
-  "windowIds": ["hwnd:000F0254"]
+  "windowIds": ["hwnd:000F0254"],
+  "hidesDesktop": true
 }
 ```
 
@@ -548,6 +549,10 @@ Rules:
 - **Meaning:** `windowIds` lists the windows the host currently shows by cropping the guest framebuffer. Each request replaces the previous list, and an empty list means none.
 - **Effect:** the agent keeps their frame streams but captures them about once a second instead of up to 120 times. The host still reads each window's size and scale from those frames, while the pixels the user sees come from the framebuffer.
 - **Validation:** the agent ignores ids it does not track.
+- **`hidesDesktop`:** optional. `true` while the host shows apps as their own Mac windows (Coherence).
+  - While set, the agent hides the Windows taskbar (`Shell_TrayWnd`, `Shell_SecondaryTrayWnd`). The taskbar is part of the desktop Coherence hides, and it covered app windows near the bottom of the display.
+  - The taskbar is only hidden, so the work area and the user's taskbar settings are unchanged.
+  - It shows again when a request omits the flag or sends `false` (the desktop view), when the list lapses, or when the agent exits.
 - **Expiry:** the host repeats the list every two seconds. The agent lets a list lapse after six, so windows are not left slowed if the host goes away.
 - **Reply:** the agent answers with `operation.ack`, or with `error` code `invalid_message` when `windowIds` is missing.
 
