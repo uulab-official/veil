@@ -109,8 +109,10 @@ struct GracefulWindowsShutdownTests {
 
 @Suite("QEMU process activity")
 struct QEMUProcessActivityTests {
-    // Lower bound only: tests running in parallel add their own CPU time to this process.
-    @Test("reads this process's CPU time in nanoseconds and a busy loop as at least half a core")
+    // Lower bound only: tests running in parallel add their own CPU time to this process, and a busy CI runner
+    // gave the loop a third of a core. The bound is there to catch units: Mach ticks read as nanoseconds would
+    // come out about 40 times too small on Apple silicon, near 0.02.
+    @Test("reads this process's CPU time in nanoseconds and a busy loop as a tenth of a core or more")
     func measuresOwnProcess() throws {
         let activity = QEMUProcessActivity(pid: getpid())
         let start = Date()
@@ -121,7 +123,7 @@ struct QEMUProcessActivityTests {
             spin += sin(spin)
         }
         let fraction = try #require(activity.coreFractionSinceLastSample(now: Date()))
-        #expect(fraction > 0.5, "fraction \(fraction), spin \(spin)")
+        #expect(fraction > 0.1, "fraction \(fraction), spin \(spin)")
     }
 }
 
