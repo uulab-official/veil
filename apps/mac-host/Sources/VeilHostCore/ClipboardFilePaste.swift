@@ -195,6 +195,7 @@ public enum ClipboardFilePaste {
 public enum ClipboardSharingPreferences {
     public static let sharingEnabledKey = "VeilClipboardSharingEnabled"
     public static let filePasteEnabledKey = "VeilClipboardFilePasteEnabled"
+    public static let guestFileCopyEnabledKey = "VeilClipboardGuestFileCopyEnabled"
 
     /// On unless the user turned it off, matching the text sharing Veil already shipped.
     public static func isSharingEnabled(_ defaults: UserDefaults = .standard) -> Bool {
@@ -204,5 +205,10 @@ public enum ClipboardSharingPreferences {
     /// File paste also requires sharing itself: turning sharing off must stop everything.
     public static func isFilePasteEnabled(_ defaults: UserDefaults = .standard) -> Bool {
         isSharingEnabled(defaults) && (defaults.object(forKey: filePasteEnabledKey) as? Bool ?? true)
+    }
+
+    /// Windows-to-Mac file copy, which writes into `~/Downloads/Veil Clipboard`. Also behind sharing.
+    public static func isGuestFileCopyEnabled(_ defaults: UserDefaults = .standard) -> Bool {
+        isSharingEnabled(defaults) && (defaults.object(forKey: guestFileCopyEnabledKey) as? Bool ?? true)
     }
 }

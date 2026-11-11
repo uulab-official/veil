@@ -49,6 +49,7 @@ struct VeilHostShellApp: App {
     /// drive the Apps menu switches. See `docs/protocol.md` "Host controls".
     @AppStorage(ClipboardSharingPreferences.sharingEnabledKey) var clipboardSharingEnabled = true
     @AppStorage(ClipboardSharingPreferences.filePasteEnabledKey) var clipboardFilePasteEnabled = true
+    @AppStorage(ClipboardSharingPreferences.guestFileCopyEnabledKey) var clipboardGuestFileCopyEnabled = true
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
@@ -341,6 +342,8 @@ struct VeilHostShellApp: App {
 
                 Toggle("Share Clipboard with Windows", isOn: $clipboardSharingEnabled)
                 Toggle("Copy Files into Windows on Paste", isOn: $clipboardFilePasteEnabled)
+                    .disabled(!clipboardSharingEnabled)
+                Toggle("Copy Files from Windows", isOn: $clipboardGuestFileCopyEnabled)
                     .disabled(!clipboardSharingEnabled)
             }
         }

@@ -311,6 +311,35 @@ extension HostDashboardModel {
         return true
     }
 
+    /// Accepts a guest file copy once ``ClipboardGuestFiles/plan(_:)`` has checked every path and name. Shares
+    /// the guest sequence space and rate limit with text and images. Nothing is read from the share here;
+    /// the shell copies the files only if Veil is active and guest file copy is on.
+    public func receiveClipboardFiles(_ clipboard: ClipboardFilesSet, receivedAt: Date = Date()) -> Bool {
+        guard clipboard.origin == "guest",
+              clipboard.sequence > lastGuestClipboardSequence else {
+            return false
+        }
+
+        let plan: ClipboardGuestFilesPlan
+        do {
+            plan = try ClipboardGuestFiles.plan(clipboard)
+        } catch {
+            VeilLog.agent.notice(
+                "Rejected a guest clipboard file copy: \(error.localizedDescription, privacy: .public)"
+            )
+            return false
+        }
+
+        guard guestClipboardRateLimiter.allows(at: receivedAt) else {
+            VeilLog.agent.notice("Rate limited a guest clipboard file copy.")
+            return false
+        }
+
+        latestGuestClipboardFiles = plan
+        lastGuestClipboardSequence = clipboard.sequence
+        return true
+    }
+
     public func receiveClipboardText(_ clipboard: ClipboardTextSet, receivedAt: Date = Date()) -> Bool {
         guard clipboard.origin == "guest",
               clipboard.sequence > lastGuestClipboardSequence else {

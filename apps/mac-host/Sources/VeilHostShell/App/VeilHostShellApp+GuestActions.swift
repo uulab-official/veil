@@ -165,7 +165,15 @@ extension VeilHostShellApp {
                 case .image(let png):
                     clipboardOutcome = await model.sendHostClipboardImage(png: png)
                 case .files(let urls):
-                    clipboardOutcome = await sendHostClipboardFiles(urls)
+                    // Files Veil itself just copied from Windows: Windows' clipboard still holds the originals,
+                    // so copying them back into the share would only duplicate them.
+                    if let marker = model.guestFilesPasteboardMarker,
+                       marker.pasteboardChangeCount == NSPasteboard.general.changeCount,
+                       marker.guestSequence == model.lastGuestClipboardSequence {
+                        clipboardOutcome = .skipped
+                    } else {
+                        clipboardOutcome = await sendHostClipboardFiles(urls)
+                    }
                 }
                 if case .failed(let reason) = clipboardOutcome {
                     windowsAppWindowPresenter.showWindowsAppMessage(
@@ -261,6 +269,62 @@ extension VeilHostShellApp {
         }
 
         HostPasteboardContent.writeImage(image, to: .general)
+    }
+
+    /// Copies a Windows file copy out of the shared folder into `~/Downloads/Veil Clipboard`, then puts the
+    /// copies on the pasteboard. See ``ClipboardGuestFiles`` for why the pasteboard never points into the share.
+    @MainActor
+    func syncGuestClipboardFilesToPasteboard() {
+        guard acceptsGuestClipboardUpdate,
+              ClipboardSharingPreferences.isGuestFileCopyEnabled(),
+              let plan = model.latestGuestClipboardFiles else {
+            return
+        }
+
+        let mount = VMSharedFolderHostMountProbe.read(transport: .guestSMB)
+        guard mount.isMounted, let mountPath = mount.mountPath else {
+            VeilLog.agent.notice("Dropped a Windows file copy because the shared folder is not mounted on this Mac.")
+            return
+        }
+
+        let sequence = model.lastGuestClipboardSequence
+        let shareRoot = URL(filePath: mountPath, directoryHint: .isDirectory)
+        let destinationRoot = ClipboardGuestFiles.defaultDestinationRoot()
+        Task { @MainActor in
+            // Up to 512 MiB over SMB; off the main actor so mirrored windows keep drawing while it copies.
+            let result = await Task.detached(priority: .userInitiated) { () -> Result<[URL], ClipboardGuestFilesRefusal> in
+                do throws(ClipboardGuestFilesRefusal) {
+                    return .success(try ClipboardGuestFiles.copy(plan, fromShareAt: shareRoot, into: destinationRoot))
+                } catch {
+                    return .failure(error)
+                }
+            }.value
+
+            let urls: [URL]
+            switch result {
+            case .success(let copies):
+                urls = copies
+            case .failure(let refusal):
+                VeilLog.agent.notice(
+                    "Did not copy Windows files to the Mac: \(refusal.localizedDescription, privacy: .public)"
+                )
+                return
+            }
+
+            // A newer guest clipboard arrived while copying, or the user left Veil: the copies stay in
+            // Downloads, but the pasteboard is not overwritten behind the user's back.
+            guard model.lastGuestClipboardSequence == sequence, acceptsGuestClipboardUpdate else {
+                return
+            }
+
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.writeObjects(urls.map { $0 as NSURL })
+            model.guestFilesPasteboardMarker = GuestFilesPasteboardMarker(
+                pasteboardChangeCount: pasteboard.changeCount,
+                guestSequence: sequence
+            )
+        }
     }
 
 #if DEBUG

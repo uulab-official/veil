@@ -5610,3 +5610,55 @@ struct ClipboardImageAndFilesModelTests {
     }
 }
 
+@Suite("Clipboard files from Windows in the model")
+@MainActor
+struct ClipboardGuestFilesModelTests {
+    private func guestFiles(sequence: Int, name: String = "budget.xlsx") -> ClipboardFilesSet {
+        ClipboardFilesSet(
+            requestId: "evt_clipboard_\(sequence)",
+            origin: "guest",
+            sequence: sequence,
+            shareName: "VeilShared",
+            relativePaths: ["Veil Clipboard from Windows\\20261111-050102-4D5E6F\\\(name)"]
+        )
+    }
+
+    @Test("consumes a guest file copy from the event stream once")
+    func consumesGuestFiles() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+        let message = try JSONEncoder.veilProtocol.encode(guestFiles(sequence: 4))
+        var results: [HostProtocolMessageResult] = []
+
+        await model.consumeProtocolMessages(from: StaticHostEventSource(messages: [message, message])) { result in
+            results.append(result)
+        }
+
+        #expect(results == [.handledClipboardFiles(sequence: 4), .ignored])
+        #expect(model.latestGuestClipboardFiles?.fileNames == ["budget.xlsx"])
+    }
+
+    @Test("shares the guest sequence space with text and does not advance on a rejected copy")
+    func sharesSequence() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+
+        #expect(!model.receiveClipboardFiles(guestFiles(sequence: 2, name: "a\u{202E}txt.exe")))
+        #expect(model.lastGuestClipboardSequence == 0)
+        #expect(model.receiveClipboardText(ClipboardTextSet(requestId: "evt_clipboard_5", origin: "guest", sequence: 5, text: "x")))
+        #expect(!model.receiveClipboardFiles(guestFiles(sequence: 4)))
+        #expect(model.latestGuestClipboardFiles == nil)
+        #expect(model.receiveClipboardFiles(guestFiles(sequence: 6)))
+        #expect(model.lastGuestClipboardSequence == 6)
+    }
+
+    @Test("ignores a host-origin file copy arriving from the guest")
+    func ignoresHostOrigin() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+        var message = guestFiles(sequence: 3)
+        message.origin = "host"
+
+        #expect(!model.receiveClipboardFiles(message))
+    }
+}
