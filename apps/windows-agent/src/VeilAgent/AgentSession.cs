@@ -1225,7 +1225,17 @@ public sealed class AgentSession
         }
 
         imeModeSink(mode!);
-        return AgentReplies.Direct(OperationAck(requestId));
+        var reply = OperationAck(requestId);
+        // Diagnostics only: whether the foreground window's IME state could be read back after the change.
+        var last = GuestImeMode.LastApply;
+        reply["ime"] = new JsonObject
+        {
+            ["openBefore"] = last.OpenBefore,
+            ["openAfter"] = last.OpenAfter,
+            ["conversionAfter"] = last.ConversionAfter,
+            ["windowClass"] = last.WindowClass
+        };
+        return AgentReplies.Direct(reply);
     }
 
     private AgentReplies HandleAppearanceSetRequest(JsonObject request, string? requestId)

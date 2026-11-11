@@ -1497,7 +1497,10 @@ Windows turned the same keys into jamo.
 - Composing on the Mac and correcting the guest's text with `input.text` `replaceLength` (§ Input Text)
   swapped and duplicated syllables when the guest's caret and the host's record of the composition drifted
   apart. It remains only for an agent without `imeMode`.
-- The reply is `operation.ack`. An unknown `mode` is rejected with `invalid_message`.
+- The reply is `operation.ack`. An unknown `mode` is rejected with `invalid_message`. For diagnostics the ack
+  also carries `ime`: `openBefore`, `openAfter`, and `conversionAfter` as read back from the foreground
+  window's IME (null when it does not answer), and that window's `windowClass`. Apps built on TSF, such as
+  the Windows 11 Notepad, may not follow `IMC_SETOPENSTATUS`, and these fields show whether one did.
 
 ## Clipboard Text
 

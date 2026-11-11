@@ -20,6 +20,7 @@ public static class GuestImeMode
     private const uint WmImeControl = 0x0283;
     private const int ImcGetConversionMode = 0x0001;
     private const int ImcSetConversionMode = 0x0002;
+    private const int ImcGetOpenStatus = 0x0005;
     private const int ImcSetOpenStatus = 0x0006;
     internal const int ImeCmodeNative = 0x0001;
     private const uint SmtoAbortIfHung = 0x0002;
@@ -30,6 +31,9 @@ public static class GuestImeMode
     private static IntPtr appliedWindow;
     private static string? appliedMode;
     private static bool watching;
+
+    /// <summary>What the last apply saw, for <c>input.ime.set</c>'s reply: whether reading back worked.</summary>
+    public static (bool? OpenBefore, bool? OpenAfter, int? ConversionAfter, string? WindowClass) LastApply { get; private set; }
 
     public static bool IsValid(string? mode) => mode is Native or Alphanumeric;
 
@@ -97,6 +101,7 @@ public static class GuestImeMode
         }
 
         var open = mode == Native;
+        var openBefore = ReadOpenStatus(imeWindow);
         SendMessageTimeout(imeWindow, WmImeControl, (IntPtr)ImcSetOpenStatus, (IntPtr)(open ? 1 : 0), SmtoAbortIfHung, 100, out _);
         if (SendMessageTimeout(imeWindow, WmImeControl, (IntPtr)ImcGetConversionMode, IntPtr.Zero, SmtoAbortIfHung, 100, out var current) != IntPtr.Zero)
         {
@@ -106,7 +111,22 @@ public static class GuestImeMode
                 SendMessageTimeout(imeWindow, WmImeControl, (IntPtr)ImcSetConversionMode, (IntPtr)next, SmtoAbortIfHung, 100, out _);
             }
         }
+
+        int? conversionAfter = SendMessageTimeout(imeWindow, WmImeControl, (IntPtr)ImcGetConversionMode, IntPtr.Zero, SmtoAbortIfHung, 100, out var after) != IntPtr.Zero
+            ? (int)after
+            : null;
+        var className = new System.Text.StringBuilder(128);
+        GetClassName(foreground, className, className.Capacity);
+        LastApply = (openBefore, ReadOpenStatus(imeWindow), conversionAfter, className.ToString());
     }
+
+    private static bool? ReadOpenStatus(IntPtr imeWindow) =>
+        SendMessageTimeout(imeWindow, WmImeControl, (IntPtr)ImcGetOpenStatus, IntPtr.Zero, SmtoAbortIfHung, 100, out var open) != IntPtr.Zero
+            ? open != IntPtr.Zero
+            : null;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder className, int maxCount);
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
