@@ -144,6 +144,8 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     public var timeSync: Bool? = nil
     /// True when the agent understands `appearance.set.request`. Optional for the same reason.
     public var appearanceSync: Bool? = nil
+    /// True when `input.text` accepts `replaceLength`, so an open IME composition can be shown in the guest.
+    public var textComposition: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
@@ -1111,15 +1113,31 @@ public struct InputTextEvent: Codable, Equatable, Sendable {
     public var type: MessageType
     public var windowId: String
     public var text: String
+    /// Characters the guest deletes with Backspace before typing `text`, to correct an open IME composition.
+    /// Nil, and left off the wire, for plain committed text so an agent without `textComposition` is unaffected.
+    public var replaceLength: Int?
 
     public init(
         type: MessageType = .inputText,
         windowId: String,
-        text: String
+        text: String,
+        replaceLength: Int? = nil
     ) {
         self.type = type
         self.windowId = windowId
         self.text = text
+        self.replaceLength = replaceLength
+    }
+
+    /// A composition correction: empty text is allowed when something is deleted.
+    public static func isSendable(_ text: String, replaceLength: Int) -> Bool {
+        guard replaceLength >= 0, replaceLength <= maximumUTF16Length else {
+            return false
+        }
+        if text.isEmpty {
+            return replaceLength > 0
+        }
+        return isSendable(text)
     }
 
     /// Text that is safe to send as committed input.

@@ -142,14 +142,17 @@ extension HostDashboardModel {
     /// Hangul, kana, and Han character. macOS finishes the IME composition first; only the committed
     /// result reaches the guest.
     @discardableResult
-    public func sendTextInput(windowId: String, text: String) async -> Bool {
+    public func sendTextInput(windowId: String, text: String, replaceLength: Int = 0) async -> Bool {
         guard canSendInput(to: windowId),
-              InputTextEvent.isSendable(text) else {
+              InputTextEvent.isSendable(text, replaceLength: replaceLength),
+              replaceLength == 0 || supportsTextComposition else {
             return false
         }
 
         do {
-            try await service.sendTextInput(InputTextEvent(windowId: windowId, text: text))
+            try await service.sendTextInput(
+                InputTextEvent(windowId: windowId, text: text, replaceLength: replaceLength > 0 ? replaceLength : nil)
+            )
             return true
         } catch {
             if await dropMirrorSessionIfUntracked(windowId: windowId, error: error) {

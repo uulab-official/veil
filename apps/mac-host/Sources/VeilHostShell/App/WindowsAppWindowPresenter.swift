@@ -32,7 +32,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     /// Window id, guest x and y, and scroll amounts in Windows wheel units (x right, y up).
     var onScrollInput: ((String, Int, Int, Int, Int, [String]) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
-    var onTextInput: ((String, String) -> Void)?
+    var onTextInput: ((String, String, Int) -> Void)?
+    /// Whether the agent can show an open IME composition (`capabilities.textComposition`).
+    var textCompositionSupported: (() -> Bool)?
     var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
     /// `(appId, windowId, fileName, contentBase64)`. Carries the window id so a failure that only Windows
     /// can report can still be shown on the window the file was dropped onto.
@@ -879,8 +881,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             onKeyInput: { [weak self] windowId, event, key, windowsVirtualKey, modifiers in
                 self?.onKeyInput?(windowId, event, key, windowsVirtualKey, modifiers)
             },
-            onTextInput: { [weak self] windowId, text in
-                self?.onTextInput?(windowId, text)
+            onTextInput: { [weak self] windowId, text, replaceLength in
+                self?.onTextInput?(windowId, text, replaceLength)
+            },
+            textCompositionSupported: { [weak self] in
+                self?.textCompositionSupported?() ?? false
             },
             onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, content in
                 self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, content)
@@ -998,7 +1003,8 @@ private struct WindowsAppMirrorView: View {
     var onMouseInput: (String, String, Int, Int) -> Void
     var onScrollInput: (String, Int, Int, Int, Int, [String]) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
-    var onTextInput: (String, String) -> Void
+    var onTextInput: (String, String, Int) -> Void
+    var textCompositionSupported: () -> Bool
     var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
     /// Called synchronously on the main actor with the accepted providers. Loading them is the presenter's job.
     var onDropProviders: ([NSItemProvider]) -> Void
@@ -1023,6 +1029,7 @@ private struct WindowsAppMirrorView: View {
                 onScrollInput: onScrollInput,
                 onKeyInput: onKeyInput,
                 onTextInput: onTextInput,
+                textCompositionSupported: textCompositionSupported,
                 onPasteShortcut: onPasteShortcut
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1071,7 +1078,8 @@ private struct InputCaptureView: NSViewRepresentable {
     var onMouseInput: (String, String, Int, Int) -> Void
     var onScrollInput: (String, Int, Int, Int, Int, [String]) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
-    var onTextInput: (String, String) -> Void
+    var onTextInput: (String, String, Int) -> Void
+    var textCompositionSupported: () -> Bool
     var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
 
     func makeNSView(context: Context) -> InputCaptureNSView {
@@ -1084,6 +1092,7 @@ private struct InputCaptureView: NSViewRepresentable {
         nsView.onScrollInput = onScrollInput
         nsView.onKeyInput = onKeyInput
         nsView.onTextInput = onTextInput
+        nsView.textCompositionSupported = textCompositionSupported
         nsView.onPasteShortcut = onPasteShortcut
     }
 }
@@ -1093,13 +1102,18 @@ private final class InputCaptureNSView: NSView {
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onScrollInput: ((String, Int, Int, Int, Int, [String]) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
-    var onTextInput: ((String, String) -> Void)?
+    var onTextInput: ((String, String, Int) -> Void)?
+    var textCompositionSupported: (() -> Bool)?
     var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
     private let keyboardMapper = MacKeyboardInputMapper()
     private let textInputRouter = MacTextInputRouter()
 
-    /// In-progress IME composition. The guest never sees this; only committed text is sent.
+    /// In-progress IME composition.
     private var markedText = ""
+
+    /// What of `markedText` the guest shows, when the agent can show a composition. Nil while it is drawn in
+    /// the overlay instead, for an agent without `textComposition`.
+    private var guestComposition: GuestTextComposition?
 
     /// Set when the current key press produced committed text.
     ///
@@ -1137,7 +1151,8 @@ private final class InputCaptureNSView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        guard !markedText.isEmpty else {
+        // The guest shows the composition itself in the app's own text.
+        guard !markedText.isEmpty, guestComposition == nil else {
             return
         }
 
@@ -1166,6 +1181,7 @@ private final class InputCaptureNSView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        endCompositionForPointer()
         let region = captionRegion(for: event)
         guard region != .content else {
             send("leftDown", event)
@@ -1465,7 +1481,7 @@ private final class InputCaptureNSView: NSView {
                 return true
             }
             didCommitTextForCurrentKeyPress = true
-            onTextInput?(session.id, text)
+            onTextInput?(session.id, text, 0)
             return true
         case .unsupported:
             return false
@@ -1483,7 +1499,15 @@ private final class InputCaptureNSView: NSView {
             onKeyInput?(session.id, "keyDown", input.key, input.windowsVirtualKey, input.modifiers)
             onKeyInput?(session.id, "keyUp", input.key, input.windowsVirtualKey, input.modifiers)
         case .committedText(let committed):
-            onTextInput?(session.id, committed)
+            if var composition = guestComposition {
+                let replacement = composition.commit(committed)
+                guestComposition = composition
+                if let replacement {
+                    onTextInput?(session.id, replacement.text, replacement.replaceLength)
+                }
+            } else {
+                onTextInput?(session.id, committed, 0)
+            }
         case .unsupported:
             break
         }
@@ -1558,6 +1582,11 @@ extension InputCaptureNSView: @preconcurrency NSTextInputClient {
     }
 
     func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        if markedText.isEmpty {
+            // A composition starts: decide once whether the guest shows it or the overlay does.
+            guestComposition = textCompositionSupported?() == true ? GuestTextComposition() : nil
+        }
+
         switch string {
         case let attributed as NSAttributedString:
             markedText = attributed.string
@@ -1567,11 +1596,46 @@ extension InputCaptureNSView: @preconcurrency NSTextInputClient {
             markedText = ""
         }
 
+        if var composition = guestComposition {
+            let replacement = composition.update(to: markedText)
+            guestComposition = composition
+            sendGuestReplacement(replacement)
+        }
         needsDisplay = true
     }
 
     func unmarkText() {
+        // macOS asks for the composition to be accepted as it is, and the guest already shows it.
         markedText = ""
+        guestComposition?.abandon()
+        needsDisplay = true
+    }
+
+    private func sendGuestReplacement(_ replacement: GuestTextReplacement?) {
+        guard let replacement,
+              let session,
+              session.connectionMode == .agent else {
+            return
+        }
+        onTextInput?(session.id, replacement.text, replacement.replaceLength)
+    }
+
+    /// A click moves the guest's caret, so an open composition ends there: it stays in the guest as typed,
+    /// and the input method starts over instead of correcting text at the new caret.
+    func endCompositionForPointer() {
+        guard hasMarkedText() else {
+            return
+        }
+        let shownInGuest = guestComposition != nil
+        inputContext?.discardMarkedText()
+        if !markedText.isEmpty {
+            if !shownInGuest {
+                // The overlay was the only place it existed; keep what the user typed.
+                sendCommittedText(markedText)
+            }
+            markedText = ""
+        }
+        guestComposition?.abandon()
         needsDisplay = true
     }
 

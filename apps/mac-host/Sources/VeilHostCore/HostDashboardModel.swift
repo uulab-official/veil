@@ -215,6 +215,11 @@ public final class HostDashboardModel {
         !mirrorSessions.isEmpty && phase != .loading
     }
 
+    /// Whether an open IME composition can be typed into the guest (`input.text` with `replaceLength`).
+    public var supportsTextComposition: Bool {
+        hasLiveAgentConnection && health?.capabilities.textComposition == true
+    }
+
     public var canSendHostClipboardText: Bool {
         hasLiveAgentConnection && health?.capabilities.clipboardText == true
     }

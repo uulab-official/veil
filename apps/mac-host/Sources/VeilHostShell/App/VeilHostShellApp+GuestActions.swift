@@ -157,10 +157,14 @@ extension VeilHostShellApp {
         windowsAppWindowPresenter.sessionProvider = { windowId in
             model.mirrorSessions.first { $0.id == windowId }
         }
-        windowsAppWindowPresenter.onTextInput = { windowId, text in
-            Task { @MainActor in
-                await model.sendTextInput(windowId: windowId, text: text)
+        windowsAppWindowPresenter.onTextInput = { windowId, text, replaceLength in
+            // In order: a composition correction applied out of turn would delete the wrong characters.
+            OrderedTextInput.shared.enqueue {
+                await model.sendTextInput(windowId: windowId, text: text, replaceLength: replaceLength)
             }
+        }
+        windowsAppWindowPresenter.textCompositionSupported = {
+            model.supportsTextComposition
         }
         windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, content in
             Task { @MainActor in
