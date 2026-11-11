@@ -243,8 +243,14 @@ struct KeyboardMappingPanel: View {
 
 /// Parallels' Graphics > Resolution choice: scaled for normal-size text, or Retina for full pixels.
 struct DisplayResolutionPanel: View {
-    @AppStorage(DisplayResolutionPreference.retinaResolutionKey)
-    private var retinaResolution = DisplayResolutionPreference.retinaResolutionDefault
+    @AppStorage(DisplayResolutionPreference.retinaResolutionKey) private var storedRetinaResolution: Bool?
+
+    private var retinaResolution: Binding<Bool> {
+        Binding(
+            get: { storedRetinaResolution ?? DisplayResolutionPreference.isRetinaResolutionEnabled() },
+            set: { storedRetinaResolution = $0 }
+        )
+    }
 
     var body: some View {
         ShellPanel(spacing: 12) {
@@ -254,15 +260,15 @@ struct DisplayResolutionPanel: View {
                 symbolName: "display"
             )
 
-            Picker("Resolution", selection: $retinaResolution) {
+            Picker("Resolution", selection: retinaResolution) {
                 Text("Scaled").tag(false)
                 Text("Retina resolution").tag(true)
             }
             .pickerStyle(.segmented)
 
-            Text(retinaResolution
-                ? "Sharper on a Retina display. Set Windows Settings > System > Display > Scale to 200% so text is not half size."
-                : "Windows text and controls appear at their normal size. Takes effect the next time the window changes size.")
+            Text(retinaResolution.wrappedValue
+                ? "Sharper on a Retina display. Veil sets Windows' display scale to 200% to match, so text keeps its size."
+                : "Windows uses one pixel per Mac point and its own display scale, so text is softer on a Retina display.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
