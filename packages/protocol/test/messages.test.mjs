@@ -84,7 +84,9 @@ test("parses every stable fixture", async () => {
     "system.shutdown.request.json",
     "system.shutdown.response.json",
     "input.mouse.left-down.json",
+    "input.mouse.pinch-zoom.json",
     "input.key.copy.json",
+    "input.key.browser-back.json",
     "input.text.json",
     "input.text.acknowledged.json",
     "operation.ack.json",
@@ -500,6 +502,22 @@ test("validates one host key input fixture", async () => {
   assert.equal(input.key, "c");
   assert.equal(input.windowsVirtualKey, 67);
   assert.deepEqual(input.modifiers, ["ctrl"]);
+});
+
+test("validates a trackpad pinch as a Ctrl+wheel scroll fixture", async () => {
+  const input = validateInputMouse(await readFixture("input.mouse.pinch-zoom.json"));
+
+  assert.equal(input.event, "scroll");
+  assert.deepEqual(input.modifiers, ["ctrl"]);
+  assert.equal(input.deltaY, 40);
+});
+
+test("validates a page swipe as a browser back key fixture", async () => {
+  const input = validateInputKey(await readFixture("input.key.browser-back.json"));
+
+  assert.equal(input.key, "browserBack");
+  assert.equal(input.windowsVirtualKey, 166);
+  assert.deepEqual(input.modifiers, []);
 });
 
 test("validates committed Unicode text input fixture", async () => {

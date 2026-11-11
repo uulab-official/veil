@@ -50,7 +50,8 @@ internal static class WindowsInputInjector
         0x5B, 0x5C, 0x5D,       // Windows keys, Apps
         0x6F,                   // keypad divide
         0x90,                   // Num Lock
-        0xA3, 0xA5              // right Ctrl, right Alt
+        0xA3, 0xA5,             // right Ctrl, right Alt
+        0xA6, 0xA7              // Browser Back, Browser Forward
     ];
 
     /// <summary>The mouse button flags for a protocol mouse event, or null for an unknown event.</summary>
@@ -263,9 +264,7 @@ internal static class WindowsInputInjector
         );
 
         var inputs = new List<NativeInput>();
-        var modifierKeys = input.Event.EndsWith("Down", StringComparison.Ordinal)
-            ? ModifierVirtualKeys(input.Modifiers).ToArray()
-            : [];
+        var modifierKeys = MouseModifierVirtualKeys(input.Event, input.Modifiers);
         inputs.AddRange(modifierKeys.Select(key => KeyboardInput((ushort)key, 0, keyUp: false)));
         if (input.Event == "scroll")
         {
@@ -290,6 +289,16 @@ internal static class WindowsInputInjector
         pointer = new GuestPointerPosition(tabletX, tabletY);
         return true;
     }
+
+    /// <summary>
+    /// The keys held around one mouse event. A button press carries them (Ctrl+click, Shift+click), and so
+    /// does a scroll, since the host sends a trackpad pinch as Ctrl+wheel, which Windows apps treat as zoom.
+    /// Moves and releases carry none, so a release never leaves a modifier pressed or taps one on its own.
+    /// </summary>
+    internal static int[] MouseModifierVirtualKeys(string inputEvent, IReadOnlyList<string> modifiers) =>
+        inputEvent == "scroll" || inputEvent.EndsWith("Down", StringComparison.Ordinal)
+            ? ModifierVirtualKeys(modifiers).ToArray()
+            : [];
 
     /// <summary>
     /// The wheel events for a scroll: vertical then horizontal, each only when non-zero, and one notch up when
