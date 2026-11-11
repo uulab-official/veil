@@ -146,7 +146,7 @@ export function validateAgentHealthResponse(response) {
   // Optional so an older agent keeps image and file clipboards on the Mac instead of receiving a message
   // it cannot route. timeSync and appearanceSync are optional for the same reason: without them the host
   // never sends time.sync.request or appearance.set.request.
-  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync"]) {
+  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync", "textComposition"]) {
     if (response.capabilities[field] !== undefined && typeof response.capabilities[field] !== "boolean") {
       throw new TypeError(`Agent health response field 'capabilities.${field}' must be a boolean.`);
     }
@@ -1106,17 +1106,22 @@ export function validateInputKey(input) {
 //
 // This exists because `input.key` carries a Windows *virtual key*, and characters outside the virtual
 // key map -- every Hangul syllable, kana, and Han character -- have no representation there. macOS
-// owns the IME: it composes, and only finished text is sent here. There is deliberately no marked or
-// in-progress text on the wire, so the guest never has to render a candidate window over a mirrored
-// bitmap.
+// owns the IME. With `capabilities.textComposition` the composition is typed as ordinary text and
+// corrected in place: `replaceLength` code units are deleted with Backspace before `text` is typed.
 export function validateInputText(input) {
   if (!input || input.type !== MessageType.InputText) {
     throw new TypeError("Text input must use type input.text.");
   }
 
   requireNonEmptyString(input.windowId, "windowId", "Text input");
-  if (typeof input.text !== "string" || input.text.length === 0) {
-    throw new TypeError("Text input field 'text' must be a non-empty string.");
+  const replaceLength = input.replaceLength ?? 0;
+  if (!Number.isInteger(replaceLength) || replaceLength < 0 || replaceLength > MAX_INPUT_TEXT_UTF16_LENGTH) {
+    throw new TypeError(
+      `Text input field 'replaceLength' must be an integer from 0 to ${MAX_INPUT_TEXT_UTF16_LENGTH}.`
+    );
+  }
+  if (typeof input.text !== "string" || (input.text.length === 0 && replaceLength === 0)) {
+    throw new TypeError("Text input field 'text' must be a non-empty string unless 'replaceLength' is above 0.");
   }
   if (input.text.length > MAX_INPUT_TEXT_UTF16_LENGTH) {
     throw new TypeError(

@@ -37,6 +37,7 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `input.key.copy.json`
 - `input.key.browser-back.json`
 - `input.text.json`
+- `input.text.composition.json`
 - `operation.ack.mouse-pointer.json`
 - `clipboard.text.set.host.json`
 - `clipboard.text.set.guest.json`

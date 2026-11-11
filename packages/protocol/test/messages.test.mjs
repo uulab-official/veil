@@ -89,6 +89,7 @@ test("parses every stable fixture", async () => {
     "input.key.browser-back.json",
     "input.text.json",
     "input.text.acknowledged.json",
+    "input.text.composition.json",
     "operation.ack.json",
     "clipboard.text.set.host.json",
     "clipboard.text.set.guest.json",
@@ -545,6 +546,26 @@ test("rejects empty committed text", () => {
     () => validateInputText({ type: MessageType.InputText, windowId: "hwnd:0003029A", text: "" }),
     /text/
   );
+});
+
+test("accepts a composition that replaces what it typed before", async () => {
+  const input = validateInputText(await readFixture("input.text.composition.json"));
+  assert.equal(input.text, "녕");
+  assert.equal(input.replaceLength, 1);
+  assert.equal(
+    validateInputText({ type: MessageType.InputText, windowId: "hwnd:0003029A", text: "", replaceLength: 1 }).text,
+    ""
+  );
+});
+
+test("rejects a replaceLength that is negative, fractional, or too large", () => {
+  for (const replaceLength of [-1, 1.5, MAX_INPUT_TEXT_UTF16_LENGTH + 1, "1"]) {
+    assert.throws(
+      () => validateInputText({ type: MessageType.InputText, windowId: "hwnd:0003029A", text: "a", replaceLength }),
+      /replaceLength/,
+      String(replaceLength)
+    );
+  }
 });
 
 test("rejects committed text beyond the posted-message bound", () => {

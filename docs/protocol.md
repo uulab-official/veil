@@ -84,6 +84,7 @@ Response:
     "clipboardFiles": true,
     "timeSync": true,
     "appearanceSync": true,
+    "textComposition": true,
     "packageIdentity": false
   },
   "sharedFolder": {
@@ -1420,16 +1421,38 @@ keystroke was silently dropped, so a Korean user could not type their own langua
 Windows app.
 
 Composition rule: **macOS owns the IME.** The host composes with the user's existing macOS input
-source, shows the in-progress composition in its own overlay, and sends only the committed result
-here. There is deliberately no marked or in-progress text on the wire. The alternative -- forwarding
-raw keystrokes so the Windows IME composes -- would need a per-keystroke round trip plus a guest
-candidate window rendered over a mirrored bitmap.
+source. Forwarding raw keystrokes so the Windows IME composes would need a per-keystroke round trip plus a
+guest candidate window rendered over a mirrored bitmap.
+
+Sending only committed text left the syllable being composed off the guest until the next key committed
+it: the last Hangul syllable appeared only after Space. So an agent that reports
+`capabilities.textComposition` also shows the composition itself, as ordinary text:
+
+```json
+{
+  "type": "input.text",
+  "windowId": "hwnd:0003029A",
+  "text": "녕",
+  "replaceLength": 1
+}
+```
+
+- `replaceLength` (optional, default 0) is how many UTF-16 code units to delete before typing `text`.
+  The guest presses Backspace that many times and then types `text`, in one `SendInput` call, so nothing
+  can land between the two.
+- The host keeps what it last typed for the open composition. Each change to the composition sends only
+  the difference: Backspace over the part that changed, then the new part. When the IME commits, the
+  committed text replaces the composition the same way, and the host forgets it.
+- `text` may be empty when `replaceLength` is above 0, for example when Backspace removes the last jamo.
+- An agent without `textComposition` gets committed text only, and the host draws the composition in its
+  own overlay as before.
 
 Rules:
 
 - `windowId` must match the HWND-shaped id from a tracked `window.created` event. An untracked HWND is
   rejected with `window_not_tracked` and no messages are posted, exactly like `input.key`.
-- `text` must be non-empty and at most 4096 UTF-16 code units. One message becomes a key-down and key-up
+- `text` must be non-empty, unless `replaceLength` is above 0, and at most 4096 UTF-16 code units.
+  `replaceLength` must be between 0 and 4096. One message becomes a key-down and key-up
   pair per code unit on the guest, so an unbounded payload would flood the guest's input queue.
   Oversized payloads are rejected with `text_too_long`.
 - `text` must not contain newlines, carriage returns, or tabs. Enter and Tab have guest semantics that

@@ -24,6 +24,7 @@
     "clipboardFiles": true,
     "timeSync": true,
     "appearanceSync": true,
+    "textComposition": true,
     "packageIdentity": false
   },
   "packageIdentityStatus": {
