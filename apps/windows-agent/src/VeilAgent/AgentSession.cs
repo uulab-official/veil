@@ -51,6 +51,7 @@ public sealed class AgentSession
     private readonly IWindowsNotificationAccessProbe notificationAccessProbe;
     private readonly IWindowsSharedFolderProbe sharedFolderProbe;
     private readonly IGuestShutdown guestShutdown;
+    private readonly DisplayScaleManager displayScale;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> appLaunchGates = new();
@@ -63,7 +64,8 @@ public sealed class AgentSession
         ISparsePackageStatusProbe? sparsePackageStatusProbe = null,
         IWindowsNotificationAccessProbe? notificationAccessProbe = null,
         IWindowsSharedFolderProbe? sharedFolderProbe = null,
-        IGuestShutdown? guestShutdown = null
+        IGuestShutdown? guestShutdown = null,
+        DisplayScaleManager? displayScale = null
     )
     {
         this.desktop = desktop;
@@ -73,6 +75,8 @@ public sealed class AgentSession
         this.notificationAccessProbe = notificationAccessProbe ?? new WindowsNotificationAccessProbe();
         this.sharedFolderProbe = sharedFolderProbe ?? new SharedFolderProbe();
         this.guestShutdown = guestShutdown ?? new WindowsGuestShutdown();
+        this.displayScale = displayScale
+            ?? new DisplayScaleManager(new WindowsDisplayScaleBackend(), new UserDisplayScaleFile());
     }
 
     /// <summary>
@@ -116,6 +120,7 @@ public sealed class AgentSession
                 MessageTypes.WindowCloseRequest => await HandleWindowCloseAsync(request, requestId, cancellationToken),
                 MessageTypes.WindowResizeRequest => await HandleWindowResizeAsync(request, requestId, cancellationToken),
                 MessageTypes.DisplayResizeRequest => await HandleDisplayResizeAsync(request, requestId, cancellationToken),
+                MessageTypes.DisplayScaleRequest => HandleDisplayScale(request, requestId),
                 MessageTypes.SystemShutdownRequest => HandleSystemShutdown(requestId),
                 MessageTypes.FrameCaptureStrategySet => HandleFrameCaptureStrategySet(request, requestId),
                 MessageTypes.WindowCropSet => HandleWindowCropSet(request, requestId),
@@ -1021,6 +1026,9 @@ public sealed class AgentSession
                 // additive window.resize.request message.
                 ["windowResize"] = true,
                 ["displayResize"] = OperatingSystem.IsWindows(),
+                // Lets the host run Windows at the Mac's backing scale (200% on Retina) with
+                // display.scale.request. An older agent omits it and the host keeps one pixel per point.
+                ["displayScale"] = OperatingSystem.IsWindows(),
                 // Lets the host boot the next cold start on virtio-gpu alone. Read-only, like the rest
                 // of health: the driver itself is installed by the setup and repair scripts.
                 ["virtioGpuDisplay"] = VirtioGpuDisplay.IsDriverInstalled(),
@@ -1295,6 +1303,41 @@ public sealed class AgentSession
         }
 
         return response;
+    }
+
+    private AgentReplies HandleDisplayScale(JsonObject request, string? requestId)
+    {
+        var hasPercent = TryReadInt(request, "scalePercent", out var percent);
+        var restores = request["restoresUserScale"] is JsonValue restoreValue
+            && restoreValue.TryGetValue<bool>(out var flag)
+            && flag;
+        if (hasPercent == restores || (hasPercent && !DisplayScaleSteps.IsStep(percent)))
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                "invalid_message",
+                "display.scale.request requires either a scalePercent that is a Windows scale step or restoresUserScale: true."
+            ));
+        }
+
+        var result = displayScale.Apply(new DisplayScaleInput(hasPercent ? percent : null, restores));
+        var response = new JsonObject
+        {
+            ["type"] = MessageTypes.DisplayScaleResponse,
+            ["requestId"] = requestId,
+            ["accepted"] = result.Accepted
+        };
+        if (result.ScalePercent is { } applied)
+        {
+            response["scalePercent"] = applied;
+        }
+
+        if (result.Reason is { } reason)
+        {
+            response["reason"] = reason;
+        }
+
+        return AgentReplies.Direct(response);
     }
 
     private static JsonObject DisplayResizeResponse(string? requestId, DisplayResizeResult? result)
