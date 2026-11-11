@@ -15,6 +15,7 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `window.updated.json`
 - `window.layout.json`
 - `window.crop.set.json`
+- `window.move.request.json`
 - `window.closed.json`
 - `window.frame.json`
 - `window.frame.unchanged.json`

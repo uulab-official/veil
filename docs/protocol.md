@@ -553,6 +553,32 @@ Rules:
 
 Fixture: `harness/protocol-fixtures/window.crop.set.json`.
 
+## Window Move
+
+Request (host → agent), sent when the agent advertises `capabilities.windowLayout`:
+
+```json
+{
+  "type": "window.move.request",
+  "requestId": "req_window_move_1A2B3C4D",
+  "windowId": "hwnd:000F0254",
+  "x": 240,
+  "y": 96
+}
+```
+
+Rules:
+
+- **Coordinates:** `x` and `y` place the window's visible frame (see Window Geometry) in guest display pixels, the coordinates `window.layout` reports. Both must be between -16384 and 16384.
+- **Effect:** the agent moves the window with `SetWindowPos` without resizing, activating, or reordering it, and adds back the invisible borders itself.
+- **Purpose:** the host sends this after a mirrored Mac window moves or is resized, so each Windows window sits where its Mac window is. Windows that overlap on the Mac then overlap the same way in the guest, and the one on top stays cropped from the framebuffer. The design is in `docs/superpowers/specs/2026-11-10-coherence-framebuffer-design.md`, stage 3.
+- **Reply:** `operation.ack`. Errors:
+  - `invalid_message` for a missing id or an out-of-range coordinate;
+  - `window_not_tracked` for an id the agent does not track;
+  - `window_move_failed` when Windows refused.
+
+Fixture: `harness/protocol-fixtures/window.move.request.json`.
+
 ## Window Frame
 
 Example production-sized frame event from guest to host:
@@ -1448,6 +1474,7 @@ to a user nor pre-empt them:
 | `window_focus_failed` | `window.focus.request` threw. Distinct from an accepted-but-refused focus, which returns `accepted: false` rather than an error. |
 | `window_close_failed` | `window.close.request` threw, same distinction. |
 | `window_resize_failed` | `window.resize.request` threw while applying the size to the tracked HWND. |
+| `window_move_failed` | `window.move.request` reached a tracked HWND but Windows refused to move it. |
 | `input_mouse_failed` | Posting a mouse message threw or Windows declined to apply it. |
 | `input_key_failed` | Posting a key message threw or Windows declined to apply it. |
 | `input_text_failed` | Posting committed text threw or Windows declined to apply it. |

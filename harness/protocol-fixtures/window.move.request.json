@@ -1,0 +1,7 @@
+{
+  "type": "window.move.request",
+  "requestId": "req_window_move_1A2B3C4D",
+  "windowId": "hwnd:000F0254",
+  "x": 240,
+  "y": 96
+}
