@@ -125,6 +125,57 @@ public class AgentSessionOperationAckTests
     }
 
     [Fact]
+    public async Task PassesACompositionReplacementToTheDesktop()
+    {
+        var desktop = new ConfigurableWindowsDesktop();
+        var session = new AgentSession(desktop, new NoOpFrameCapture());
+        await LaunchNotepadAsync(session);
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.InputText,
+            ["requestId"] = "req_compose",
+            ["windowId"] = "hwnd:00000010",
+            ["text"] = "",
+            ["replaceLength"] = 1
+        });
+
+        Assert.True(Assert.Single(replies.DirectReplies)["accepted"]!.GetValue<bool>());
+        Assert.Equal(new WindowTextInput("hwnd:00000010", "", 1), Assert.Single(desktop.TextInputs));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(4097)]
+    public async Task RejectsAnOutOfRangeReplaceLength(int replaceLength)
+    {
+        var desktop = new ConfigurableWindowsDesktop();
+        var session = new AgentSession(desktop, new NoOpFrameCapture());
+        await LaunchNotepadAsync(session);
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.InputText,
+            ["requestId"] = "req_compose_bad",
+            ["windowId"] = "hwnd:00000010",
+            ["text"] = "a",
+            ["replaceLength"] = replaceLength
+        });
+
+        Assert.Equal("invalid_message", Assert.Single(replies.DirectReplies)["code"]!.GetValue<string>());
+        Assert.Empty(desktop.TextInputs);
+    }
+
+    [Fact]
+    public void ReplaceLengthBecomesThatManyBackspacePresses()
+    {
+        Assert.Equal(
+            [(0x08, false), (0x08, true), (0x08, false), (0x08, true)],
+            TextInputSequence.Backspaces(2));
+        Assert.Empty(TextInputSequence.Backspaces(0));
+    }
+
+    [Fact]
     public async Task AcknowledgesAHostClipboardWrite()
     {
         var desktop = new ConfigurableWindowsDesktop();
@@ -336,7 +387,13 @@ public class AgentSessionOperationAckTests
 
         public Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken) => Task.FromResult(KeyResult);
 
-        public Task<bool> SendTextInputAsync(WindowTextInput input, CancellationToken cancellationToken) => Task.FromResult(TextResult);
+        public List<WindowTextInput> TextInputs { get; } = [];
+
+        public Task<bool> SendTextInputAsync(WindowTextInput input, CancellationToken cancellationToken)
+        {
+            TextInputs.Add(input);
+            return Task.FromResult(TextResult);
+        }
 
         public Task SetClipboardTextAsync(string text, CancellationToken cancellationToken) => Task.CompletedTask;
 

@@ -829,7 +829,23 @@ public sealed class AgentSession
     {
         var windowId = request["windowId"]?.GetValue<string>();
         var text = request["text"]?.GetValue<string>();
-        if (string.IsNullOrWhiteSpace(windowId) || string.IsNullOrEmpty(text))
+        int replaceLength;
+        try
+        {
+            replaceLength = request["replaceLength"]?.GetValue<int>() ?? 0;
+        }
+        catch (Exception error) when (error is FormatException or InvalidOperationException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.text replaceLength must be an integer."));
+        }
+
+        if (replaceLength < 0 || replaceLength > WindowsDesktop.MaxTextInputUtf16Length)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", $"input.text replaceLength must be from 0 to {WindowsDesktop.MaxTextInputUtf16Length}."));
+        }
+
+        // A composition can shrink to nothing (Backspace over its last jamo), which is a replacement with no text.
+        if (string.IsNullOrWhiteSpace(windowId) || text is null || (text.Length == 0 && replaceLength == 0))
         {
             return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.text requires windowId and non-empty text."));
         }
@@ -853,7 +869,7 @@ public sealed class AgentSession
 
         try
         {
-            var applied = await desktop.SendTextInputAsync(new WindowTextInput(windowId, text), cancellationToken);
+            var applied = await desktop.SendTextInputAsync(new WindowTextInput(windowId, text, replaceLength), cancellationToken);
             if (!applied)
             {
                 return AgentReplies.Direct(ErrorResponse(
@@ -1053,6 +1069,9 @@ public sealed class AgentSession
                 // time.sync.request or appearance.set.request.
                 ["timeSync"] = true,
                 ["appearanceSync"] = true,
+                // input.text accepts replaceLength, so the host can show an open IME composition inline
+                // instead of only after it is committed.
+                ["textComposition"] = OperatingSystem.IsWindows(),
                 ["packageIdentity"] = hasPackageIdentity
             },
             ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity),

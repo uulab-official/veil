@@ -349,9 +349,15 @@ internal static class WindowsInputInjector
     /// Committed text, including Hangul and anything outside the virtual-key map, typed as Unicode key events,
     /// one per UTF-16 code unit as Windows expects for surrogate pairs.
     /// </summary>
-    public static bool SendText(string text)
+    /// <param name="replaceLength">
+    /// Backspaces pressed first, in the same <c>SendInput</c> call, so an IME composition shown in the guest is
+    /// corrected with nothing able to land in between.
+    /// </param>
+    public static bool SendText(string text, int replaceLength = 0)
     {
-        var inputs = new List<NativeInput>(text.Length * 2);
+        var inputs = new List<NativeInput>((text.Length + replaceLength) * 2);
+        inputs.AddRange(TextInputSequence.Backspaces(replaceLength)
+            .Select(step => KeyboardInput((ushort)step.VirtualKey, 0, step.KeyUp)));
         foreach (var codeUnit in text)
         {
             inputs.Add(KeyboardInput(0, codeUnit, keyUp: false, unicode: true));

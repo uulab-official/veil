@@ -86,9 +86,14 @@ public sealed record WindowKeyInput(
 /// outside the virtual key map -- every Hangul syllable, kana, and Han character. The macOS host owns
 /// the IME and sends only finished text, so this record never carries in-progress composition.
 /// </remarks>
+/// <param name="ReplaceLength">
+/// UTF-16 code units to delete with Backspace before typing <paramref name="Text"/>: the part of an open
+/// host IME composition that changed (<c>input.text</c> with <c>replaceLength</c>).
+/// </param>
 public sealed record WindowTextInput(
     string WindowId,
-    string Text
+    string Text,
+    int ReplaceLength = 0
 );
 
 public sealed record WindowResizeInput(

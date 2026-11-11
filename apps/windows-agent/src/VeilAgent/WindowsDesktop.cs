@@ -633,12 +633,12 @@ public sealed class WindowsDesktop : IWindowsDesktop
             throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
         }
 
-        if (!TryParseWindowId(input.WindowId, out var hwnd) || input.Text.Length == 0)
+        if (!TryParseWindowId(input.WindowId, out var hwnd) || (input.Text.Length == 0 && input.ReplaceLength == 0))
         {
             return Task.FromResult(false);
         }
 
-        if (input.Text.Length > MaxTextInputUtf16Length)
+        if (input.Text.Length > MaxTextInputUtf16Length || input.ReplaceLength is < 0 or > MaxTextInputUtf16Length)
         {
             return Task.FromResult(false);
         }
@@ -648,7 +648,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             return Task.FromResult(false);
         }
 
-        return Task.FromResult(WindowsInputInjector.SendText(input.Text));
+        return Task.FromResult(WindowsInputInjector.SendText(input.Text, input.ReplaceLength));
     }
 
     public Task SetClipboardTextAsync(string text, CancellationToken cancellationToken)
