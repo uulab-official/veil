@@ -51,5 +51,9 @@ public static class MessageTypes
     public const string TimeSyncResponse = "time.sync.response";
     public const string AppearanceSetRequest = "appearance.set.request";
     public const string AppearanceSetResponse = "appearance.set.response";
+    public const string HostFolderMountRequest = "host.folder.mount.request";
+    public const string HostFolderMountResponse = "host.folder.mount.response";
+    public const string HostFolderUnmountRequest = "host.folder.unmount.request";
+    public const string HostFolderUnmountResponse = "host.folder.unmount.response";
     public const string Error = "error";
 }

@@ -55,6 +55,7 @@ public sealed class AgentSession
     private readonly GuestTimeSync timeSync;
     private readonly GuestAppearanceSync appearanceSync;
     private readonly Action<string> imeModeSink;
+    private readonly HostFolderMount hostFolderMount;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> appLaunchGates = new();
@@ -71,7 +72,8 @@ public sealed class AgentSession
         DisplayScaleManager? displayScale = null,
         GuestTimeSync? timeSync = null,
         GuestAppearanceSync? appearanceSync = null,
-        Action<string>? imeModeSink = null
+        Action<string>? imeModeSink = null,
+        HostFolderMount? hostFolderMount = null
     )
     {
         this.desktop = desktop;
@@ -86,6 +88,7 @@ public sealed class AgentSession
         this.timeSync = timeSync ?? new GuestTimeSync();
         this.appearanceSync = appearanceSync ?? new GuestAppearanceSync();
         this.imeModeSink = imeModeSink ?? GuestImeMode.Set;
+        this.hostFolderMount = hostFolderMount ?? new HostFolderMount();
     }
 
     /// <summary>
@@ -145,6 +148,8 @@ public sealed class AgentSession
                 MessageTypes.SharedFolderRequest => await HandleSharedFolderRequestAsync(request, requestId, cancellationToken),
                 MessageTypes.TimeSyncRequest => HandleTimeSyncRequest(request, requestId),
                 MessageTypes.AppearanceSetRequest => HandleAppearanceSetRequest(request, requestId),
+                MessageTypes.HostFolderMountRequest => HandleHostFolderMount(request, requestId),
+                MessageTypes.HostFolderUnmountRequest => HandleHostFolderUnmount(request, requestId),
                 _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
             };
         }
@@ -1078,6 +1083,8 @@ public sealed class AgentSession
                 ["textComposition"] = OperatingSystem.IsWindows(),
                 // input.ime.set: the Windows IME follows the macOS input source instead of keeping its own.
                 ["imeMode"] = OperatingSystem.IsWindows(),
+                // host.folder.mount.request: a Mac folder served over WebDAV, mapped as a drive letter.
+                ["hostFolder"] = OperatingSystem.IsWindows(),
                 ["packageIdentity"] = hasPackageIdentity
             },
             ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity),
@@ -1206,6 +1213,70 @@ public sealed class AgentSession
             ["timeSync"] = timeSync.Handle(request)
         });
     }
+
+    private AgentReplies HandleHostFolderMount(JsonObject request, string? requestId)
+    {
+        string? token, driveLetter, label;
+        int port;
+        try
+        {
+            token = request["token"]?.GetValue<string>();
+            driveLetter = request["driveLetter"]?.GetValue<string>();
+            label = request["label"]?.GetValue<string>();
+            port = request["port"]?.GetValue<int>() ?? 0;
+        }
+        catch (Exception error) when (error is FormatException or InvalidOperationException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "host.folder.mount.request has a field of the wrong type."));
+        }
+
+        // The token and letter name a network path, so only the documented shapes are accepted.
+        if (port is < 1 or > 65535
+            || !HostFolderMount.IsValidToken(token)
+            || !HostFolderMount.IsValidDriveLetter(driveLetter)
+            || string.IsNullOrEmpty(label) || label.Length > 32)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "host.folder.mount.request needs a port, a 16-128 character token, a drive letter D-Z, and a label of up to 32 characters."));
+        }
+
+        var result = hostFolderMount.Mount(port, token!, driveLetter!, label);
+        return AgentReplies.Direct(HostFolderReply(MessageTypes.HostFolderMountResponse, requestId, result.IsMounted, driveLetter!, result.UncPath, result.Message));
+    }
+
+    private AgentReplies HandleHostFolderUnmount(JsonObject request, string? requestId)
+    {
+        string? driveLetter;
+        try
+        {
+            driveLetter = request["driveLetter"]?.GetValue<string>();
+        }
+        catch (InvalidOperationException)
+        {
+            driveLetter = null;
+        }
+
+        if (!HostFolderMount.IsValidDriveLetter(driveLetter))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "host.folder.unmount.request needs a drive letter D-Z."));
+        }
+
+        var result = hostFolderMount.Unmount(driveLetter!);
+        return AgentReplies.Direct(HostFolderReply(MessageTypes.HostFolderUnmountResponse, requestId, result.IsMounted, driveLetter!, null, result.Message));
+    }
+
+    private static JsonObject HostFolderReply(string type, string? requestId, bool isMounted, string driveLetter, string? uncPath, string? message) => new()
+    {
+        ["type"] = type,
+        ["requestId"] = requestId,
+        ["protocolVersion"] = 1,
+        ["hostFolder"] = new JsonObject
+        {
+            ["isMounted"] = isMounted,
+            ["driveLetter"] = driveLetter,
+            ["uncPath"] = uncPath,
+            ["message"] = message
+        }
+    };
 
     private AgentReplies HandleImeSet(JsonObject request, string? requestId)
     {
