@@ -184,6 +184,8 @@ extension VeilHostShellApp {
 
             while !Task.isCancelled {
                 noteLiveAgentConnectionIfPresent()
+                // Cheap when nothing is pending; sends the clock and theme once a reconnect lands.
+                await flushGuestStateSync()
                 let vmState = vmModel.snapshot?.state
                 let shouldPoll = (vmState == .running || vmState == .starting) && !model.hasLiveAgentConnection
                 if shouldPoll {

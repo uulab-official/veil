@@ -10,6 +10,15 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
 
+$TimeSyncTaskName = "VeilTimeSync"
+if (Get-ScheduledTask -TaskName $TimeSyncTaskName -ErrorAction SilentlyContinue) {
+    try {
+        Unregister-ScheduledTask -TaskName $TimeSyncTaskName -Confirm:$false
+    } catch {
+        Write-Warning "VeilTimeSync task needs an elevated uninstall to remove: $($_.Exception.Message)"
+    }
+}
+
 $ExistingPackage = Get-AppxPackage -Name $SparsePackageName -ErrorAction SilentlyContinue
 if ($ExistingPackage) {
     $ExistingPackage | Remove-AppxPackage

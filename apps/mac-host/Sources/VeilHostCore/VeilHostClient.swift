@@ -1059,6 +1059,22 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    /// Tells the guest the Mac's current UTC time. The guest leaves its clock alone within two seconds.
+    public func syncGuestTime(hostUtc: Date, reason: GuestTimeSyncReason) async throws -> TimeSyncResponse {
+        try await requestRejectingErrors(
+            TimeSyncRequest(requestId: "req_time_sync", hostUtc: hostUtc, reason: reason),
+            context: "time sync requires one response"
+        )
+    }
+
+    /// Asks the guest to switch Windows' app and system theme to match the Mac.
+    public func setGuestAppearance(theme: GuestAppearanceTheme) async throws -> AppearanceSetResponse {
+        try await requestRejectingErrors(
+            AppearanceSetRequest(requestId: "req_appearance_set", theme: theme),
+            context: "appearance set requires one response"
+        )
+    }
+
     public func diagnoseAgentConnection(
         endpoint: String,
         timeoutNanoseconds: UInt64 = 5_000_000_000
@@ -1572,6 +1588,26 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
 
         return HostOverview(health: health, apps: appList.apps)
+    }
+
+    /// Like `request(_:)`, but surfaces a structured guest `error` reply as `VeilHostError.agentError`
+    /// instead of a decoding failure, so the caller can log what the guest actually said.
+    private func requestRejectingErrors<Request: Encodable, Response: Decodable>(
+        _ message: Request,
+        context: String
+    ) async throws -> Response {
+        let replies = try await transport.send(encoder.encode(message), expectedReplies: 1)
+        if let error = replies
+            .compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
+            .first(where: { $0.type == .error }) {
+            throw VeilHostError.agentError(code: error.code, message: error.message)
+        }
+
+        guard let data = replies.first else {
+            throw VeilHostError.missingReply(context)
+        }
+
+        return try decoder.decode(Response.self, from: data)
     }
 
     private func request<Request: Encodable, Response: Decodable>(_ message: Request) async throws -> Response {

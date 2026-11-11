@@ -1,0 +1,7 @@
+{
+  "type": "time.sync.request",
+  "requestId": "req_time_sync",
+  "protocolVersion": 1,
+  "hostUtc": "2026-11-11T09:30:00.000Z",
+  "reason": "vm-resume"
+}

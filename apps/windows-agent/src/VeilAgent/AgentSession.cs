@@ -52,6 +52,8 @@ public sealed class AgentSession
     private readonly IWindowsSharedFolderProbe sharedFolderProbe;
     private readonly IGuestShutdown guestShutdown;
     private readonly DisplayScaleManager displayScale;
+    private readonly GuestTimeSync timeSync;
+    private readonly GuestAppearanceSync appearanceSync;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> appLaunchGates = new();
@@ -65,7 +67,9 @@ public sealed class AgentSession
         IWindowsNotificationAccessProbe? notificationAccessProbe = null,
         IWindowsSharedFolderProbe? sharedFolderProbe = null,
         IGuestShutdown? guestShutdown = null,
-        DisplayScaleManager? displayScale = null
+        DisplayScaleManager? displayScale = null,
+        GuestTimeSync? timeSync = null,
+        GuestAppearanceSync? appearanceSync = null
     )
     {
         this.desktop = desktop;
@@ -77,6 +81,8 @@ public sealed class AgentSession
         this.guestShutdown = guestShutdown ?? new WindowsGuestShutdown();
         this.displayScale = displayScale
             ?? new DisplayScaleManager(new WindowsDisplayScaleBackend(), new UserDisplayScaleFile());
+        this.timeSync = timeSync ?? new GuestTimeSync();
+        this.appearanceSync = appearanceSync ?? new GuestAppearanceSync();
     }
 
     /// <summary>
@@ -133,6 +139,8 @@ public sealed class AgentSession
                 MessageTypes.ClipboardFilesSet => await HandleClipboardFilesSetAsync(request, requestId, cancellationToken),
                 MessageTypes.NotificationListenerRequest => await HandleNotificationListenerRequestAsync(requestId, cancellationToken),
                 MessageTypes.SharedFolderRequest => await HandleSharedFolderRequestAsync(request, requestId, cancellationToken),
+                MessageTypes.TimeSyncRequest => HandleTimeSyncRequest(request, requestId),
+                MessageTypes.AppearanceSetRequest => HandleAppearanceSetRequest(request, requestId),
                 _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
             };
         }
@@ -1041,6 +1049,10 @@ public sealed class AgentSession
                 // (input, clipboard, frame subscribe). An older host ignores it; an older agent
                 // omits it and the host keeps its fire-and-forget semantics instead of hanging.
                 ["operationAcks"] = true,
+                // Advertise the host-to-guest state sync messages so an older agent is never sent
+                // time.sync.request or appearance.set.request.
+                ["timeSync"] = true,
+                ["appearanceSync"] = true,
                 ["packageIdentity"] = hasPackageIdentity
             },
             ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity),
@@ -1156,6 +1168,53 @@ public sealed class AgentSession
             ["requestId"] = requestId,
             ["protocolVersion"] = 1,
             ["sharedFolder"] = status
+        });
+    }
+
+    private AgentReplies HandleTimeSyncRequest(JsonObject request, string? requestId)
+    {
+        return AgentReplies.Direct(new JsonObject
+        {
+            ["type"] = MessageTypes.TimeSyncResponse,
+            ["requestId"] = requestId,
+            ["protocolVersion"] = 1,
+            ["timeSync"] = timeSync.Handle(request)
+        });
+    }
+
+    private AgentReplies HandleAppearanceSetRequest(JsonObject request, string? requestId)
+    {
+        string? theme;
+        try
+        {
+            theme = request["theme"]?.GetValue<string>();
+        }
+        catch (InvalidOperationException)
+        {
+            theme = null;
+        }
+
+        JsonObject? status;
+        try
+        {
+            status = appearanceSync.Apply(theme);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "appearance_set_failed", error.Message));
+        }
+
+        if (status is null)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "appearance.set.request theme must be light or dark."));
+        }
+
+        return AgentReplies.Direct(new JsonObject
+        {
+            ["type"] = MessageTypes.AppearanceSetResponse,
+            ["requestId"] = requestId,
+            ["protocolVersion"] = 1,
+            ["appearance"] = status
         });
     }
 

@@ -125,6 +125,14 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         await primary.waitForAgentConnection(endpoint: endpoint, timeoutSeconds: timeoutSeconds)
     }
 
+    public func syncGuestTime(hostUtc: Date, reason: GuestTimeSyncReason) async throws -> TimeSyncResponse {
+        try await primary.syncGuestTime(hostUtc: hostUtc, reason: reason)
+    }
+
+    public func setGuestAppearance(theme: GuestAppearanceTheme) async throws -> AppearanceSetResponse {
+        try await primary.setGuestAppearance(theme: theme)
+    }
+
     private var fallbackDetail: String {
         "No Windows agent reachable at \(primaryEndpointDescription). Showing built-in demo data."
     }

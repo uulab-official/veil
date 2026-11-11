@@ -5,6 +5,7 @@ import Observation
 public enum HostDashboardServiceError: Error, LocalizedError, Equatable, Sendable {
     case textInputUnsupported
     case clipboardFormatUnsupported
+    case guestStateSyncUnsupported
     case agentEndpointUnavailable(endpoint: String, detail: String, nextActions: [String])
 
     public var errorDescription: String? {
@@ -13,6 +14,8 @@ public enum HostDashboardServiceError: Error, LocalizedError, Equatable, Sendabl
             "This Windows agent connection cannot accept committed text input."
         case .clipboardFormatUnsupported:
             "This Windows agent connection cannot accept images or files on the clipboard. Repair the app connection to update Veil's Windows tools."
+        case .guestStateSyncUnsupported:
+            "This Windows agent connection cannot sync the clock or appearance."
         case .agentEndpointUnavailable(_, let detail, _):
             detail
         }
@@ -48,6 +51,8 @@ public protocol HostDashboardService: Sendable {
     /// Moves a guest window so its visible frame starts at (x, y) display pixels (`window.move.request`).
     func moveWindow(windowId: String, x: Int, y: Int) async throws
     func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport
+    func syncGuestTime(hostUtc: Date, reason: GuestTimeSyncReason) async throws -> TimeSyncResponse
+    func setGuestAppearance(theme: GuestAppearanceTheme) async throws -> AppearanceSetResponse
 }
 
 public extension HostDashboardService {
@@ -70,6 +75,16 @@ public extension HostDashboardService {
 
     func restoreApp(appId: String) async throws -> WindowsAppLaunchResult {
         try await launchApp(appId: appId)
+    }
+
+    /// Default for services with no guest to sync, such as demo mode. Throwing keeps a missing
+    /// implementation visible instead of looking like a guest that is already in sync.
+    func syncGuestTime(hostUtc: Date, reason: GuestTimeSyncReason) async throws -> TimeSyncResponse {
+        throw HostDashboardServiceError.guestStateSyncUnsupported
+    }
+
+    func setGuestAppearance(theme: GuestAppearanceTheme) async throws -> AppearanceSetResponse {
+        throw HostDashboardServiceError.guestStateSyncUnsupported
     }
 
     func sendMouseInputReportingPointer(_ input: InputMouseEvent) async throws -> GuestPointerPosition? {

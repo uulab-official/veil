@@ -3,6 +3,7 @@ import SwiftUI
 import VeilHostCore
 
 struct VeilMenuBarMenu: View {
+    @AppStorage(GuestStateSyncSettings.matchMacAppearanceKey) private var matchMacAppearanceInWindows = true
     var model: HostDashboardModel
     var vmModel: VMRuntimeModel
     var activateMainWindowAction: () -> Void
@@ -212,6 +213,10 @@ struct VeilMenuBarMenu: View {
             }
             .disabled(!vmModel.canStop || vmModel.phase == .loading)
         }
+
+        Divider()
+
+        Toggle("Match Mac Appearance in Windows", isOn: $matchMacAppearanceInWindows)
 
         Divider()
 
