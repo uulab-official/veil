@@ -46,5 +46,9 @@ public static class MessageTypes
     public const string NotificationReceived = "notification.received";
     public const string SharedFolderRequest = "shared.folder.request";
     public const string SharedFolderResponse = "shared.folder.response";
+    public const string TimeSyncRequest = "time.sync.request";
+    public const string TimeSyncResponse = "time.sync.response";
+    public const string AppearanceSetRequest = "appearance.set.request";
+    public const string AppearanceSetResponse = "appearance.set.response";
     public const string Error = "error";
 }

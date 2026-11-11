@@ -29,6 +29,7 @@ $LogRoot = Join-Path $InstallRoot "logs"
 $InstallLogPath = Join-Path $LogRoot "install.log"
 $StartScript = Join-Path $InstalledScriptsRoot "Start-VeilAgent.ps1"
 $TaskName = "VeilAgent"
+$TimeSyncTaskName = "VeilTimeSync"
 
 New-Item -ItemType Directory -Force -Path $InstalledScriptsRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $LogRoot | Out-Null
@@ -62,6 +63,64 @@ function Move-VeilItemWithRetry {
             Start-Sleep -Seconds 1
         }
     }
+}
+
+function Test-VeilAdministrator {
+    $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $Principal = New-Object Security.Principal.WindowsPrincipal($Identity)
+    return $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+# The agent runs with a limited token and cannot set the Windows clock, which goes stale after a
+# suspended session is resumed or the Mac sleeps. This registers a SYSTEM task that resyncs from
+# network time and lets the installing user start it; time.sync.request starts it when needed.
+function Register-VeilTimeSyncTask {
+    param(
+        [string]$SyncScript,
+        [string]$TaskName
+    )
+
+    if (-not (Test-VeilAdministrator)) {
+        Write-Host "Not elevated; skipping the $TaskName task. time.sync.request will report install-time-sync-task-elevated."
+        return
+    }
+
+    $Action = New-ScheduledTaskAction `
+        -Execute "powershell.exe" `
+        -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$SyncScript`""
+    $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    $Settings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -ExecutionTimeLimit (New-TimeSpan -Minutes 2) `
+        -MultipleInstances IgnoreNew
+    Register-ScheduledTask `
+        -TaskName $TaskName `
+        -Action $Action `
+        -Principal $Principal `
+        -Settings $Settings `
+        -Force | Out-Null
+
+    # Grant only read and execute on this one task to the installing user, so the limited-token agent
+    # can start it but not change what it runs.
+    $UserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $Scheduler = New-Object -ComObject "Schedule.Service"
+    $Scheduler.Connect()
+    $Task = $Scheduler.GetFolder("\").GetTask($TaskName)
+    $Descriptor = $Task.GetSecurityDescriptor(4)
+    $Ace = "(A;;GRGX;;;$UserSid)"
+    if (-not $Descriptor.Contains($Ace)) {
+        $Task.SetSecurityDescriptor($Descriptor + $Ace, 0)
+    }
+
+    # Standalone-machine W32Time refuses corrections over 15 hours, which is exactly the long-sleep
+    # case. 0xFFFFFFFF means "accept any correction".
+    $ConfigKey = "HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Config"
+    Set-ItemProperty -Path $ConfigKey -Name MaxPosPhaseCorrection -Value 0xFFFFFFFF -Type DWord
+    Set-ItemProperty -Path $ConfigKey -Name MaxNegPhaseCorrection -Value 0xFFFFFFFF -Type DWord
+    w32tm /config /update | Out-Null
+
+    Write-Host "Registered SYSTEM task '$TaskName' so the agent can resync the Windows clock after a Mac sleep."
 }
 
 function Register-VeilSparsePackage {
@@ -196,6 +255,10 @@ try {
         -Path (Join-Path $ScriptRoot "Uninstall-VeilAgent.ps1") `
         -Destination $InstalledScriptsRoot `
         -Force
+    Copy-Item `
+        -Path (Join-Path $ScriptRoot "Sync-VeilGuestTime.ps1") `
+        -Destination $InstalledScriptsRoot `
+        -Force
 
     $Action = New-ScheduledTaskAction `
         -Execute "powershell.exe" `
@@ -231,6 +294,15 @@ try {
     } catch {
         Write-Warning "Veil sparse identity package could not be registered: $($_.Exception.Message)"
         Write-Host "Continuing with unpackaged identity; agent.health.response.capabilities.packageIdentity will remain false until the sparse package is registered."
+    }
+
+    try {
+        Register-VeilTimeSyncTask `
+            -SyncScript (Join-Path $InstalledScriptsRoot "Sync-VeilGuestTime.ps1") `
+            -TaskName $TimeSyncTaskName
+    } catch {
+        Write-Warning "VeilTimeSync task could not be registered: $($_.Exception.Message)"
+        Write-Host "Windows will keep its own clock after a Mac sleep or session resume until this installer runs as administrator."
     }
 
     $FirewallProgram = Join-Path $PublishRoot "VeilAgent.exe"
