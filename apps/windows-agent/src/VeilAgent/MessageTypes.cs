@@ -37,6 +37,7 @@ public static class MessageTypes
     public const string InputMouse = "input.mouse";
     public const string InputKey = "input.key";
     public const string InputText = "input.text";
+    public const string InputImeSet = "input.ime.set";
     public const string ClipboardTextSet = "clipboard.text.set";
     public const string ClipboardImageSet = "clipboard.image.set";
     public const string ClipboardFilesSet = "clipboard.files.set";

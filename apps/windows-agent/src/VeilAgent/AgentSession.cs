@@ -54,6 +54,7 @@ public sealed class AgentSession
     private readonly DisplayScaleManager displayScale;
     private readonly GuestTimeSync timeSync;
     private readonly GuestAppearanceSync appearanceSync;
+    private readonly Action<string> imeModeSink;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> appLaunchGates = new();
@@ -69,7 +70,8 @@ public sealed class AgentSession
         IGuestShutdown? guestShutdown = null,
         DisplayScaleManager? displayScale = null,
         GuestTimeSync? timeSync = null,
-        GuestAppearanceSync? appearanceSync = null
+        GuestAppearanceSync? appearanceSync = null,
+        Action<string>? imeModeSink = null
     )
     {
         this.desktop = desktop;
@@ -83,6 +85,7 @@ public sealed class AgentSession
             ?? new DisplayScaleManager(new WindowsDisplayScaleBackend(), new UserDisplayScaleFile());
         this.timeSync = timeSync ?? new GuestTimeSync();
         this.appearanceSync = appearanceSync ?? new GuestAppearanceSync();
+        this.imeModeSink = imeModeSink ?? GuestImeMode.Set;
     }
 
     /// <summary>
@@ -134,6 +137,7 @@ public sealed class AgentSession
                 MessageTypes.InputMouse => await HandleMouseInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputKey => await HandleKeyInputAsync(request, requestId, cancellationToken),
                 MessageTypes.InputText => await HandleTextInputAsync(request, requestId, cancellationToken),
+                MessageTypes.InputImeSet => HandleImeSet(request, requestId),
                 MessageTypes.ClipboardTextSet => await HandleClipboardTextSetAsync(request, requestId, cancellationToken),
                 MessageTypes.ClipboardImageSet => await HandleClipboardImageSetAsync(request, requestId, cancellationToken),
                 MessageTypes.ClipboardFilesSet => await HandleClipboardFilesSetAsync(request, requestId, cancellationToken),
@@ -1072,6 +1076,8 @@ public sealed class AgentSession
                 // input.text accepts replaceLength, so the host can show an open IME composition inline
                 // instead of only after it is committed.
                 ["textComposition"] = OperatingSystem.IsWindows(),
+                // input.ime.set: the Windows IME follows the macOS input source instead of keeping its own.
+                ["imeMode"] = OperatingSystem.IsWindows(),
                 ["packageIdentity"] = hasPackageIdentity
             },
             ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity),
@@ -1199,6 +1205,27 @@ public sealed class AgentSession
             ["protocolVersion"] = 1,
             ["timeSync"] = timeSync.Handle(request)
         });
+    }
+
+    private AgentReplies HandleImeSet(JsonObject request, string? requestId)
+    {
+        string? mode;
+        try
+        {
+            mode = request["mode"]?.GetValue<string>();
+        }
+        catch (InvalidOperationException)
+        {
+            mode = null;
+        }
+
+        if (!GuestImeMode.IsValid(mode))
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "input.ime.set mode must be native or alphanumeric."));
+        }
+
+        imeModeSink(mode!);
+        return AgentReplies.Direct(OperationAck(requestId));
     }
 
     private AgentReplies HandleAppearanceSetRequest(JsonObject request, string? requestId)
