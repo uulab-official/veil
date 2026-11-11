@@ -274,6 +274,12 @@ struct VeilHostShellApp: App {
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(!canInstallGuestAgent)
 
+                // Always reachable, not only from the banner that appears when the bundled tools are newer.
+                Button("Update Tools") {
+                    updateGuestTools()
+                }
+                .disabled(vmModel.snapshot?.state != .running || vmModel.phase == .loading)
+
                 Button("Mark Windows Installed") {
                     markWindowsInstalledFromSetup()
                 }
