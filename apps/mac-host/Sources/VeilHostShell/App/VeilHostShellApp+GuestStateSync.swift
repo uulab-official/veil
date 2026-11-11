@@ -43,5 +43,6 @@ extension VeilHostShellApp {
         )
         // Also called on every agent poll, so a reconnected agent gets the IME mode back.
         await syncGuestImeMode()
+        await HostFolderSharing.shared.sync(model: model)
     }
 }

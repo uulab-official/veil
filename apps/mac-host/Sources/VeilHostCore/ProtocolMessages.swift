@@ -44,6 +44,8 @@ public enum MessageType: String, Codable, Sendable {
     case timeSyncResponse = "time.sync.response"
     case appearanceSetRequest = "appearance.set.request"
     case appearanceSetResponse = "appearance.set.response"
+    case hostFolderMountRequest = "host.folder.mount.request"
+    case hostFolderMountResponse = "host.folder.mount.response"
     case inputText = "input.text"
     case inputImeSet = "input.ime.set"
     case inputMouse = "input.mouse"
@@ -149,6 +151,8 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     public var textComposition: Bool? = nil
     /// True when the agent understands `input.ime.set`, so the Windows IME can follow the macOS input source.
     public var imeMode: Bool? = nil
+    /// True when the agent maps a Mac folder served over WebDAV (`host.folder.mount.request`).
+    public var hostFolder: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
@@ -447,6 +451,41 @@ public struct GuestAppearanceStatus: Codable, Equatable, Sendable {
         self.broadcast = broadcast
         self.message = message
     }
+}
+
+/// Maps the Mac folder Veil serves over WebDAV as a Windows drive; see docs/protocol.md § Mac Folder In Windows.
+public struct HostFolderMountRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var port: Int
+    public var token: String
+    public var driveLetter: String
+    public var label: String
+
+    public init(requestId: String, port: Int, token: String, driveLetter: String, label: String, protocolVersion: Int = 1) {
+        self.type = .hostFolderMountRequest
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.port = port
+        self.token = token
+        self.driveLetter = driveLetter
+        self.label = label
+    }
+}
+
+public struct HostFolderStatus: Codable, Equatable, Sendable {
+    public var isMounted: Bool
+    public var driveLetter: String
+    public var uncPath: String?
+    public var message: String?
+}
+
+public struct HostFolderMountResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var hostFolder: HostFolderStatus
 }
 
 public struct AppearanceSetResponse: Codable, Equatable, Sendable {

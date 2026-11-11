@@ -54,6 +54,7 @@ public protocol HostDashboardService: Sendable {
     func syncGuestTime(hostUtc: Date, reason: GuestTimeSyncReason) async throws -> TimeSyncResponse
     func setGuestAppearance(theme: GuestAppearanceTheme) async throws -> AppearanceSetResponse
     func setGuestImeMode(_ mode: GuestImeMode) async throws
+    func mountHostFolder(_ request: HostFolderMountRequest) async throws -> HostFolderMountResponse
 }
 
 public extension HostDashboardService {
@@ -89,6 +90,10 @@ public extension HostDashboardService {
     }
 
     func setGuestImeMode(_ mode: GuestImeMode) async throws {
+        throw HostDashboardServiceError.guestStateSyncUnsupported
+    }
+
+    func mountHostFolder(_ request: HostFolderMountRequest) async throws -> HostFolderMountResponse {
         throw HostDashboardServiceError.guestStateSyncUnsupported
     }
 

@@ -228,6 +228,11 @@ struct VeilHostShellApp: App {
                     .keyboardShortcut("b", modifiers: [.command, .shift])
                 }
 
+                Button("Share a Mac Folder with Windows…") {
+                    HostFolderSharing.shared.chooseFolder()
+                    Task { @MainActor in await flushGuestStateSync() }
+                }
+
                 Button("Refresh Display") {
                     recoverRuntimeDisplayEvidence()
                 }

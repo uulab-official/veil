@@ -375,6 +375,26 @@ extension VeilHostShellApp {
                 updateGuestTools(presentsWindowsDesktop: false)
             }
         }
+        // Shares a folder from a script, the same as Share a Mac Folder with Windows, without the open panel.
+        // Post `org.uulab.veil.debug.hostFolder` with `path`; an empty path stops sharing.
+        DebugViewModeObserver.hostFolderToken = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("org.uulab.veil.debug.hostFolder"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            let path = notification.userInfo?["path"] as? String
+            Task { @MainActor in
+                HostFolderSharing.shared.setFolder(path.flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) })
+                await flushGuestStateSync()
+                let status = HostFolderSharing.shared.lastStatus
+                let url = VeilApplicationSupport.directory
+                    .appendingPathComponent("Diagnostics", isDirectory: true)
+                    .appendingPathComponent("host-folder.json")
+                if let data = try? JSONEncoder().encode(status) {
+                    try? data.write(to: url)
+                }
+            }
+        }
         // Writes the Coherence framebuffer's source and recent frame rate to Diagnostics, for measuring
         // the display path from a script without touching the Mac.
         DebugViewModeObserver.framebufferStatsToken = DistributedNotificationCenter.default().addObserver(
@@ -426,6 +446,7 @@ extension VeilHostShellApp {
     private enum DebugViewModeObserver {
         @MainActor static var token: NSObjectProtocol?
         @MainActor static var updateToolsToken: NSObjectProtocol?
+        @MainActor static var hostFolderToken: NSObjectProtocol?
         @MainActor static var launchAppToken: NSObjectProtocol?
         @MainActor static var framebufferStatsToken: NSObjectProtocol?
     }

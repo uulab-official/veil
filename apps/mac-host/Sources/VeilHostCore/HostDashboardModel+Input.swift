@@ -155,6 +155,21 @@ extension HostDashboardModel {
         }
     }
 
+    /// Asks the agent to map the Mac folder Veil serves over WebDAV. Nil when the agent cannot, or did not answer.
+    public func mountHostFolder(port: Int, token: String, driveLetter: String, label: String) async -> HostFolderStatus? {
+        guard hasLiveAgentConnection, health?.capabilities.hostFolder == true else {
+            return nil
+        }
+        do {
+            return try await service.mountHostFolder(
+                HostFolderMountRequest(requestId: "req_host_folder", port: port, token: token, driveLetter: driveLetter, label: label)
+            ).hostFolder
+        } catch {
+            VeilLog.window.notice("Host folder mount failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
+    }
+
     /// Sends committed Unicode text to a mirrored Windows window.
     ///
     /// This is the path for anything the Windows virtual-key map cannot express, which includes every

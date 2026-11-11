@@ -1067,6 +1067,11 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    /// Maps the Mac folder served over WebDAV as a Windows drive letter.
+    public func mountHostFolder(_ request: HostFolderMountRequest) async throws -> HostFolderMountResponse {
+        try await requestRejectingErrors(request, context: "host folder mount requires one response")
+    }
+
     /// Sets the Windows IME of the foreground window, and each later one, to on or off.
     public func setGuestImeMode(_ mode: GuestImeMode) async throws {
         try await sendAcknowledged(encoder.encode(InputImeSetRequest(requestId: "req_ime_set", mode: mode)))

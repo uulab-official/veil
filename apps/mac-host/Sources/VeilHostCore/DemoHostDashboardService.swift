@@ -137,6 +137,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.setGuestImeMode(mode)
     }
 
+    public func mountHostFolder(_ request: HostFolderMountRequest) async throws -> HostFolderMountResponse {
+        try await primary.mountHostFolder(request)
+    }
+
     private var fallbackDetail: String {
         "No Windows agent reachable at \(primaryEndpointDescription). Showing built-in demo data."
     }
