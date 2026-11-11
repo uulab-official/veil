@@ -1319,7 +1319,7 @@ Fixtures: `harness/protocol-fixtures/clipboard.image.set.host.json`,
 
 ## Clipboard Files
 
-Host to guest only:
+Both directions use one message shape. Host to guest:
 
 ```json
 {
@@ -1351,14 +1351,16 @@ The alternatives were rejected on trust-boundary grounds:
 - **Sending host paths** and letting the guest read them needs a Mac folder visible to Windows. The only way
   to get one is macOS File Sharing, which publishes on every interface (see Shared Folder), and it would
   expose more than the copied files.
-- **Guest-to-host files** (Explorer copy, Finder paste) are deliberately not synchronised. The guest would
-  choose which paths the Mac pasteboard points at, and a guest-chosen file URL is the one clipboard payload
-  that can make Finder act on host files. A user moves guest files to the Mac through the shared folder,
-  which they can see and choose from.
+- **Guest-chosen file URLs on the Mac pasteboard** were the reason guest-to-host files were first left out:
+  a file URL is the one clipboard payload that can make Finder act on host files. The guest-to-host
+  direction below therefore never lets the guest name a Mac path. The guest names files *inside its own
+  share*, and the host copies their bytes into a folder it creates itself before any URL reaches the
+  pasteboard. See [Guest to host](#guest-to-host).
 
-### Rules
+### Rules (host to guest)
 
-- Only `origin: "host"` exists. A guest-origin `clipboard.files.set` is rejected with `invalid_message`.
+- The guest accepts only `origin: "host"`. A guest-origin `clipboard.files.set` sent *to* the agent is
+  rejected with `invalid_message`; guest-origin messages only ever travel from the agent to the host.
 - `shareName` must equal the share the guest publishes. The guest resolves paths against its own
   `guestDirectoryPath`; the host never sends an absolute guest path.
 - `relativePaths` holds 1...64 entries. Each is at most 240 characters, uses `\` separators, starts
@@ -1378,12 +1380,107 @@ The alternatives were rejected on trust-boundary grounds:
 
 Fixture: `harness/protocol-fixtures/clipboard.files.set.host.json`.
 
+### Guest to host
+
+When the user copies files in Windows Explorer (or any app that places `CF_HDROP`), the agent stages a copy
+in the share and names it:
+
+```json
+{
+  "type": "clipboard.files.set",
+  "requestId": "evt_clipboard_12",
+  "origin": "guest",
+  "sequence": 12,
+  "shareName": "VeilShared",
+  "relativePaths": [
+    "Veil Clipboard from Windows\\20261111-050102-4D5E6F\\budget.xlsx"
+  ]
+}
+```
+
+The pieces, and who decides each one:
+
+1. **The guest stages.** On a clipboard change that carries `CF_HDROP`, the agent copies the listed files
+   into a fresh batch folder `C:\VeilShared\Veil Clipboard from Windows\<batch>\` and broadcasts the
+   message. It copies regular files only, 1...64 of them, at most 512 MiB in total, with no two names equal
+   ignoring case. A selection that breaks any bound (a folder, a link, too many, too large) is not sent at
+   all, so the Mac pasteboard never holds part of what the user copied. The agent keeps the three newest
+   batches and deletes older ones whose names match the batch pattern.
+2. **The host validates the names.** Every entry must be exactly
+   `Veil Clipboard from Windows\<batch>\<file name>`, all in one batch, where `<batch>` matches
+   `yyyyMMdd-HHmmss-<6 hex>` and the file name passes the Windows name rules above *and* the Mac rules
+   below. One bad entry drops the whole message.
+3. **The host copies the bytes into a folder it owns.** The destination is
+   `~/Downloads/Veil Clipboard/<host batch>/`, a folder the user can see in Finder, with a batch name the
+   host generates (the guest's batch name is not reused on the Mac). Each source is opened from the mount
+   root one component at a time with `O_NOFOLLOW`, so a symbolic link, junction or reparse point anywhere
+   on the path fails the open instead of being followed out of the share; the final open must be a
+   regular file by `fstat`. The host re-counts sizes while it reads and stops at 64 files and 512 MiB,
+   whatever the guest staged. Each file is created with `O_EXCL`, mode `0644` (never executable), and the
+   standard quarantine properties (`com.apple.quarantine`, agent "Veil"), so opening it goes through
+   Gatekeeper exactly like a downloaded file. A failure removes the partial batch.
+4. **Only then does the pasteboard change.** The host writes the copied files as file URLs, which Finder
+   pastes as a normal file copy. Nothing is opened, launched, or previewed by Veil.
+
+Why copy instead of pointing the pasteboard at `/Volumes/VeilShared/...`: the share is served by the guest.
+Between the host checking a path and Finder reading it, the guest can swap the file for a link to a host
+file, or change its bytes. Copying through `O_NOFOLLOW` descriptors into a host-owned folder closes that
+window: what lands on the pasteboard is a file the host wrote and the guest can no longer reach.
+
+Mac name rules (in addition to the Windows ones, which the guest names already satisfy):
+
+- At most 255 UTF-8 bytes, the APFS component limit.
+- No Unicode bidirectional controls (U+200E, U+200F, U+202A...U+202E, U+2066...U+2069). They are how
+  a name written `invoice` + U+202E + `fdp.app` displays as `invoiceppa.pdf`; a file whose name hides its type is refused, not renamed.
+- A leading `.` is replaced by `_`, so a copied `.zshrc` stays visible in Finder instead of becoming a
+  hidden file in Downloads.
+
+Acceptance on the host, in order:
+
+- `origin` is `guest`, `sequence` is greater than the last accepted guest clipboard sequence (text, image
+  and files share one sequence space, as for images), and the guest clipboard rate limit allows it.
+- Clipboard sharing and **Copy Files from Windows** are both on, and Veil is the active app, the same
+  rule as other guest clipboard updates. A background update is dropped, not queued.
+- The shared folder is mounted on the Mac. Without it the update is dropped and logged; nothing else reads
+  guest files.
+- The copy runs off the main thread. If a newer guest clipboard update arrives while it runs, the finished
+  copy is not written to the pasteboard, so a slow large copy never overwrites a later small one.
+- The host keeps the three newest batches in `~/Downloads/Veil Clipboard/` and deletes only folders it
+  named with the batch pattern. Finder copies the files out on paste, so the batches are staging, not the
+  user's copy.
+
+Loop prevention:
+
+- The agent never broadcasts a `CF_HDROP` whose files are inside `C:\VeilShared\Veil Clipboard\` or
+  `C:\VeilShared\Veil Clipboard from Windows\`. Those are exactly the files a host paste places there, so a
+  host-to-guest paste is not echoed back as a guest copy.
+- After writing guest files to the pasteboard the host remembers the pasteboard change count and guest
+  sequence. A ⌘V in a mirrored window while both still match sends Ctrl+V without re-sending the files,
+  because Windows' clipboard already holds the originals.
+
+Compatibility: an older host ignores a guest-origin `clipboard.files.set` (its event pump drops unknown
+clipboard kinds), so the only cost of a newer agent against an older host is the staged copy in the share.
+
+Not in v1:
+
+- **Folders.** Explorer's Copy on a folder is not sent. A recursive copy is where links and junctions
+  inside the tree would need the same per-component checks, and is left for a later version with its own
+  tests.
+- **Drag out of a mirrored window.** A Windows drag runs `DoDragDrop`'s modal loop inside the guest; the
+  guest never learns that the pointer left the mirrored window on the Mac, and Windows offers no API to read
+  another process's in-flight drag data object. Supporting it needs a guest-side drop target the host can
+  steer the drag onto when the Mac pointer leaves the window, which is a separate design.
+
+Fixture: `harness/protocol-fixtures/clipboard.files.set.guest.json`.
+
 ### Host controls
 
 Clipboard sharing is on by default, matching the text behaviour Veil already shipped, and can be turned off
 from the Apps menu (**Share Clipboard with Windows**). Off means no clipboard message is sent or accepted in
 either direction; ⌘V still forwards Ctrl+V, so Windows pastes its own clipboard. **Copy Files into Windows on
-Paste** is a separate switch, also on by default, because it writes into the shared folder.
+Paste** is a separate switch, also on by default, because it writes into the shared folder. **Copy Files
+from Windows** is the guest-to-host switch, also on by default and also behind sharing, because it writes
+into `~/Downloads/Veil Clipboard`.
 
 Guest-to-host updates are applied to the Mac pasteboard only while Veil is the active app. A Windows app
 that sets the clipboard in the background would otherwise replace what the user just copied in a Mac app

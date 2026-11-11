@@ -38,6 +38,7 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `clipboard.image.set.host.json`
 - `clipboard.image.set.guest.json`
 - `clipboard.files.set.host.json`
+- `clipboard.files.set.guest.json`
 - `notification.listener.request.json`
 - `notification.listener.response.json`
 - `notification.received.json`
