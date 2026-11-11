@@ -70,3 +70,22 @@ QEMU's own `-display dbus` already has a shared-map listener interface, but it a
 The object is declared in `qapi/qom.json`, as every user-creatable type must be, and builds wherever
 pixman does. The host adds it only for a bundled QEMU that carries this patch
 (`QEMUSharedFramebuffer.isSupported`).
+
+### Why the Windows Balloon driver's pages never arrive (2026-11-11)
+
+Reading the guest's memory through QMP (`x-query-virtio-queue-element`, `xp`, `pmemsave`) showed that
+virtio-win 0.1.302's ARM64 `balloon.sys` gives the device the wrong guest physical address for its
+two DMA buffers. The inflate descriptor pointed at `0x11B4A0000`, which held zeros. The PFN array the
+driver had filled was at `0x11B495000`, 512 64-bit PFNs such as `0x23d952`. The statistics buffer
+was announced at `0x11B49F000`, which held unrelated kernel data, while its `-1` initial fill sat at
+`0x11B494000`. Both are off by the same `0xB000`. The virtqueue rings themselves are read correctly.
+
+Two more defects of 0.1.302 are fixed upstream but not yet in a signed release:
+
+- Its PFNs are 64-bit. The virtio spec and QEMU read 32-bit entries. This is
+  virtio-win/kvm-guest-drivers-windows `9f96702d`, 2026-10-07.
+- It has no MSI-X support. That matches the statistics queue never being answered after its first
+  buffer. This is `d92b9c07`, 2026-10-09.
+
+0.1.302 is still the newest release on fedorapeople.org. QEMU cannot work around the address offset
+safely, so ballooning Windows waits for a fixed driver.
