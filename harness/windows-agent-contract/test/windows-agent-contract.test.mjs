@@ -481,12 +481,15 @@ test("windows agent exposes an inbox app catalog for native-style Mac windows", 
   assert.match(session, /handler_failed/);
   assert.match(session, /WindowCreatedEvent\(app,\s*launched\)/);
   assert.match(desktop, /SnapshotAppWindowHandles\(app\)/);
-  assert.match(desktop, /DoesProcessMatchApp\(windowProcessId,\s*app\)/);
+  // Start menu apps also match packaged windows by AppUserModelID, so the per-window check takes the handle.
+  assert.match(desktop, /DoesWindowMatchApp\(hwnd,\s*windowProcessId,\s*app\)/);
+  assert.match(desktop, /DoesProcessMatchApp\(processId,\s*app\)/);
   assert.match(desktop, /\.Append\(app\.Executable\)/);
   assert.match(desktop, /\.Select\(Path\.GetFileNameWithoutExtension\)/);
   assert.match(desktop, /OrderBy\(candidate\s*=>\s*candidate\.IsPopup\)/);
   assert.match(desktop, /ThenByDescending\(candidate\s*=>\s*candidate\.IsNewWindow\)/);
-  assert.match(desktop, /TryFindTopLevelWindow\(app,\s*process\.Id,\s*existingWindowHandles,\s*out var launched\)/);
+  // The process id comes from Process.Start for shortcuts or from ActivateApplication for packaged apps.
+  assert.match(desktop, /TryFindTopLevelWindow\(app,\s*launchedProcessId,\s*existingWindowHandles,\s*out var launched\)/);
   assert.match(desktop, /EnumWindows/);
   assert.match(desktop, /GetWindowThreadProcessId/);
   assert.match(desktop, /GetWindowText/);
