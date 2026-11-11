@@ -36,6 +36,10 @@ export const MessageType = Object.freeze({
   TimeSyncRequest: "time.sync.request",
   TimeSyncResponse: "time.sync.response",
   AppearanceSetRequest: "appearance.set.request",
+  HostFolderMountRequest: "host.folder.mount.request",
+  HostFolderMountResponse: "host.folder.mount.response",
+  HostFolderUnmountRequest: "host.folder.unmount.request",
+  HostFolderUnmountResponse: "host.folder.unmount.response",
   AppearanceSetResponse: "appearance.set.response",
   InputMouse: "input.mouse",
   InputKey: "input.key",
@@ -147,7 +151,7 @@ export function validateAgentHealthResponse(response) {
   // Optional so an older agent keeps image and file clipboards on the Mac instead of receiving a message
   // it cannot route. timeSync and appearanceSync are optional for the same reason: without them the host
   // never sends time.sync.request or appearance.set.request.
-  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync", "textComposition", "imeMode"]) {
+  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync", "textComposition", "imeMode", "hostFolder"]) {
     if (response.capabilities[field] !== undefined && typeof response.capabilities[field] !== "boolean") {
       throw new TypeError(`Agent health response field 'capabilities.${field}' must be a boolean.`);
     }
@@ -409,6 +413,56 @@ export function validateTimeSyncResponse(response) {
     throw new TypeError(`${context} field 'timeSync.recommendedAction' must be install-time-sync-task-elevated when elevation is required.`);
   }
 
+  return response;
+}
+
+// A Mac folder mounted in Windows over WebDAV (docs/protocol.md § Mac Folder In Windows). The token and
+// drive letter end up on a `net use` command line in the guest, so their shapes are checked strictly.
+const hostFolderTokenPattern = /^[A-Za-z0-9_-]{16,128}$/;
+const hostFolderDrivePattern = /^[D-Z]$/;
+
+export function validateHostFolderMountRequest(request) {
+  if (!request || request.type !== MessageType.HostFolderMountRequest) {
+    throw new TypeError("Host folder mount request must use type host.folder.mount.request.");
+  }
+  const context = "Host folder mount request";
+  requireNonEmptyString(request.requestId, "requestId", context);
+  requirePositiveInteger(request.protocolVersion, "protocolVersion", context);
+  if (!Number.isInteger(request.port) || request.port < 1 || request.port > 65535) {
+    throw new TypeError(`${context} field 'port' must be an integer from 1 to 65535.`);
+  }
+  if (typeof request.token !== "string" || !hostFolderTokenPattern.test(request.token)) {
+    throw new TypeError(`${context} field 'token' must be 16-128 characters of A-Z, a-z, 0-9, _ or -.`);
+  }
+  if (typeof request.driveLetter !== "string" || !hostFolderDrivePattern.test(request.driveLetter)) {
+    throw new TypeError(`${context} field 'driveLetter' must be one letter from D to Z.`);
+  }
+  if (typeof request.label !== "string" || request.label.length === 0 || request.label.length > 32) {
+    throw new TypeError(`${context} field 'label' must be 1-32 characters.`);
+  }
+  return request;
+}
+
+export function validateHostFolderMountResponse(response) {
+  if (!response || response.type !== MessageType.HostFolderMountResponse) {
+    throw new TypeError("Host folder mount response must use type host.folder.mount.response.");
+  }
+  const context = "Host folder mount response";
+  requireNonEmptyString(response.requestId, "requestId", context);
+  requirePositiveInteger(response.protocolVersion, "protocolVersion", context);
+  const status = response.hostFolder;
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    throw new TypeError(`${context} field 'hostFolder' must be an object.`);
+  }
+  if (typeof status.isMounted !== "boolean") {
+    throw new TypeError(`${context} field 'hostFolder.isMounted' must be a boolean.`);
+  }
+  if (typeof status.driveLetter !== "string" || !hostFolderDrivePattern.test(status.driveLetter)) {
+    throw new TypeError(`${context} field 'hostFolder.driveLetter' must be one letter from D to Z.`);
+  }
+  if (status.isMounted && (typeof status.uncPath !== "string" || !status.uncPath.startsWith("\\\\10.0.2.2@"))) {
+    throw new TypeError(`${context} field 'hostFolder.uncPath' must be the Veil WebDAV path when mounted.`);
+  }
   return response;
 }
 

@@ -39,6 +39,8 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `input.text.json`
 - `input.text.composition.json`
 - `input.ime.set.json`
+- `host.folder.mount.request.json`
+- `host.folder.mount.response.json`
 - `operation.ack.mouse-pointer.json`
 - `clipboard.text.set.host.json`
 - `clipboard.text.set.guest.json`

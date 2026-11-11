@@ -22,6 +22,8 @@ import {
   validateInputMouse,
   validateInputText,
   validateInputImeSet,
+  validateHostFolderMountRequest,
+  validateHostFolderMountResponse,
   validateNotificationListenerRequest,
   validateNotificationListenerResponse,
   validateNotificationReceived,
@@ -92,6 +94,8 @@ test("parses every stable fixture", async () => {
     "input.text.acknowledged.json",
     "input.text.composition.json",
     "input.ime.set.json",
+    "host.folder.mount.request.json",
+    "host.folder.mount.response.json",
     "operation.ack.json",
     "clipboard.text.set.host.json",
     "clipboard.text.set.guest.json",
@@ -991,4 +995,13 @@ test("accepts the two IME modes and nothing else", async () => {
     "alphanumeric"
   );
   assert.throws(() => validateInputImeSet({ type: MessageType.InputImeSet, requestId: "r", mode: "hangul" }), /mode/);
+});
+
+test("host folder mount fixtures validate and unsafe shapes are refused", async () => {
+  const request = validateHostFolderMountRequest(await readFixture("host.folder.mount.request.json"));
+  assert.equal(request.driveLetter, "M");
+  assert.equal(validateHostFolderMountResponse(await readFixture("host.folder.mount.response.json")).hostFolder.isMounted, true);
+  for (const change of [{ token: "a&calc" }, { token: "short" }, { driveLetter: "C" }, { port: 0 }, { label: "" }]) {
+    assert.throws(() => validateHostFolderMountRequest({ ...request, ...change }), TypeError, JSON.stringify(change));
+  }
 });

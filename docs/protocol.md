@@ -86,6 +86,7 @@ Response:
     "appearanceSync": true,
     "textComposition": true,
     "imeMode": true,
+    "hostFolder": true,
     "packageIdentity": false
   },
   "sharedFolder": {
@@ -1973,6 +1974,62 @@ Turning the shared folder on or off does **not** invalidate a suspended Windows 
 forwarding is excluded from the suspend/resume machine fingerprint, because a `hostfwd` rule is slirp-side
 plumbing: the guest sees an identical NIC with an identical MAC and address either way, and QEMU migration
 does not serialize forwarding rules. Device topology is a different question and stays fingerprinted.
+
+## Mac Folder In Windows
+
+A folder on the Mac, mounted in Windows as a drive letter. The reverse of § Shared Folder, which keeps the
+folder in Windows. UTM shares Mac folders with Windows guests over WebDAV (its SPICE WebDAV channel); Veil
+does the same over plain HTTP, because QEMU usermode networking already lets the guest reach the Mac's
+loopback at `10.0.2.2` and Windows ships a WebDAV client (the WebClient service).
+
+- The host serves the folder with WebDAV on `127.0.0.1` only, at a random port, under a random path token:
+  `http://10.0.2.2:<port>/<token>/` from the guest. Requests outside the token get 404, and paths that
+  leave the folder, by `..` or a symlink, get 403.
+- The token is the only credential. Windows refuses Basic authentication over plain HTTP by default
+  (`BasicAuthLevel`), and the server is reachable only from this Mac and its guest. Any local Mac process
+  that learns the token can use the share, the same trust as the agent's own loopback port.
+- The guest maps it with `net use <drive>: \\10.0.2.2@<port>\<token>` in the signed-in user's session, so
+  Explorer shows it, and names it in Explorer with `label`.
+
+Host request:
+
+```json
+{
+  "type": "host.folder.mount.request",
+  "requestId": "req_host_folder",
+  "protocolVersion": 1,
+  "port": 50123,
+  "token": "6f1d0c9a2b7e4f30a8d5c1e9b2f47a60",
+  "driveLetter": "M",
+  "label": "Mac"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "host.folder.mount.response",
+  "requestId": "req_host_folder",
+  "protocolVersion": 1,
+  "hostFolder": {
+    "isMounted": true,
+    "driveLetter": "M",
+    "uncPath": "\\\\10.0.2.2@50123\\6f1d0c9a2b7e4f30a8d5c1e9b2f47a60",
+    "message": null
+  }
+}
+```
+
+- `port` is 1-65535; `token` is 16-128 characters of `[A-Za-z0-9_-]`, so it is safe on a command line;
+  `driveLetter` is one letter `D`-`Z`; `label` is at most 32 characters. Anything else is rejected with
+  `invalid_message`.
+- A drive letter already mapped to the same UNC path counts as mounted. One mapped elsewhere is replaced
+  only when it is a Veil WebDAV mapping (`\\10.0.2.2@...`); a letter taken by anything else is refused
+  with `isMounted: false` and a message.
+- `host.folder.unmount.request` with `driveLetter` removes a Veil mapping and answers
+  `host.folder.unmount.response` with the same `hostFolder` shape.
+- An agent that reports `capabilities.hostFolder` understands both.
 
 ## Guest Time Sync
 

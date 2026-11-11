@@ -26,6 +26,7 @@
     "appearanceSync": true,
     "textComposition": true,
     "imeMode": true,
+    "hostFolder": true,
     "packageIdentity": false
   },
   "packageIdentityStatus": {
