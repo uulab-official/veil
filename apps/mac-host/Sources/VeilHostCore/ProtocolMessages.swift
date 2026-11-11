@@ -546,6 +546,8 @@ public struct WindowsApp: Codable, Equatable, Identifiable, Sendable {
     /// icons are static (`WindowsAppIconExtractor` on the guest). `nil` in demo mode or if the guest
     /// could not resolve/extract the icon -- callers should fall back to a generic icon in that case.
     public var iconPngBase64: String? = nil
+    /// The Start menu folder the app is in, such as `Windows Tools`; nil at the top of the Start menu.
+    public var folder: String? = nil
 
     public init(
         id: String,
@@ -553,8 +555,10 @@ public struct WindowsApp: Codable, Equatable, Identifiable, Sendable {
         exePath: String,
         publisher: String,
         iconId: String,
-        iconPngBase64: String? = nil
+        iconPngBase64: String? = nil,
+        folder: String? = nil
     ) {
+        self.folder = folder
         self.id = id
         self.name = name
         self.exePath = exePath

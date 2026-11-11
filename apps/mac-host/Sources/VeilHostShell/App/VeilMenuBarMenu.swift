@@ -112,22 +112,21 @@ struct VeilMenuBarMenu: View {
             }
             .disabled(model.phase == .loading || model.phase == .launching)
         } else {
-            Menu("Windows Apps", systemImage: "square.grid.2x2") {
-                ForEach(model.apps) { app in
-                    Button(WindowsShellCopy.menuItemTitle(app.name), systemImage: symbolName(for: app)) {
-                        if !model.hasLiveAgentConnection {
-                            openMainWindow()
+            // The Windows Start menu: apps at the top, then its folders, as in the Dock menu.
+            let layout = WindowsStartMenuLayout(apps: model.apps)
+            Menu("Windows Start Menu", systemImage: "square.grid.2x2") {
+                ForEach(layout.topLevel) { app in
+                    appButton(app)
+                }
+                if !layout.topLevel.isEmpty, !layout.folders.isEmpty {
+                    Divider()
+                }
+                ForEach(layout.folders, id: \.name) { folder in
+                    Menu(folder.name, systemImage: "folder") {
+                        ForEach(folder.apps) { app in
+                            appButton(app)
                         }
-                        launchWindowsAppByIdAction(app.id)
                     }
-                    .disabled(
-                        !WindowsAppLaunchCommandPolicy.isEnabled(
-                            canRequestLaunch: model.canRequestAppLaunch(appId: app.id),
-                            canFulfillPendingLaunch: false,
-                            hasRecoverableRuntimeDisplay: canRecoverRuntimeDisplay,
-                            hasLiveAgentConnection: model.hasLiveAgentConnection
-                        )
-                    )
                 }
             }
         }
@@ -437,6 +436,23 @@ struct VeilMenuBarMenu: View {
 
     private func openMainWindow() {
         MainWindowChrome.showMainWindow()
+    }
+
+    private func appButton(_ app: WindowsApp) -> some View {
+        Button(WindowsShellCopy.menuItemTitle(app.name), systemImage: symbolName(for: app)) {
+            if !model.hasLiveAgentConnection {
+                openMainWindow()
+            }
+            launchWindowsAppByIdAction(app.id)
+        }
+        .disabled(
+            !WindowsAppLaunchCommandPolicy.isEnabled(
+                canRequestLaunch: model.canRequestAppLaunch(appId: app.id),
+                canFulfillPendingLaunch: false,
+                hasRecoverableRuntimeDisplay: canRecoverRuntimeDisplay,
+                hasLiveAgentConnection: model.hasLiveAgentConnection
+            )
+        )
     }
 
     private func symbolName(for app: WindowsApp) -> String {

@@ -692,3 +692,9 @@
 "%@ opened in %@." = "%1$@을(를) %2$@에서 열었습니다.";
 "Starting Windows to open %@." = "%@을(를) 열기 위해 Windows를 시작하는 중입니다.";
 "Windows started, but Veil could not connect to it yet. Try again in a moment." = "Windows가 시작되었지만 Veil이 아직 연결하지 못했습니다. 잠시 후 다시 시도하세요.";
+
+"Windows Start Menu" = "Windows 시작 메뉴";
+"Share a Mac Folder with Windows…" = "Mac 폴더를 Windows와 공유…";
+"Stop Sharing the Mac Folder" = "Mac 폴더 공유 중단";
+"Share with Windows" = "Windows와 공유";
+"Windows shows this folder as drive M:. Only this folder is shared." = "Windows에서 이 폴더가 M: 드라이브로 보입니다. 이 폴더만 공유됩니다.";
