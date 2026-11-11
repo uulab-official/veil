@@ -137,11 +137,16 @@ enum MenuBarPrimaryActionPresentation {
 }
 
 struct LauncherWindowVisibilityPolicy {
+    /// - Parameter lastAppClosedByUser: the user just closed the last Windows app. Like Parallels
+    ///   Coherence, that leaves nothing on screen: bringing the Veil window up in its place showed Windows
+    ///   behind the app the user had just closed. Windows keeps running, or quiets, in the background, and
+    ///   the Dock icon and menu bar bring the window back.
     static func shouldHideLauncher(
         visibleMirroredWindowCount: Int,
-        modelRequestsHide: Bool
+        modelRequestsHide: Bool,
+        lastAppClosedByUser: Bool = false
     ) -> Bool {
-        visibleMirroredWindowCount > 0 || modelRequestsHide
+        visibleMirroredWindowCount > 0 || modelRequestsHide || lastAppClosedByUser
     }
 }
 

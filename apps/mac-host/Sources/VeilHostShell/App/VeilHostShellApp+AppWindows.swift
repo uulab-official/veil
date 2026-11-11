@@ -455,7 +455,8 @@ extension VeilHostShellApp {
 
         return LauncherWindowVisibilityPolicy.shouldHideLauncher(
             visibleMirroredWindowCount: windowsAppWindowPresenter.visibleWindowIds.count,
-            modelRequestsHide: model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow
+            modelRequestsHide: model.runtimeStatusReport().launcherVisibility.shouldHideMainWindow,
+            lastAppClosedByUser: launcherDismissedWithLastApp
         )
     }
 }

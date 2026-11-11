@@ -51,6 +51,7 @@ extension VeilHostShellApp {
             Task { @MainActor in
                 _ = await model.closeMirrorSession(windowId: windowId)
                 lastAppWindowClosedByUser = true
+                launcherDismissedWithLastApp = windowsAppWindowPresenter.visibleWindowIds.isEmpty
                 scheduleAutomaticQuietRuntimeIfNeeded()
                 syncLauncherWindowVisibility()
             }
@@ -685,6 +686,7 @@ extension VeilHostShellApp {
     }
 
     func activateMainWindow() {
+        launcherDismissedWithLastApp = false
         Task { @MainActor in
             MainWindowChrome.showMainWindow()
         }

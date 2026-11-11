@@ -136,6 +136,7 @@ extension VeilHostShellApp {
                         windowsAppWindowPresenter.closeWindow(windowId: windowId)
                         // The app's window closed in Windows, which the user did there.
                         lastAppWindowClosedByUser = true
+                        launcherDismissedWithLastApp = windowsAppWindowPresenter.visibleWindowIds.isEmpty
                         scheduleAutomaticQuietRuntimeIfNeeded()
                         syncLauncherWindowVisibility()
                     case .handledClipboardText:

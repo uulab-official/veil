@@ -33,6 +33,17 @@ struct WindowsAppWindowPresenterTests {
         )
     }
 
+    @Test("closing the last Windows app leaves nothing on screen, like Parallels Coherence")
+    func closingTheLastAppKeepsTheLauncherHidden() {
+        #expect(
+            LauncherWindowVisibilityPolicy.shouldHideLauncher(
+                visibleMirroredWindowCount: 0,
+                modelRequestsHide: false,
+                lastAppClosedByUser: true
+            )
+        )
+    }
+
     @Test("mirrors several Windows apps side by side as separate macOS windows")
     func mirrorsSeveralWindowsAppsSideBySide() {
         _ = NSApplication.shared

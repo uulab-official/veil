@@ -29,6 +29,10 @@ struct VeilHostShellApp: App {
     /// Automatic quiet only follows that. Windows dropped because the agent restarted, for example during a
     /// tools update, once left zero windows on reconnect and Veil shut Windows down with apps still open in it.
     @State var lastAppWindowClosedByUser = false
+    /// The Veil window stays away after the user closed the last Windows app, until they bring it back.
+    /// Separate from `lastAppWindowClosedByUser`, which also lets Windows quiet down and must not be undone
+    /// just because the window was reopened.
+    @State var launcherDismissedWithLastApp = false
     @State var automaticGuestAgentRecoveryTask: Task<Void, Never>?
     @State var automaticRuntimeConnectionRecoveryTask: Task<Void, Never>?
     @State var automaticFrameStreamMaintenanceTask: Task<Void, Never>?
@@ -144,6 +148,7 @@ struct VeilHostShellApp: App {
             .onChange(of: model.mirrorSessions.count) { previousCount, count in
                 if count > previousCount {
                     lastAppWindowClosedByUser = false
+                    launcherDismissedWithLastApp = false
                 }
                 syncDockTileRuntimeStatus()
                 scheduleAutomaticQuietRuntimeIfNeeded()
