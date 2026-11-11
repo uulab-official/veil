@@ -46,6 +46,8 @@ public enum MessageType: String, Codable, Sendable {
     case appearanceSetResponse = "appearance.set.response"
     case hostFolderMountRequest = "host.folder.mount.request"
     case hostFolderMountResponse = "host.folder.mount.response"
+    case hostFolderUnmountRequest = "host.folder.unmount.request"
+    case hostFolderUnmountResponse = "host.folder.unmount.response"
     case inputText = "input.text"
     case inputImeSet = "input.ime.set"
     case inputMouse = "input.mouse"
@@ -471,6 +473,20 @@ public struct HostFolderMountRequest: Codable, Equatable, Sendable {
         self.token = token
         self.driveLetter = driveLetter
         self.label = label
+    }
+}
+
+public struct HostFolderUnmountRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var driveLetter: String
+
+    public init(requestId: String, driveLetter: String, protocolVersion: Int = 1) {
+        self.type = .hostFolderUnmountRequest
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.driveLetter = driveLetter
     }
 }
 

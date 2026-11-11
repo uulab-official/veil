@@ -1067,6 +1067,11 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    /// Removes the drive mapping for the Mac folder. The reply has the mount reply's shape.
+    public func unmountHostFolder(_ request: HostFolderUnmountRequest) async throws -> HostFolderMountResponse {
+        try await requestRejectingErrors(request, context: "host folder unmount requires one response")
+    }
+
     /// Maps the Mac folder served over WebDAV as a Windows drive letter.
     public func mountHostFolder(_ request: HostFolderMountRequest) async throws -> HostFolderMountResponse {
         try await requestRejectingErrors(request, context: "host folder mount requires one response")

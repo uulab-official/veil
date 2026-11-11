@@ -155,6 +155,16 @@ extension HostDashboardModel {
         }
     }
 
+    /// Removes the Windows drive for the Mac folder. Nil when the agent cannot, or did not answer.
+    public func unmountHostFolder(driveLetter: String) async -> HostFolderStatus? {
+        guard hasLiveAgentConnection, health?.capabilities.hostFolder == true else {
+            return nil
+        }
+        return try? await service.unmountHostFolder(
+            HostFolderUnmountRequest(requestId: "req_host_folder_unmount", driveLetter: driveLetter)
+        ).hostFolder
+    }
+
     /// Asks the agent to map the Mac folder Veil serves over WebDAV. Nil when the agent cannot, or did not answer.
     public func mountHostFolder(port: Int, token: String, driveLetter: String, label: String) async -> HostFolderStatus? {
         guard hasLiveAgentConnection, health?.capabilities.hostFolder == true else {

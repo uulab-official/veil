@@ -55,6 +55,7 @@ public protocol HostDashboardService: Sendable {
     func setGuestAppearance(theme: GuestAppearanceTheme) async throws -> AppearanceSetResponse
     func setGuestImeMode(_ mode: GuestImeMode) async throws
     func mountHostFolder(_ request: HostFolderMountRequest) async throws -> HostFolderMountResponse
+    func unmountHostFolder(_ request: HostFolderUnmountRequest) async throws -> HostFolderMountResponse
 }
 
 public extension HostDashboardService {
@@ -94,6 +95,10 @@ public extension HostDashboardService {
     }
 
     func mountHostFolder(_ request: HostFolderMountRequest) async throws -> HostFolderMountResponse {
+        throw HostDashboardServiceError.guestStateSyncUnsupported
+    }
+
+    func unmountHostFolder(_ request: HostFolderUnmountRequest) async throws -> HostFolderMountResponse {
         throw HostDashboardServiceError.guestStateSyncUnsupported
     }
 

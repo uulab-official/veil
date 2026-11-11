@@ -35,7 +35,11 @@ final class HostFolderSharing {
     /// Cheap when nothing changed, so it runs on every agent poll.
     func sync(model: HostDashboardModel) async {
         guard let folder else {
-            stopServing()
+            // Sharing was turned off: the drive goes away in Windows too, instead of pointing at a closed port.
+            if server != nil || lastStatus?.isMounted == true {
+                stopServing()
+                lastStatus = await model.unmountHostFolder(driveLetter: Self.driveLetter)
+            }
             return
         }
         guard model.hasLiveAgentConnection, model.health?.capabilities.hostFolder == true else {

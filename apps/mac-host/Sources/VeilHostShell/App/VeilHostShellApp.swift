@@ -233,6 +233,11 @@ struct VeilHostShellApp: App {
                     Task { @MainActor in await flushGuestStateSync() }
                 }
 
+                Button("Stop Sharing the Mac Folder") {
+                    HostFolderSharing.shared.setFolder(nil)
+                    Task { @MainActor in await flushGuestStateSync() }
+                }
+
                 Button("Refresh Display") {
                     recoverRuntimeDisplayEvidence()
                 }
