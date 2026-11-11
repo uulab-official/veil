@@ -11,6 +11,7 @@ public final class HostDashboardModel {
 
     public internal(set) var phase: HostDashboardPhase = .idle
     public internal(set) var health: AgentHealthResponse?
+    @ObservationIgnored var lastSentImeMode: (mode: GuestImeMode, connection: String?)?
     public internal(set) var apps: [WindowsApp] = []
     public internal(set) var lastLaunch: NotepadLaunchResult?
     /// Tracked guest windows. Like `mirrorSessions`, a change that only moves or resizes a window is

@@ -41,5 +41,7 @@ extension VeilHostShellApp {
             macTheme: MacHostStateObserver.currentTheme(),
             matchMacAppearance: matchMacAppearanceInWindows
         )
+        // Also called on every agent poll, so a reconnected agent gets the IME mode back.
+        await syncGuestImeMode()
     }
 }

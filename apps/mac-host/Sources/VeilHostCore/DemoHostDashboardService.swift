@@ -133,6 +133,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.setGuestAppearance(theme: theme)
     }
 
+    public func setGuestImeMode(_ mode: GuestImeMode) async throws {
+        try await primary.setGuestImeMode(mode)
+    }
+
     private var fallbackDetail: String {
         "No Windows agent reachable at \(primaryEndpointDescription). Showing built-in demo data."
     }

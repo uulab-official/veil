@@ -1067,6 +1067,11 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    /// Sets the Windows IME of the foreground window, and each later one, to on or off.
+    public func setGuestImeMode(_ mode: GuestImeMode) async throws {
+        try await sendAcknowledged(encoder.encode(InputImeSetRequest(requestId: "req_ime_set", mode: mode)))
+    }
+
     /// Asks the guest to switch Windows' app and system theme to match the Mac.
     public func setGuestAppearance(theme: GuestAppearanceTheme) async throws -> AppearanceSetResponse {
         try await requestRejectingErrors(

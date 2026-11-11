@@ -45,6 +45,7 @@ public enum MessageType: String, Codable, Sendable {
     case appearanceSetRequest = "appearance.set.request"
     case appearanceSetResponse = "appearance.set.response"
     case inputText = "input.text"
+    case inputImeSet = "input.ime.set"
     case inputMouse = "input.mouse"
     case inputKey = "input.key"
     case error
@@ -146,6 +147,8 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     public var appearanceSync: Bool? = nil
     /// True when `input.text` accepts `replaceLength`, so an open IME composition can be shown in the guest.
     public var textComposition: Bool? = nil
+    /// True when the agent understands `input.ime.set`, so the Windows IME can follow the macOS input source.
+    public var imeMode: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
@@ -365,6 +368,42 @@ public struct TimeSyncResponse: Codable, Equatable, Sendable {
         self.requestId = requestId
         self.protocolVersion = protocolVersion
         self.timeSync = timeSync
+    }
+}
+
+/// The Windows IME state the host asks for: on (`native`, for example Hangul) or off.
+public enum GuestImeMode: String, Codable, Equatable, Sendable {
+    case native
+    case alphanumeric
+
+    /// The mode for where keys go. The apps view composes on the Mac and sends finished text, so Windows
+    /// must not compose again; the desktop view sends scancodes, so Windows composes as the Mac would.
+    public static func desired(isDesktopView: Bool, macInputSourceLanguages: [String], macInputSourceIsInputMode: Bool) -> GuestImeMode {
+        guard isDesktopView else {
+            return .alphanumeric
+        }
+        return isComposingLanguage(macInputSourceLanguages, isInputMode: macInputSourceIsInputMode) ? .native : .alphanumeric
+    }
+
+    /// A Korean, Japanese, or Chinese input method, as opposed to a plain keyboard layout such as ABC.
+    static func isComposingLanguage(_ languages: [String], isInputMode: Bool) -> Bool {
+        guard isInputMode, let primary = languages.first?.lowercased() else {
+            return false
+        }
+        return primary.hasPrefix("ko") || primary.hasPrefix("ja") || primary.hasPrefix("zh")
+    }
+}
+
+/// `input.ime.set`; see docs/protocol.md § Input IME Mode.
+public struct InputImeSetRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var mode: GuestImeMode
+
+    public init(requestId: String, mode: GuestImeMode) {
+        self.type = .inputImeSet
+        self.requestId = requestId
+        self.mode = mode
     }
 }
 

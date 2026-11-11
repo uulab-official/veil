@@ -53,6 +53,7 @@ public protocol HostDashboardService: Sendable {
     func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport
     func syncGuestTime(hostUtc: Date, reason: GuestTimeSyncReason) async throws -> TimeSyncResponse
     func setGuestAppearance(theme: GuestAppearanceTheme) async throws -> AppearanceSetResponse
+    func setGuestImeMode(_ mode: GuestImeMode) async throws
 }
 
 public extension HostDashboardService {
@@ -84,6 +85,10 @@ public extension HostDashboardService {
     }
 
     func setGuestAppearance(theme: GuestAppearanceTheme) async throws -> AppearanceSetResponse {
+        throw HostDashboardServiceError.guestStateSyncUnsupported
+    }
+
+    func setGuestImeMode(_ mode: GuestImeMode) async throws {
         throw HostDashboardServiceError.guestStateSyncUnsupported
     }
 

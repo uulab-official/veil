@@ -137,6 +137,7 @@ struct VeilHostShellApp: App {
                 // the endpoint exists at all.
                 startFrameChannelPumpIfNeeded()
                 startMacHostStateObservation()
+                startGuestImeModeSync()
                 await flushGuestStateSync()
                 await restorePreviousWindowsAppWindowAfterLaunchIfNeeded()
                 syncLauncherWindowVisibility()
@@ -183,6 +184,7 @@ struct VeilHostShellApp: App {
             }
             .onChange(of: shellNavigation.viewMode) { _, mode in
                 applyViewMode(mode)
+                Task { @MainActor in await syncGuestImeMode() }
             }
             .environment(\.appRuntimeProvider, vmRuntimeBooter.provider)
             .environment(shellNavigation)

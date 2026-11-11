@@ -136,6 +136,25 @@ extension HostDashboardModel {
         }
     }
 
+    /// Sets the Windows IME mode, once per change: `lastSentImeMode` is cleared when the agent reconnects so
+    /// a restarted agent, which starts with no mode, gets it again.
+    public func syncGuestImeMode(_ mode: GuestImeMode) async {
+        guard hasLiveAgentConnection, health?.capabilities.imeMode == true else {
+            lastSentImeMode = nil
+            return
+        }
+        let connection = health?.agentVersion
+        guard lastSentImeMode?.mode != mode || lastSentImeMode?.connection != connection else {
+            return
+        }
+        do {
+            try await service.setGuestImeMode(mode)
+            lastSentImeMode = (mode, connection)
+        } catch {
+            VeilLog.window.notice("IME mode \(mode.rawValue, privacy: .public) not set: \(String(describing: error), privacy: .public)")
+        }
+    }
+
     /// Sends committed Unicode text to a mirrored Windows window.
     ///
     /// This is the path for anything the Windows virtual-key map cannot express, which includes every
