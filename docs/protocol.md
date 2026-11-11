@@ -74,6 +74,7 @@ Response:
     "clipboardText": true,
     "windowResize": true,
     "displayResize": true,
+    "displayScale": true,
     "virtioGpuDisplay": true,
     "systemShutdown": true,
     "windowLayout": true,
@@ -130,6 +131,10 @@ agent predates `window.resize.request`.
 desktop monitor mode through the Win32 display API. Veil uses it only as a fallback after QEMU's
 RFB `ExtendedDesktopSize` request is rejected or forwarded to the guest (QEMU result code 4); an absent
 or false value keeps the confirmed guest framebuffer aspect-fit without stretching.
+
+`capabilities.displayScale` is optional. `true` means the agent accepts `display.scale.request` and can
+set Windows' display scale (Settings > System > Display > Scale). An absent or false value means the agent
+predates it, and the host keeps the guest display at one pixel per Mac point. See Display Scale.
 
 `capabilities.virtioGpuDisplay` is optional. `true` means Windows has the virtio-win VirtIO GPU DOD
 display driver (`viogpudo`) installed for the VM's `virtio-gpu-pci` device, so the next cold boot can
@@ -1020,6 +1025,76 @@ Rules:
   answers result code 4 ("request forwarded"): QEMU passed the size to `virtio-gpu`, and the VirtIO GPU
   driver lists it as a mode but does not switch to it on its own. A later successful RFB desktop-size response becomes authoritative
   and returns the display to normal dynamic mode.
+
+## Display Scale
+
+Request (host → agent), sent when the agent advertises `capabilities.displayScale`:
+
+```json
+{
+  "type": "display.scale.request",
+  "requestId": "req_display_scale_200",
+  "scalePercent": 200
+}
+```
+
+To give the display back the scale the Windows user chose, the host sends `restoresUserScale` instead:
+
+```json
+{
+  "type": "display.scale.request",
+  "requestId": "req_display_scale_user",
+  "restoresUserScale": true
+}
+```
+
+Response (agent → host):
+
+```json
+{
+  "type": "display.scale.response",
+  "requestId": "req_display_scale_200",
+  "accepted": true,
+  "scalePercent": 200
+}
+```
+
+Rules:
+
+- **Purpose:** text is sharp on a Retina Mac only when Windows draws two pixels per Mac point. The host
+  makes the guest display twice the Mac screen's size in points and asks Windows for 200%, so a window's
+  logical size, which sizes its Mac window in points, stays the same while it gets four times the pixels.
+  The design is in `docs/checklists/2026-11-11-retina-guest-scale.md`.
+- **Scope:** the primary display only, which is the one the host receives.
+- **`scalePercent`:** one of Windows' scale steps: 100, 125, 150, 175, 200, 225, 250, 300, 350, 400, 450,
+  500. Exactly one of `scalePercent` and `restoresUserScale: true` is present; anything else is
+  `invalid_message`.
+- **The user's own scale:** before the agent first changes the scale it records the current one in
+  `%LOCALAPPDATA%\Veil\Agent\display-scale.json`. `restoresUserScale` sets that value back and deletes
+  the file. Without a record it changes nothing and answers with the current scale. The record survives an
+  agent restart, so a Veil quit while Windows ran at 200% is still undone by the next restore.
+- **Limits:** Windows offers only the steps that leave the display at least about 1024×768 logical pixels.
+  A larger step is lowered to the largest one offered, so raise the display size first and lower the scale
+  before shrinking the display.
+- **Reply:** `scalePercent` is the scale Windows reports after the change, which can differ from the
+  request. `accepted: false` comes with a `reason` and means nothing changed:
+  - `display_scale_unavailable` when Windows does not answer the scale query, such as with no WDDM display;
+  - `display_scale_refused` when Windows refused the change.
+- **Effect on apps:** Windows sends `WM_DPICHANGED` to Per-Monitor DPI aware windows, which redraw at the
+  new scale. Other apps are stretched by Windows and stay as soft as before. Logical `bounds` keep their
+  meaning, while `window.layout` frames, `window.move.request` coordinates and `window.frame` pixels are
+  display pixels and so double at 200%.
+- **API:** Windows has no documented way to set the display scale. The agent uses
+  `DisplayConfigGetDeviceInfo` and `DisplayConfigSetDeviceInfo`
+  ([docs](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-displayconfigsetdeviceinfo)),
+  which are documented, with the device info types -3 (get) and -4 (set), which are not: they are absent
+  from [`DISPLAYCONFIG_DEVICE_INFO_TYPE`](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ne-wingdi-displayconfig_device_info_type).
+  Because a future Windows may change them, the agent reads the
+  result back and reports what Windows says, and the host falls back to one pixel per point when a request
+  is refused or ends at a different scale.
+
+Fixtures: `harness/protocol-fixtures/display.scale.request.json`, `display.scale.request.restore.json`,
+`display.scale.response.json`.
 
 ## Guest Shutdown
 
