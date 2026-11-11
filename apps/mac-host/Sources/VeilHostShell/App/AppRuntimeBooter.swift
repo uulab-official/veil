@@ -44,6 +44,10 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let qemuBooter: QEMUVMRuntimeBooter
     private let virtualizationBooter: VirtualizationVMRuntimeBooter
     @MainActor private var virtualizationConsolePresenter: VMConsoleWindowPresenter?
+    /// Turns the Windows IME off before Veil types a command into Windows (Run dialog). With the IME following a
+    /// Korean Mac input source, `D:\\U.cmd` was typed as Hangul and the tools update failed.
+    /// Set once at launch, before any automation runs.
+    nonisolated(unsafe) var prepareGuestForTyping: (@MainActor @Sendable () async -> Void)?
 
     init(
         provider: AppRuntimeProviderSelection,
@@ -166,6 +170,7 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
         }
+        await prepareGuestForTyping?()
         return try await qemuBooter.installGuestAgentFromAttachedMedia()
     }
 
@@ -173,6 +178,7 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
         }
+        await prepareGuestForTyping?()
         return try await qemuBooter.updateGuestToolsFromRemovableMedia()
     }
 
@@ -180,6 +186,7 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
         }
+        await prepareGuestForTyping?()
         return try await qemuBooter.prepareSparsePackageFromAttachedMedia()
     }
 

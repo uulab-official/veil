@@ -38,21 +38,45 @@ enum MacInputSource {
     }
 }
 
+/// While Veil types commands into Windows itself, the Windows IME stays off whatever the Mac input source is.
+@MainActor
+enum GuestAutomatedTyping {
+    /// Long enough for the Run dialog to take the command and start it.
+    static let holdSeconds: TimeInterval = 20
+    private(set) static var until: Date?
+
+    static var isActive: Bool {
+        guard let until else { return false }
+        return Date() < until
+    }
+
+    static func begin() {
+        until = Date().addingTimeInterval(holdSeconds)
+    }
+}
+
 extension VeilHostShellApp {
     /// Keeps the Windows IME on or off with the Mac's input source: Windows composes from the keys in both views.
     @MainActor
     func syncGuestImeMode() async {
         let source = MacInputSource.current()
-        await model.syncGuestImeMode(
-            GuestImeMode.desired(
-                macInputSourceLanguages: source.languages,
-                macInputSourceIsInputMode: source.isInputMode
-            )
-        )
+        let mode = GuestAutomatedTyping.isActive
+            ? GuestImeMode.alphanumeric
+            : GuestImeMode.desired(macInputSourceLanguages: source.languages, macInputSourceIsInputMode: source.isInputMode)
+        await model.syncGuestImeMode(mode)
     }
 
     @MainActor
     func startGuestImeModeSync() {
+        vmRuntimeBooter.prepareGuestForTyping = {
+            GuestAutomatedTyping.begin()
+            await syncGuestImeMode()
+            // Back to the Mac's input source once the command has run.
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(GuestAutomatedTyping.holdSeconds + 1))
+                await syncGuestImeMode()
+            }
+        }
         MacInputSource.observeChanges {
             Task { @MainActor in await syncGuestImeMode() }
         }
