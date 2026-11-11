@@ -461,6 +461,12 @@ write that folder, which is what keeps file paths out of the URL. The host:
   name rewriting and `file.open.request`, so the guest's own checks still apply. Refusals are shown in Veil's
   main window.
 
+Veil makes or refreshes a launcher whenever a Windows app window is shown on the Mac. Each attempt, and every
+reason for not making one (`skipped-disabled`, `skipped-no-launcher-program`, `skipped-not-agent`,
+`skipped-not-in-app-list`, `failed` with the error), is written to
+`~/Library/Application Support/Veil/Diagnostics/windows-app-launchers.json` and logged at notice level under the
+`integration` category.
+
 Launcher creation can be turned off with
 `defaults write org.uulab.veil.host-shell VeilCreatesWindowsAppLaunchers -bool NO`; deleting
 `~/Applications/Veil Apps` removes the launchers, and they come back the next time an app opens unless the
