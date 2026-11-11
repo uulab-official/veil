@@ -100,6 +100,9 @@ extension VeilHostShellApp {
                 )
             }
         }
+        windowsAppWindowPresenter.onMirroredWindowsChanged = {
+            syncLauncherWindowVisibility()
+        }
         windowsAppWindowPresenter.onWindowVisibilityChange = { windowId, isVisible in
             Task { @MainActor in
                 if isVisible {

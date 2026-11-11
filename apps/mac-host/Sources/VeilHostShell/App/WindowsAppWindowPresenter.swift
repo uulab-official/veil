@@ -5,7 +5,6 @@ import VeilHostCore
 
 @MainActor
 final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
-    private var windowsById: [String: NSWindow] = [:]
     private var windowOrder: [String] = []
     private var suppressedCloseWindowIds: Set<String> = []
     private var identitiesById: [String: WindowsAppWindowIdentity] = [:]
@@ -68,6 +67,22 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
     var visibleWindowIds: [String] {
         windowOrder.filter { windowsById[$0] != nil }
+    }
+
+    /// Fires after a mirrored window is created or removed, on whatever path did it, so the Veil window can
+    /// hide behind the apps or come back. A relaunch reattaches windows without the launch path that used to
+    /// hide it, which left the Veil window up behind the app.
+    var onMirroredWindowsChanged: (() -> Void)?
+
+    private var windowsById: [String: NSWindow] = [:] {
+        didSet {
+            guard Set(windowsById.keys) != Set(oldValue.keys) else {
+                return
+            }
+            DispatchQueue.main.async { [weak self] in
+                self?.onMirroredWindowsChanged?()
+            }
+        }
     }
 
     /// Presents a mirrored window, creating it if needed.
