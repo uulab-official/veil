@@ -100,6 +100,12 @@ final class FramebufferCropHostView: NSView {
     }
 
     func refresh() {
+        // While the window settles after a move or resize, keep the last cropped picture instead of switching
+        // to the captured frame, which updates about once a second and made every move stutter. The last
+        // picture is the window's own pixels; the new position's pixels may still be the desktop.
+        if isShowingCrop, MainActor.assumeIsolated({ GuestWindowLayoutStore.shared.isSettling(windowId: windowId) }) {
+            return
+        }
         let crop = latestFrame.flatMap { frame in
             MainActor.assumeIsolated {
                 GuestWindowLayoutStore.shared.framebufferCrop(

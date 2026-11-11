@@ -568,6 +568,15 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
               windowsById[windowId] != nil else {
             return
         }
+        // While the user drags, the Windows window stays where it is and the Mac window moves on its own, so
+        // the content keeps cropping the same guest pixels at the Mac's frame rate. Moving the guest window
+        // along made each step re-settle and fall back to once-a-second captures, which stuttered.
+        if MirroredWindowDrag.isDragging(window) {
+            guard !MirroredWindowDrag.isMouseButtonDown() else {
+                return
+            }
+            MirroredWindowDrag.end(window)
+        }
         reportPlacement(of: window, windowId: windowId)
     }
 
@@ -1319,7 +1328,17 @@ private final class InputCaptureNSView: NSView {
         // snapping and Space behavior, and the matching mouse-up never reaches this view.
         captionPress = nil
         VeilLog.window.notice("Caption drag from \(String(describing: press.region), privacy: .public)")
-        window?.performDrag(with: event)
+        guard let window else {
+            return
+        }
+        MirroredWindowDrag.begin(window)
+        window.performDrag(with: event)
+        // The guest window follows once, where the drag ended. If the drag is still running here, the first
+        // move after the button is released does it instead (`windowDidMove`).
+        if !MirroredWindowDrag.isMouseButtonDown() {
+            MirroredWindowDrag.end(window)
+            window.delegate?.windowDidMove?(Notification(name: NSWindow.didMoveNotification, object: window))
+        }
     }
 
     private func captionRegion(for event: NSEvent) -> WindowsCaptionRegion {
@@ -1683,4 +1702,26 @@ extension InputCaptureNSView: @preconcurrency NSTextInputClient {
         NSNotFound
     }
 
+}
+
+/// Mirrored windows the user is dragging by their Windows caption.
+@MainActor
+enum MirroredWindowDrag {
+    private static var dragging: Set<ObjectIdentifier> = []
+
+    static func begin(_ window: NSWindow) {
+        dragging.insert(ObjectIdentifier(window))
+    }
+
+    static func end(_ window: NSWindow) {
+        dragging.remove(ObjectIdentifier(window))
+    }
+
+    static func isDragging(_ window: NSWindow) -> Bool {
+        dragging.contains(ObjectIdentifier(window))
+    }
+
+    static func isMouseButtonDown() -> Bool {
+        NSEvent.pressedMouseButtons & 1 != 0
+    }
 }
