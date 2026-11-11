@@ -10,13 +10,16 @@ public enum GracefulWindowsShutdown {
         case poweredOffViaTools
         /// Windows powered off after the power button press.
         case poweredOffViaPowerButton
+        /// Windows finished shutting down after the tools asked it to, but the VM never powered off;
+        /// see `settledSeconds`. The caller turns it off, which loses nothing.
+        case finishedWithoutPowerOff
         /// Windows was asked but was still running at the deadline.
         case timedOut
         /// Neither the tools nor the power button could be reached.
         case notRequested
 
         public var poweredOff: Bool {
-            self == .poweredOffViaTools || self == .poweredOffViaPowerButton
+            self == .poweredOffViaTools || self == .poweredOffViaPowerButton || self == .finishedWithoutPowerOff
         }
     }
 
@@ -25,6 +28,11 @@ public enum GracefulWindowsShutdown {
     public static let toolsShutdownSeconds: TimeInterval = 600
     /// Without the tools, Windows may leave the power button unanswered.
     public static let powerButtonSeconds: TimeInterval = 90
+    /// How long the guest must look finished (`hasFinishedShuttingDown`) before a tools shutdown counts
+    /// as done although the VM is still on. Windows 11 Arm 26300 under QEMU/HVF ends its shutdown with a
+    /// dark screen, its tools gone, and the vCPUs idle, but never powers off, which held Stop for the
+    /// full ten minutes before Veil turned it off.
+    public static let settledSeconds: TimeInterval = 20
 
     /// Main-actor bound because its callers drive main-actor models.
     @MainActor
@@ -32,7 +40,9 @@ public enum GracefulWindowsShutdown {
         requestToolsShutdown: () async -> Bool,
         pressPowerButton: () async -> Bool,
         isStillRunning: () async -> Bool,
+        hasFinishedShuttingDown: () async -> Bool = { false },
         toolsTimeout: TimeInterval = toolsShutdownSeconds,
+        settleTimeout: TimeInterval = settledSeconds,
         powerButtonTimeout: TimeInterval = powerButtonSeconds,
         pollInterval: Duration = .seconds(2),
         now: () -> Date = Date.init
@@ -43,10 +53,25 @@ public enum GracefulWindowsShutdown {
         }
 
         let deadline = now().addingTimeInterval(viaTools ? toolsTimeout : powerButtonTimeout)
+        var finishedSince: Date?
         repeat {
             try? await Task.sleep(for: pollInterval)
             if !(await isStillRunning()) {
                 return viaTools ? .poweredOffViaTools : .poweredOffViaPowerButton
+            }
+            // Only after the tools asked: a power button press can also put Windows to sleep, which
+            // looks the same from outside and must not be cut off.
+            guard viaTools else {
+                continue
+            }
+            if await hasFinishedShuttingDown() {
+                let since = finishedSince ?? now()
+                finishedSince = since
+                if now().timeIntervalSince(since) >= settleTimeout {
+                    return .finishedWithoutPowerOff
+                }
+            } else {
+                finishedSince = nil
             }
         } while now() < deadline
         return .timedOut

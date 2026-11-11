@@ -170,12 +170,26 @@ extension VeilHostShellApp {
         guard vmModel.snapshot?.state == .running else {
             return false
         }
+        let launch = vmModel.snapshot?.latestConsoleLaunch
+        let completionProbe = launch?.pid.map {
+            GuestShutdownCompletionProbe(pid: $0, monitorSocketPath: launch?.monitorSocketPath ?? "")
+        }
         let outcome = await GracefulWindowsShutdown.run(
             requestToolsShutdown: { await model.requestSystemShutdown() },
             pressPowerButton: { await vmModel.pressPowerButton() },
             isStillRunning: {
                 await vmModel.load()
                 return vmModel.snapshot?.state == .running
+            },
+            hasFinishedShuttingDown: {
+                guard let completionProbe else {
+                    return false
+                }
+                let toolsConnected = model.hasLiveAgentConnection
+                // The display check runs a monitor screendump; keep it off the main thread.
+                return await Task.detached {
+                    completionProbe.isFinished(toolsConnected: toolsConnected)
+                }.value
             }
         )
         return outcome.poweredOff
