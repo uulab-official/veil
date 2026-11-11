@@ -47,13 +47,18 @@ final class WindowsAppLauncherLibrary {
     let folder: URL
     let launcherProgram: URL?
     let defaults: UserDefaults
+    /// Registers a finished launcher with Launch Services; tests pass a no-op so temporary bundles stay out of
+    /// "Open With".
+    let register: @Sendable (URL) -> Void
 
     init(
         folder: URL = WindowsAppLauncherBundleSpec.defaultFolder(),
         launcherProgram: URL? = WindowsAppLauncherInstaller.bundledLauncherProgram(),
         diagnosticsURL: URL = WindowsAppLauncherDiagnostics.defaultURL(),
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        register: @escaping @Sendable (URL) -> Void = WindowsAppLauncherInstaller.registerWithLaunchServices
     ) {
+        self.register = register
         self.folder = folder
         self.launcherProgram = launcherProgram
         self.diagnosticsURL = diagnosticsURL
@@ -120,11 +125,13 @@ final class WindowsAppLauncherLibrary {
             return
         }
 
-        let installer = WindowsAppLauncherInstaller(
+        var configured = WindowsAppLauncherInstaller(
             folder: folder,
             launcherProgram: program,
             veilVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
         )
+        configured.register = register
+        let installer = configured
         Task { @MainActor in
             for job in jobs {
                 let spec = job.spec

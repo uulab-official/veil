@@ -403,14 +403,16 @@ struct WindowsAppLauncherLibraryTests {
         defer { try? FileManager.default.removeItem(at: sandbox.root) }
 
         let missingProgram = WindowsAppLauncherLibrary(
-            folder: sandbox.folder, launcherProgram: nil, diagnosticsURL: sandbox.diagnosticsURL, defaults: sandbox.defaults
+            folder: sandbox.folder, launcherProgram: nil, diagnosticsURL: sandbox.diagnosticsURL, defaults: sandbox.defaults,
+            register: { _ in }
         )
         await install(missingProgram, [notepad])
         #expect(try sandbox.readDiagnostics().apps["winapp_notepad"]?.status == "skipped-no-launcher-program")
 
         sandbox.defaults.set(false, forKey: WindowsAppLauncherLibrary.enabledDefaultsKey)
         let disabled = WindowsAppLauncherLibrary(
-            folder: sandbox.folder, launcherProgram: sandbox.root, diagnosticsURL: sandbox.diagnosticsURL, defaults: sandbox.defaults
+            folder: sandbox.folder, launcherProgram: sandbox.root, diagnosticsURL: sandbox.diagnosticsURL, defaults: sandbox.defaults,
+            register: { _ in }
         )
         await install(disabled, [notepad])
         let diagnostics = try sandbox.readDiagnostics()
@@ -434,7 +436,8 @@ struct WindowsAppLauncherLibraryTests {
             folder: sandbox.folder,
             launcherProgram: WindowsAppLauncherSigningTests.builtLauncherProgram,
             diagnosticsURL: sandbox.diagnosticsURL,
-            defaults: sandbox.defaults
+            defaults: sandbox.defaults,
+            register: { _ in }
         )
         await install(library, [notepad])
         let entry = try #require(try sandbox.readDiagnostics().apps["winapp_notepad"])
@@ -451,7 +454,8 @@ struct WindowsAppLauncherLibraryTests {
             folder: sandbox.folder,
             launcherProgram: WindowsAppLauncherSigningTests.builtLauncherProgram,
             diagnosticsURL: sandbox.diagnosticsURL,
-            defaults: sandbox.defaults
+            defaults: sandbox.defaults,
+            register: { _ in }
         )
 
         await install(library, [notepad])
