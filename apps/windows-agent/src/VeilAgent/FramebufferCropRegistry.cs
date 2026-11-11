@@ -17,15 +17,30 @@ public static class FramebufferCropRegistry
 
     private static readonly object Gate = new();
     private static HashSet<string> cropped = new(StringComparer.Ordinal);
+    private static bool desktopHidden;
     private static long setAt;
 
-    public static void Set(IEnumerable<string> windowIds, long? nowMilliseconds = null)
+    public static void Set(IEnumerable<string> windowIds, bool hidesDesktop = false, long? nowMilliseconds = null)
     {
         var next = windowIds.ToHashSet(StringComparer.Ordinal);
         lock (Gate)
         {
             cropped = next;
+            desktopHidden = hidesDesktop;
             setAt = nowMilliseconds ?? Environment.TickCount64;
+        }
+    }
+
+    /// <summary>
+    /// Whether the host shows apps as their own windows and wants the Windows desktop out of the way
+    /// (<c>window.crop.set</c>'s <c>hidesDesktop</c>), within the same lifetime as the crop list.
+    /// </summary>
+    public static bool HidesDesktop(long? nowMilliseconds = null)
+    {
+        lock (Gate)
+        {
+            return (nowMilliseconds ?? Environment.TickCount64) - setAt <= (long)Lifetime.TotalMilliseconds
+                && desktopHidden;
         }
     }
 
@@ -43,6 +58,7 @@ public static class FramebufferCropRegistry
         lock (Gate)
         {
             cropped = new HashSet<string>(StringComparer.Ordinal);
+            desktopHidden = false;
         }
     }
 }

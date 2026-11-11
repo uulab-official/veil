@@ -55,6 +55,7 @@ public sealed class WindowLayoutStreamer
                 {
                     await onEvent(layoutEvent, cancellationToken);
                 }
+                EnforceTaskbar();
 
                 var active = lastSent is not null;
                 if (active && timerResolution is null)
@@ -73,6 +74,27 @@ public sealed class WindowLayoutStreamer
         finally
         {
             timerResolution?.Dispose();
+        }
+    }
+
+    private long lastTaskbarCheck;
+
+    /// <summary>Keeps the taskbar hidden while the host hides the desktop; checked a few times a second.</summary>
+    private void EnforceTaskbar()
+    {
+        var now = Environment.TickCount64;
+        if (now - lastTaskbarCheck < 250)
+        {
+            return;
+        }
+        lastTaskbarCheck = now;
+        try
+        {
+            TaskbarVisibility.Enforce(FramebufferCropRegistry.HidesDesktop());
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            Console.Error.WriteLine($"WindowLayoutStreamer: taskbar update failed. {error.GetType().Name}: {error.Message}");
         }
     }
 

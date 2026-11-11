@@ -1116,11 +1116,14 @@ public sealed class AgentSession
             tracked = trackedWindowsById.Keys.ToHashSet(StringComparer.Ordinal);
         }
 
+        var hidesDesktop = request["hidesDesktop"] is JsonValue flag && flag.TryGetValue<bool>(out var value) && value;
         // Only tracked windows: the list slows their capture and must not name anything else.
-        FramebufferCropRegistry.Set(windowIds
-            .Select(node => node?.GetValue<string>())
-            .OfType<string>()
-            .Where(tracked.Contains));
+        FramebufferCropRegistry.Set(
+            windowIds
+                .Select(node => node?.GetValue<string>())
+                .OfType<string>()
+                .Where(tracked.Contains),
+            hidesDesktop);
         return AgentReplies.Direct(OperationAck(requestId));
     }
 
