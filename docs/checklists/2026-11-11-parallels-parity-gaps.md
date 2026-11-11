@@ -9,7 +9,7 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 1 | Coherence: one Mac window per app, desktop hidden | Partial (live) | Windows come from the guest framebuffer (`window.layout`, `window.crop.set`, `window.move.request`). The Windows taskbar still covers the bottom of the guest display and can cover windows there, so this slice hides it. There is no Start menu from the Mac. |
-| 2 | Apps in Dock, Launchpad, Applications; "Open with" | Partial | Dock icons and the Dock menu exist. There are no per-app `.app` launchers and no `CFBundleDocumentTypes`. |
+| 2 | Apps in Dock, Launchpad, Applications; "Open with" | Implemented (live, partly) | Opening a Windows app writes a signed launcher to `~/Applications/Veil Apps` (`09dfe151`). Live: Notepad's launcher was created, passes `codesign --verify --strict`, and is listed by Launch Services for `.txt` files. Opening a file through it was not tried, because that brings Veil forward. |
 | 3 | Clipboard and drag and drop | Partial | Text and images go both ways. Files go Mac to Windows only, and drops travel as base64. |
 | 4 | Shared folders | Partial | `C:\VeilShared` is available on the Mac over SMB. Mac folders inside Windows are not. |
 | 5 | Retina | Implemented (live, agent side) | With Retina resolution, the default once the agent reports `displayScale`, the apps view runs the guest display at twice the screen in points and Windows at 200% (`display.scale.request`). About 5% frame-rate cost. See `2026-11-11-retina-guest-scale.md`. |
