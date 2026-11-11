@@ -275,3 +275,33 @@ public struct CoherenceDisplayScale: Equatable, Sendable {
         (target ?? 100) >= (current ?? 100)
     }
 }
+
+/// Keeps a Windows window's 1-pixel DWM border out of its Mac window.
+///
+/// The layout frame is the DWM extended frame bounds, which include that border. Windows 11 draws it
+/// translucent, so a crop of the frame showed a line of whatever was behind the window on the guest
+/// display, usually the wallpaper. The exact pixels are taken from inside the border, and the ring they
+/// leave is filled by the same inner region stretched to the full size beneath them, so the ring shows the
+/// window's own edge colours.
+public struct CoherenceBorderlessCrop: Equatable, Sendable {
+    /// The framebuffer region drawn pixel for pixel.
+    public var inner: CGRect
+    /// Where `inner` sits in the Mac content view, in guest pixels from its top-left corner.
+    public var innerOffset: CGPoint
+
+    /// Guest pixels to drop on each side: one Mac point, which covers the border at every Windows scale.
+    public static func borderPixels(pointsPerPixel: CGFloat) -> CGFloat {
+        guard pointsPerPixel > 0 else { return 1 }
+        return max(1, (1 / pointsPerPixel).rounded(.up))
+    }
+
+    /// Nil when the window is too small to lose its border, in which case the whole crop is drawn.
+    public init?(crop: CGRect, borderPixels: CGFloat) {
+        let inner = crop.insetBy(dx: borderPixels, dy: borderPixels)
+        guard borderPixels > 0, inner.width >= 1, inner.height >= 1 else {
+            return nil
+        }
+        self.inner = inner
+        innerOffset = CGPoint(x: borderPixels, y: borderPixels)
+    }
+}

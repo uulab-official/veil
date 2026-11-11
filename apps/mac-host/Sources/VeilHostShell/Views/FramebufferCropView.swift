@@ -34,6 +34,9 @@ final class FramebufferCropHostView: NSView {
     var pointsPerPixel: CGFloat = 1
     var onAvailabilityChange: ((Bool) -> Void)?
     private let imageLayer = CALayer()
+    /// The window's inner region stretched to the full size under `imageLayer`; only its outer ring shows,
+    /// where the Windows border was dropped. See `CoherenceBorderlessCrop`.
+    private let edgeLayer = CALayer()
     private var frameToken: UUID?
     private var layoutToken: UUID?
     private var latestFrame: CGImage?
@@ -51,6 +54,12 @@ final class FramebufferCropHostView: NSView {
             "contents": NSNull(), "contentsRect": NSNull(), "bounds": NSNull(), "position": NSNull(), "hidden": NSNull()
         ]
         imageLayer.isHidden = true
+        edgeLayer.anchorPoint = .zero
+        edgeLayer.magnificationFilter = .linear
+        edgeLayer.minificationFilter = .linear
+        edgeLayer.actions = imageLayer.actions
+        edgeLayer.isHidden = true
+        layer?.addSublayer(edgeLayer)
         layer?.addSublayer(imageLayer)
         MainActor.assumeIsolated {
             frameToken = GuestFramebufferSource.shared.addSink { [weak self] image in
@@ -106,23 +115,38 @@ final class FramebufferCropHostView: NSView {
         if let crop, let latestFrame {
             let width = CGFloat(latestFrame.width)
             let height = CGFloat(latestFrame.height)
+            func normalized(_ rect: CGRect) -> CGRect {
+                CGRect(x: rect.minX / width, y: rect.minY / height, width: rect.width / width, height: rect.height / height)
+            }
+            let fullFrame = CGRect(x: 0, y: 0, width: crop.width * pointsPerPixel, height: crop.height * pointsPerPixel)
             imageLayer.contents = latestFrame
-            imageLayer.contentsRect = CGRect(
-                x: crop.minX / width,
-                y: crop.minY / height,
-                width: crop.width / width,
-                height: crop.height / height
-            )
-            imageLayer.frame = CGRect(
-                x: 0,
-                y: 0,
-                width: crop.width * pointsPerPixel,
-                height: crop.height * pointsPerPixel
-            )
+            if let borderless = CoherenceBorderlessCrop(
+                crop: crop,
+                borderPixels: CoherenceBorderlessCrop.borderPixels(pointsPerPixel: pointsPerPixel)
+            ) {
+                imageLayer.contentsRect = normalized(borderless.inner)
+                imageLayer.frame = CGRect(
+                    x: borderless.innerOffset.x * pointsPerPixel,
+                    y: borderless.innerOffset.y * pointsPerPixel,
+                    width: borderless.inner.width * pointsPerPixel,
+                    height: borderless.inner.height * pointsPerPixel
+                )
+                edgeLayer.contents = latestFrame
+                edgeLayer.contentsRect = normalized(borderless.inner)
+                edgeLayer.frame = fullFrame
+                edgeLayer.isHidden = false
+            } else {
+                imageLayer.contentsRect = normalized(crop)
+                imageLayer.frame = fullFrame
+                edgeLayer.isHidden = true
+                edgeLayer.contents = nil
+            }
             imageLayer.isHidden = false
         } else {
             imageLayer.isHidden = true
             imageLayer.contents = nil
+            edgeLayer.isHidden = true
+            edgeLayer.contents = nil
         }
         CATransaction.commit()
 
