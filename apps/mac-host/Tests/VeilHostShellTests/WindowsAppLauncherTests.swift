@@ -367,3 +367,101 @@ extension WindowsAppLauncherIconTests {
         return WindowsAppLauncherIcon.icnsData(for: image)
     }
 }
+
+@MainActor
+struct WindowsAppLauncherLibraryTests {
+    private struct Sandbox {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("VeilLauncherLibrary-\(UUID().uuidString)")
+        var folder: URL { root.appendingPathComponent("Veil Apps", isDirectory: true) }
+        var diagnosticsURL: URL { root.appendingPathComponent("Diagnostics/windows-app-launchers.json") }
+        let defaults = UserDefaults(suiteName: "VeilLauncherLibraryTests-\(UUID().uuidString)")!
+
+        func readDiagnostics() throws -> WindowsAppLauncherDiagnostics {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode(WindowsAppLauncherDiagnostics.self, from: Data(contentsOf: diagnosticsURL))
+        }
+    }
+
+    private let notepad = WindowsApp(
+        id: "winapp_notepad",
+        name: "Notepad",
+        exePath: "C:\\Windows\\System32\\notepad.exe",
+        publisher: "Microsoft",
+        iconId: "icon_notepad"
+    )
+
+    private func install(_ library: WindowsAppLauncherLibrary, _ apps: [WindowsApp]) async {
+        await withCheckedContinuation { continuation in
+            library.ensureLaunchers(for: apps) { continuation.resume() }
+        }
+    }
+
+    @Test("a launcher that was not made says why in the diagnostics file")
+    func recordsSkipReasons() async throws {
+        let sandbox = Sandbox()
+        defer { try? FileManager.default.removeItem(at: sandbox.root) }
+
+        let missingProgram = WindowsAppLauncherLibrary(
+            folder: sandbox.folder, launcherProgram: nil, diagnosticsURL: sandbox.diagnosticsURL, defaults: sandbox.defaults
+        )
+        await install(missingProgram, [notepad])
+        #expect(try sandbox.readDiagnostics().apps["winapp_notepad"]?.status == "skipped-no-launcher-program")
+
+        sandbox.defaults.set(false, forKey: WindowsAppLauncherLibrary.enabledDefaultsKey)
+        let disabled = WindowsAppLauncherLibrary(
+            folder: sandbox.folder, launcherProgram: sandbox.root, diagnosticsURL: sandbox.diagnosticsURL, defaults: sandbox.defaults
+        )
+        await install(disabled, [notepad])
+        let diagnostics = try sandbox.readDiagnostics()
+        #expect(diagnostics.apps["winapp_notepad"]?.status == "skipped-disabled")
+        #expect(diagnostics.enabled == false)
+        #expect(!FileManager.default.fileExists(atPath: sandbox.folder.path))
+
+        disabled.recordSkip(appId: "winapp_paint", appName: "Paint", status: "skipped-not-agent", detail: "demo")
+        #expect(try sandbox.readDiagnostics().apps["winapp_paint"]?.status == "skipped-not-agent")
+    }
+
+    @Test("a failed install is recorded with its error", .enabled(if: WindowsAppLauncherSigningTests.builtLauncherProgram != nil))
+    func recordsInstallFailure() async throws {
+        let sandbox = Sandbox()
+        defer { try? FileManager.default.removeItem(at: sandbox.root) }
+        // A file where the folder should be makes the install fail the way an unwritable folder would.
+        try FileManager.default.createDirectory(at: sandbox.root, withIntermediateDirectories: true)
+        try Data().write(to: sandbox.folder)
+
+        let library = WindowsAppLauncherLibrary(
+            folder: sandbox.folder,
+            launcherProgram: WindowsAppLauncherSigningTests.builtLauncherProgram,
+            diagnosticsURL: sandbox.diagnosticsURL,
+            defaults: sandbox.defaults
+        )
+        await install(library, [notepad])
+        let entry = try #require(try sandbox.readDiagnostics().apps["winapp_notepad"])
+        #expect(entry.status == "failed")
+        #expect(entry.detail?.isEmpty == false)
+    }
+
+    @Test("an opened app gets a signed launcher and a diagnostics entry pointing at it",
+          .enabled(if: WindowsAppLauncherSigningTests.builtLauncherProgram != nil))
+    func createsLauncherAndRecordsIt() async throws {
+        let sandbox = Sandbox()
+        defer { try? FileManager.default.removeItem(at: sandbox.root) }
+        let library = WindowsAppLauncherLibrary(
+            folder: sandbox.folder,
+            launcherProgram: WindowsAppLauncherSigningTests.builtLauncherProgram,
+            diagnosticsURL: sandbox.diagnosticsURL,
+            defaults: sandbox.defaults
+        )
+
+        await install(library, [notepad])
+        let entry = try #require(try sandbox.readDiagnostics().apps["winapp_notepad"])
+        #expect(entry.status == "created")
+        let bundlePath = try #require(entry.bundlePath)
+        #expect(FileManager.default.fileExists(atPath: bundlePath + "/Contents/MacOS/veil-app-launcher"))
+
+        // Same inputs again: nothing to do, and no new install is started.
+        await install(library, [notepad])
+        #expect(try sandbox.readDiagnostics().apps["winapp_notepad"]?.status == "created")
+    }
+}

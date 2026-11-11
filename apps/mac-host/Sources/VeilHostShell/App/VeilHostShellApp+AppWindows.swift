@@ -375,6 +375,7 @@ extension VeilHostShellApp {
         }
 
         windowsAppWindowPresenter.showWindow(for: session, bringToFront: bringToFront)
+        syncWindowsAppLauncher(for: session)
         if let successMessage {
             displayMessage = successMessage
         } else if bringToFront {
@@ -408,6 +409,7 @@ extension VeilHostShellApp {
         }
 
         windowsAppWindowPresenter.showWindow(for: session, bringToFront: bringToFront)
+        syncWindowsAppLauncher(for: session)
         return true
     }
 
