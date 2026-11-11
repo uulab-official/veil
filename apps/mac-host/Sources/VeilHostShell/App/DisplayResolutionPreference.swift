@@ -9,10 +9,17 @@ import Foundation
 /// users who then set Windows' display scale to 200% themselves.
 enum DisplayResolutionPreference {
     static let retinaResolutionKey = "VeilDisplayRetinaResolution"
+    /// Used until the user picks a resolution. See docs/checklists/2026-11-11-retina-guest-scale.md for the
+    /// frame rate measured both ways.
+    static let retinaResolutionDefault = false
+
+    static func isRetinaResolutionEnabled(_ defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: retinaResolutionKey) as? Bool ?? retinaResolutionDefault
+    }
 
     static func guestPixelsPerPoint(
         screenScale: CGFloat?,
-        retinaResolution: Bool = UserDefaults.standard.bool(forKey: retinaResolutionKey)
+        retinaResolution: Bool = isRetinaResolutionEnabled()
     ) -> Double {
         guard retinaResolution, let screenScale, screenScale > 0 else {
             return 1

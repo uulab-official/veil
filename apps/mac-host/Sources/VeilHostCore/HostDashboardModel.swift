@@ -309,6 +309,27 @@ public final class HostDashboardModel {
         hasLiveAgentConnection && health?.capabilities.displayResize == true
     }
 
+    public var canSetDisplayScale: Bool {
+        hasLiveAgentConnection && health?.capabilities.displayScale == true
+    }
+
+    /// Sets Windows' display scale, or gives back the user's own when `scalePercent` is nil. Returns the
+    /// scale Windows reports afterwards, or nil when the agent cannot or did not change it.
+    public func setDisplayScale(scalePercent: Int?) async -> Int? {
+        guard canSetDisplayScale else {
+            return nil
+        }
+        do {
+            let response = try await service.setDisplayScale(scalePercent: scalePercent)
+            VeilLog.window.notice(
+                "Guest display scale \(scalePercent.map(String.init) ?? "user", privacy: .public): accepted=\(response.accepted, privacy: .public) now=\(response.scalePercent.map(String.init) ?? "unknown", privacy: .public)"
+            )
+            return response.accepted ? response.scalePercent : nil
+        } catch {
+            return nil
+        }
+    }
+
     public var canRequestSystemShutdown: Bool {
         hasLiveAgentConnection && health?.capabilities.systemShutdown == true
     }

@@ -1394,6 +1394,29 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         return try decoder.decode(DisplayResizeResponse.self, from: data)
     }
 
+    public func setDisplayScale(scalePercent: Int?) async throws -> DisplayScaleResponse {
+        let input = DisplayScaleRequest(
+            requestId: "req_display_scale_\(requestIdSuffix(for: scalePercent.map(String.init) ?? "user"))",
+            scalePercent: scalePercent
+        )
+        // Windows redraws every Per-Monitor DPI aware window before the call returns, which takes as long
+        // as a display mode change.
+        let replies = try await transport.send(encoder.encode(input), expectedReplies: 1,
+            replyTimeout: Self.displayResizeReplyTimeoutSeconds
+        )
+        if let error = replies
+            .compactMap({ try? decoder.decode(ErrorResponse.self, from: $0) })
+            .first(where: { $0.type == .error }) {
+            throw VeilHostError.agentError(code: error.code, message: error.message)
+        }
+
+        guard let data = replies.first else {
+            throw VeilHostError.missingReply("display scale requires one response")
+        }
+
+        return try decoder.decode(DisplayScaleResponse.self, from: data)
+    }
+
     public func sendMouseInput(_ input: InputMouseEvent) async throws {
         try await sendAcknowledged(encoder.encode(input))
     }

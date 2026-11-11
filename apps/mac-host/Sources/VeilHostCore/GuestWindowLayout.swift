@@ -212,14 +212,66 @@ public enum CoherencePlacement {
         return (x, y)
     }
 
-    /// The guest display size that makes the guest layout the Mac layout: the screen in points, which
-    /// is how big mirrored windows already are in guest pixels at Windows' 100% scale.
-    public static func displayMatching(screenFrame: CGRect) -> GuestDisplaySize? {
-        let width = Int(screenFrame.width.rounded())
-        let height = Int(screenFrame.height.rounded())
-        guard DisplayResizeRequest.isPlausible(width: width, height: height) else {
+    /// The guest display size that makes the guest layout the Mac layout: the screen in points times the
+    /// guest pixels per point. Mirrored windows are their logical size in points, and Windows draws them
+    /// at that many pixels per logical unit when its scale is `pixelsPerPoint` × 100%.
+    public static func displayMatching(screenFrame: CGRect, pixelsPerPoint: Int = 1) -> GuestDisplaySize? {
+        let width = Int((screenFrame.width * CGFloat(pixelsPerPoint)).rounded())
+        let height = Int((screenFrame.height * CGFloat(pixelsPerPoint)).rounded())
+        guard pixelsPerPoint >= 1, DisplayResizeRequest.isPlausible(width: width, height: height) else {
             return nil
         }
         return GuestDisplaySize(width: width, height: height)
+    }
+}
+
+/// How many guest pixels per Mac point the apps view runs Windows at, and the Windows scale that goes with
+/// it. Two on a Retina Mac, so text is drawn at the display's own pixels instead of being doubled by macOS.
+/// See docs/checklists/2026-11-11-retina-guest-scale.md.
+public struct CoherenceDisplayScale: Equatable, Sendable {
+    public var pixelsPerPoint: Int
+    public var display: GuestDisplaySize
+
+    /// The Windows display scale to ask for, or nil for the scale the Windows user chose.
+    public var scalePercent: Int? {
+        pixelsPerPoint > 1 ? pixelsPerPoint * 100 : nil
+    }
+
+    public init(pixelsPerPoint: Int, display: GuestDisplaySize) {
+        self.pixelsPerPoint = pixelsPerPoint
+        self.display = display
+    }
+
+    /// The apps view's guest display for a Mac screen. Falls back to one pixel per point when Retina is off,
+    /// the agent cannot set the scale, Windows refused it before, or the doubled screen is larger than a
+    /// guest display may be (a 5K display at 2x).
+    public static func target(
+        screenFrame: CGRect,
+        backingScale: Double?,
+        retinaEnabled: Bool,
+        agentCanScale: Bool,
+        scaleRefused: Bool
+    ) -> CoherenceDisplayScale? {
+        let retinaPixels = retinaPixelsPerPoint(backingScale: backingScale)
+        if retinaEnabled, agentCanScale, !scaleRefused, retinaPixels > 1,
+           let display = CoherencePlacement.displayMatching(screenFrame: screenFrame, pixelsPerPoint: retinaPixels) {
+            return CoherenceDisplayScale(pixelsPerPoint: retinaPixels, display: display)
+        }
+        return CoherencePlacement.displayMatching(screenFrame: screenFrame)
+            .map { CoherenceDisplayScale(pixelsPerPoint: 1, display: $0) }
+    }
+
+    /// Whole pixels per point for a backing scale: 2 on every Retina Mac, 1 otherwise.
+    public static func retinaPixelsPerPoint(backingScale: Double?) -> Int {
+        guard let backingScale, backingScale.isFinite else {
+            return 1
+        }
+        return min(max(Int(backingScale.rounded()), 1), 2)
+    }
+
+    /// Windows offers a scale step only while the display stays at least about 1024×768 logical pixels, so
+    /// the display grows before the scale rises and the scale drops before the display shrinks.
+    public static func resizesDisplayFirst(fromScalePercent current: Int?, toScalePercent target: Int?) -> Bool {
+        (target ?? 100) >= (current ?? 100)
     }
 }

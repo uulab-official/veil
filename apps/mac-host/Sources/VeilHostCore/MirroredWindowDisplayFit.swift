@@ -16,6 +16,7 @@ struct PendingMirrorResize: Equatable, Sendable {
     var height: Int
     var macScreenWidth: Int
     var macScreenHeight: Int
+    var pixelsPerPoint: Int = 1
 }
 
 /// Picks a Windows display size large enough for a mirrored window to take the size the Mac asked for.
@@ -38,10 +39,15 @@ public enum MirroredWindowDisplayFit {
         windowHeight: Int,
         currentDisplay: GuestDisplaySize?,
         macScreenWidth: Int,
-        macScreenHeight: Int
+        macScreenHeight: Int,
+        pixelsPerPoint: Int = 1
     ) -> GuestDisplaySize? {
-        let neededWidth = windowWidth
-        let neededHeight = windowHeight + taskbarAllowance
+        // Window sizes are logical and the Mac screen is in points; the display is in pixels.
+        let scale = max(pixelsPerPoint, 1)
+        let neededWidth = windowWidth * scale
+        let neededHeight = (windowHeight + taskbarAllowance) * scale
+        let macScreenWidth = macScreenWidth * scale
+        let macScreenHeight = macScreenHeight * scale
         if let currentDisplay,
            currentDisplay.width >= neededWidth,
            currentDisplay.height >= neededHeight {

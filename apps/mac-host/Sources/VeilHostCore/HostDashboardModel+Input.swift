@@ -74,13 +74,15 @@ extension HostDashboardModel {
         width: Int,
         height: Int,
         macScreenWidth: Int,
-        macScreenHeight: Int
+        macScreenHeight: Int,
+        pixelsPerPoint: Int = 1
     ) async -> WindowResizeResponse? {
         pendingMirrorResizes[windowId] = PendingMirrorResize(
             width: width,
             height: height,
             macScreenWidth: macScreenWidth,
-            macScreenHeight: macScreenHeight
+            macScreenHeight: macScreenHeight,
+            pixelsPerPoint: pixelsPerPoint
         )
         guard !mirrorResizesInFlight.contains(windowId) else {
             return nil
@@ -107,7 +109,8 @@ extension HostDashboardModel {
                 windowHeight: request.height,
                 currentDisplay: guestDisplaySize,
                 macScreenWidth: request.macScreenWidth,
-                macScreenHeight: request.macScreenHeight
+                macScreenHeight: request.macScreenHeight,
+                pixelsPerPoint: request.pixelsPerPoint
               ) else {
             return
         }
