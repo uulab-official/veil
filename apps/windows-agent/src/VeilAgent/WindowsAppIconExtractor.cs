@@ -29,9 +29,24 @@ public static class WindowsAppIconExtractor
         string? appUserModelId,
         IEnumerable<string> executableCandidates
     ) =>
-        Cache.GetOrAdd(cacheKey, _ => TryExtractIconPngBase64(appUserModelId, executableCandidates.ToArray()));
+        ExtractIconPngBase64(cacheKey, appUserModelId, executableCandidates, ShellItemIcon.DefaultSize);
 
-    private static string? TryExtractIconPngBase64(string? appUserModelId, string[] executableCandidates)
+    /// <param name="shellIconSize">
+    /// The shell icon's size in pixels. Start menu entries ask for less than the default so a list of many
+    /// apps stays a reasonable message size.
+    /// </param>
+    public static string? ExtractIconPngBase64(
+        string cacheKey,
+        string? appUserModelId,
+        IEnumerable<string> executableCandidates,
+        int shellIconSize
+    ) =>
+        Cache.GetOrAdd(
+            cacheKey,
+            _ => TryExtractIconPngBase64(appUserModelId, executableCandidates.ToArray(), shellIconSize)
+        );
+
+    private static string? TryExtractIconPngBase64(string? appUserModelId, string[] executableCandidates, int shellIconSize)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -39,7 +54,7 @@ public static class WindowsAppIconExtractor
         }
 
         if (appUserModelId is not null
-            && ShellItemIcon.TryGetPng(ShellItemIcon.AppsFolderPath(appUserModelId)) is { } packagedIcon)
+            && ShellItemIcon.TryGetPng(ShellItemIcon.AppsFolderPath(appUserModelId), shellIconSize) is { } packagedIcon)
         {
             return Convert.ToBase64String(packagedIcon);
         }
@@ -50,7 +65,7 @@ public static class WindowsAppIconExtractor
             .ToArray();
         foreach (var resolvedPath in resolvedPaths)
         {
-            if (ShellItemIcon.TryGetPng(resolvedPath) is { } shellIcon)
+            if (ShellItemIcon.TryGetPng(resolvedPath, shellIconSize) is { } shellIcon)
             {
                 return Convert.ToBase64String(shellIcon);
             }

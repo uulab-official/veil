@@ -12,7 +12,16 @@ public sealed record WindowsAppDescriptor(
     TimeSpan? WindowDiscoveryTimeoutOverride = null,
     // Packaged inbox apps launch through an execution alias stub whose own icon is a generic window; the
     // AppUserModelID lets the icon come from the package instead.
-    string? AppUserModelId = null
+    string? AppUserModelId = null,
+    // Start menu entries (see StartMenuCatalog). A shortcut carries its own command-line arguments and start
+    // folder, which launching only the target executable would lose.
+    string? ShortcutArguments = null,
+    string? WorkingDirectory = null,
+    // Set for a packaged Start menu app: it is activated by AppUserModelID instead of started from an
+    // executable, and its windows are matched by that id because they can belong to ApplicationFrameHost.exe.
+    string? LaunchAumid = null,
+    // The Start menu folder the entry sits in, relative to Programs, for grouping on the Mac.
+    string? Folder = null
 )
 {
     /// <summary>

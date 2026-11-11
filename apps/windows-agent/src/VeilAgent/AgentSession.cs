@@ -9,6 +9,19 @@ public sealed class AgentSession
     private static readonly TimeSpan InitialFrameCaptureTimeout = TimeSpan.FromSeconds(2);
     private const int MaxDroppedFileBytes = 50 * 1024 * 1024;
     private static readonly TimeSpan DroppedFileCleanupDelay = TimeSpan.FromMinutes(5);
+    /// <summary>
+    /// How long <c>app.list</c> waits for the first Start menu discovery. Listing the packages can take
+    /// several seconds, and the Mac shows its launcher list from this reply.
+    /// </summary>
+    internal static readonly TimeSpan AppListCatalogWait = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// How long <c>app.launch</c> waits for the first Start menu discovery. The host can ask for a Start menu
+    /// id it remembers from before the agent restarted, and the user is waiting for that app to open.
+    /// </summary>
+    internal static readonly TimeSpan AppLaunchCatalogWait = TimeSpan.FromSeconds(10);
+
+    // Listed first, before the Start menu entries, with the ids hosts and Mac launchers already use.
     private static readonly IReadOnlyList<WindowsAppDescriptor> AppCatalog = new[]
     {
         new WindowsAppDescriptor(
@@ -56,6 +69,7 @@ public sealed class AgentSession
     private readonly GuestAppearanceSync appearanceSync;
     private readonly Action<string> imeModeSink;
     private readonly HostFolderMount hostFolderMount;
+    private readonly IStartMenuCatalogSource startMenu;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> appLaunchGates = new();
@@ -73,7 +87,8 @@ public sealed class AgentSession
         GuestTimeSync? timeSync = null,
         GuestAppearanceSync? appearanceSync = null,
         Action<string>? imeModeSink = null,
-        HostFolderMount? hostFolderMount = null
+        HostFolderMount? hostFolderMount = null,
+        IStartMenuCatalogSource? startMenu = null
     )
     {
         this.desktop = desktop;
@@ -89,6 +104,7 @@ public sealed class AgentSession
         this.appearanceSync = appearanceSync ?? new GuestAppearanceSync();
         this.imeModeSink = imeModeSink ?? GuestImeMode.Set;
         this.hostFolderMount = hostFolderMount ?? new HostFolderMount();
+        this.startMenu = startMenu ?? new StartMenuCatalog();
     }
 
     /// <summary>
@@ -122,7 +138,7 @@ public sealed class AgentSession
             return type switch
             {
                 MessageTypes.AgentHealthRequest => AgentReplies.Direct(HealthResponse(requestId)),
-                MessageTypes.AppListRequest => AgentReplies.Direct(AppListResponse(requestId)),
+                MessageTypes.AppListRequest => AgentReplies.Direct(await AppListResponseAsync(requestId, cancellationToken)),
                 MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
                 MessageTypes.FileOpenRequest => await HandleFileOpenAsync(request, requestId, cancellationToken),
                 MessageTypes.SharedFileOpenRequest => await HandleSharedFileOpenAsync(request, requestId, cancellationToken),
@@ -166,7 +182,7 @@ public sealed class AgentSession
     )
     {
         var appId = request["appId"]?.GetValue<string>();
-        var app = AppCatalog.FirstOrDefault(candidate => candidate.Id == appId);
+        var app = await FindLaunchableAppAsync(appId, cancellationToken);
         if (app is null)
         {
             return AgentReplies.Direct(ErrorResponse(requestId, "app_not_found", $"No app exists for id {appId}"));
@@ -1364,25 +1380,78 @@ public sealed class AgentSession
         });
     }
 
-    private static JsonObject AppListResponse(string? requestId) => new()
+    private async Task<JsonObject> AppListResponseAsync(string? requestId, CancellationToken cancellationToken)
     {
-        ["type"] = MessageTypes.AppListResponse,
-        ["requestId"] = requestId,
-        ["apps"] = new JsonArray(AppCatalog.Select(AppObject).ToArray<JsonNode?>())
-    };
+        var startMenuApps = await StartMenuAppsAsync(AppListCatalogWait, cancellationToken);
+        return new JsonObject
+        {
+            ["type"] = MessageTypes.AppListResponse,
+            ["requestId"] = requestId,
+            ["apps"] = new JsonArray(
+                AppCatalog.Select(BuiltInAppObject)
+                    .Concat(startMenuApps.Select(StartMenuAppObject))
+                    .ToArray<JsonNode?>()
+            )
+        };
+    }
 
-    private static JsonObject AppObject(WindowsAppDescriptor app) => new()
+    /// <summary>
+    /// The Start menu apps that are not already a built-in app.
+    /// </summary>
+    private async Task<IReadOnlyList<WindowsAppDescriptor>> StartMenuAppsAsync(
+        TimeSpan maxWait,
+        CancellationToken cancellationToken
+    ) =>
+        StartMenuCatalog.WithoutBuiltIns(AppCatalog, await startMenu.GetAppsAsync(maxWait, cancellationToken));
+
+    /// <summary>
+    /// A built-in app or a Start menu app. File opens stay limited to the built-in apps, which are known to
+    /// take a file path as their only argument.
+    /// </summary>
+    private async Task<WindowsAppDescriptor?> FindLaunchableAppAsync(string? appId, CancellationToken cancellationToken)
+    {
+        if (AppCatalog.FirstOrDefault(candidate => candidate.Id == appId) is { } builtIn)
+        {
+            return builtIn;
+        }
+
+        if (appId is null || !appId.StartsWith(StartMenuCatalog.IdPrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return (await StartMenuAppsAsync(AppLaunchCatalogWait, cancellationToken))
+            .FirstOrDefault(candidate => candidate.Id == appId);
+    }
+
+    private static JsonObject BuiltInAppObject(WindowsAppDescriptor app) => AppObject(
+        app,
+        WindowsAppIconExtractor.ExtractIconPngBase64(
+            app.Id,
+            app.AppUserModelId,
+            new[] { app.Executable }.Concat(app.AlternateExecutables ?? [])
+        )
+    );
+
+    private static JsonObject StartMenuAppObject(WindowsAppDescriptor app)
+    {
+        var appObject = AppObject(app, StartMenuCatalog.IconPngBase64(app));
+        if (app.Folder is { Length: > 0 } folder)
+        {
+            appObject["folder"] = folder;
+        }
+
+        return appObject;
+    }
+
+    private static JsonObject AppObject(WindowsAppDescriptor app, string? iconPngBase64) => new()
     {
         ["id"] = app.Id,
         ["name"] = app.Name,
         ["exePath"] = app.Executable,
         ["publisher"] = app.Publisher,
         ["iconId"] = app.IconId,
-        ["iconPngBase64"] = WindowsAppIconExtractor.ExtractIconPngBase64(
-            app.Id,
-            app.AppUserModelId,
-            new[] { app.Executable }.Concat(app.AlternateExecutables ?? [])
-        )
+        ["iconPngBase64"] = iconPngBase64
     };
 
     private static JsonObject LaunchResponse(string? requestId, int processId) => new()

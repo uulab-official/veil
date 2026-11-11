@@ -57,14 +57,20 @@ public sealed class WindowsDesktop : IWindowsDesktop
     /// <summary>
     /// Starts an app in the user's profile folder. Inheriting the agent's folder pinned it as the
     /// app's current directory, so an open Paint blocked tools updates from replacing that folder.
+    /// A Start menu shortcut's own start folder and arguments win, since the app may depend on them.
     /// </summary>
     internal static ProcessStartInfo AppStartInfo(WindowsAppDescriptor app, string? arguments) => new()
     {
         FileName = app.Executable,
-        Arguments = arguments ?? string.Empty,
+        Arguments = CombineArguments(app.ShortcutArguments, arguments),
         UseShellExecute = true,
-        WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+        WorkingDirectory = app.WorkingDirectory is { Length: > 0 } workingDirectory && Directory.Exists(workingDirectory)
+            ? workingDirectory
+            : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
     };
+
+    internal static string CombineArguments(string? shortcutArguments, string? arguments) =>
+        string.Join(" ", new[] { shortcutArguments, arguments }.Where(part => !string.IsNullOrWhiteSpace(part)));
 
     private async Task<LaunchedWindow> LaunchAppCoreAsync(WindowsAppDescriptor app, string? arguments, CancellationToken cancellationToken)
     {
@@ -74,21 +80,30 @@ public sealed class WindowsDesktop : IWindowsDesktop
         }
 
         var existingWindowHandles = SnapshotAppWindowHandles(app);
-        using var process = Process.Start(AppStartInfo(app, arguments))
-            ?? throw new InvalidOperationException($"Could not start {app.Executable}.");
+        // A packaged app has no executable to start. Activation returns the app's process id, but its window
+        // can belong to ApplicationFrameHost.exe, so it is found by AppUserModelID below rather than through
+        // the process's main window.
+        using var process = app.LaunchAumid is { } aumid
+            ? TryGetProcess(PackagedAppActivation.Activate(aumid, string.IsNullOrWhiteSpace(arguments) ? null : arguments))
+            : Process.Start(AppStartInfo(app, arguments))
+                ?? throw new InvalidOperationException($"Could not start {app.Executable}.");
+        var launchedProcessId = process?.Id ?? 0;
 
         var discoveryAttempts = (int)(app.WindowDiscoveryTimeout.TotalMilliseconds / 100);
         for (var attempt = 0; attempt < discoveryAttempts; attempt += 1)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            process.Refresh();
 
-            if (process.MainWindowHandle != IntPtr.Zero)
+            if (app.LaunchAumid is null && process is not null)
             {
-                return CreateLaunchedWindow(process.MainWindowHandle, process.Id, process.MainWindowTitle, app.Name);
+                process.Refresh();
+                if (process.MainWindowHandle != IntPtr.Zero)
+                {
+                    return CreateLaunchedWindow(process.MainWindowHandle, process.Id, process.MainWindowTitle, app.Name);
+                }
             }
 
-            if (TryFindTopLevelWindow(app, process.Id, existingWindowHandles, out var launched))
+            if (TryFindTopLevelWindow(app, launchedProcessId, existingWindowHandles, out var launched))
             {
                 return launched;
             }
@@ -96,7 +111,21 @@ public sealed class WindowsDesktop : IWindowsDesktop
             await Task.Delay(100, cancellationToken);
         }
 
-        throw new TimeoutException($"{app.Executable} started but no top-level window was discovered.");
+        throw new TimeoutException($"{app.Name} started but no top-level window was discovered.");
+    }
+
+    private static Process? TryGetProcess(int processId)
+    {
+        try
+        {
+            return processId == 0 ? null : Process.GetProcessById(processId);
+        }
+        catch (ArgumentException)
+        {
+            // The activated process already exited, for example a single-instance app handing off to the
+            // instance that is running. Its window is still found by AppUserModelID.
+            return null;
+        }
     }
 
     public IReadOnlyList<LaunchedWindow> DiscoverAdditionalWindows(WindowsAppDescriptor app, IReadOnlySet<string> knownWindowIds)
@@ -120,7 +149,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             }
 
             _ = GetWindowThreadProcessId(hwnd, out var windowProcessId);
-            if (!DoesProcessMatchApp(windowProcessId, app))
+            if (!DoesWindowMatchApp(hwnd, windowProcessId, app))
             {
                 return true;
             }
@@ -164,7 +193,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             }
 
             _ = GetWindowThreadProcessId(hwnd, out var windowProcessId);
-            if (DoesProcessMatchApp(windowProcessId, app))
+            if (DoesWindowMatchApp(hwnd, windowProcessId, app))
             {
                 handles.Add(hwnd);
             }
@@ -193,7 +222,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             _ = GetWindowThreadProcessId(hwnd, out var windowProcessId);
             var title = GetWindowTitle(hwnd);
             var matchesProcess = windowProcessId == launchedProcessId;
-            var matchesExecutable = DoesProcessMatchApp(windowProcessId, app);
+            var matchesExecutable = DoesWindowMatchApp(hwnd, windowProcessId, app);
             var matchesTitle = !string.IsNullOrWhiteSpace(title)
                 && title.Contains(app.Name, StringComparison.OrdinalIgnoreCase);
 
@@ -234,14 +263,29 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return true;
     }
 
+    /// <summary>
+    /// A packaged Start menu app is also matched by AppUserModelID, which finds its window whichever process
+    /// owns it. Built-in apps keep matching by process name only.
+    /// </summary>
+    private static bool DoesWindowMatchApp(IntPtr hwnd, uint processId, WindowsAppDescriptor app) =>
+        DoesProcessMatchApp(processId, app)
+        || (app.LaunchAumid is { } aumid && PackagedAppActivation.WindowBelongsTo(hwnd, processId, aumid));
+
+    internal static IEnumerable<string> CandidateProcessNames(WindowsAppDescriptor app) =>
+        (app.AlternateExecutables ?? [])
+            .Append(app.Executable)
+            // A packaged app's exePath is a shell:AppsFolder path, not a program that could be running.
+            .Where(executable => !executable.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
+            .Select(Path.GetFileNameWithoutExtension)
+            .OfType<string>()
+            .Where(name => name.Length > 0);
+
     internal static bool DoesProcessMatchApp(uint processId, WindowsAppDescriptor app)
     {
         try
         {
             using var process = Process.GetProcessById((int)processId);
-            var candidateExecutables = (app.AlternateExecutables ?? [])
-                .Append(app.Executable)
-                .Select(Path.GetFileNameWithoutExtension);
+            var candidateExecutables = CandidateProcessNames(app);
             return candidateExecutables.Any(
                 candidate => string.Equals(process.ProcessName, candidate, StringComparison.OrdinalIgnoreCase)
             );

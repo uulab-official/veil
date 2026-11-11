@@ -18,7 +18,10 @@ var clipboardStreamer = new ClipboardTextStreamer(
     fileExport: new ClipboardFileExport(SharedFolderProbe.DefaultGuestDirectoryPath)
 );
 var packageIdentityProbe = new WindowsPackageIdentityProbe();
-var session = new AgentSession(desktop, capture, packageIdentityProbe);
+// Discovery takes seconds; starting it now means the host's first app.list usually finds the Start menu ready.
+var startMenu = new StartMenuCatalog();
+_ = startMenu.StartRefresh();
+var session = new AgentSession(desktop, capture, packageIdentityProbe, startMenu: startMenu);
 session.WindowActivity = streamer.Wake;
 var windowDiscoveryStreamer = new WindowDiscoveryStreamer(session, desktop);
 var notificationStreamer = new WindowsNotificationStreamer(WindowsNotificationListenerFactory.Create(packageIdentityProbe));
