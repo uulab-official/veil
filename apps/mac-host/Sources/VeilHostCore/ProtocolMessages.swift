@@ -376,13 +376,10 @@ public enum GuestImeMode: String, Codable, Equatable, Sendable {
     case native
     case alphanumeric
 
-    /// The mode for where keys go. The apps view composes on the Mac and sends finished text, so Windows
-    /// must not compose again; the desktop view sends scancodes, so Windows composes as the Mac would.
-    public static func desired(isDesktopView: Bool, macInputSourceLanguages: [String], macInputSourceIsInputMode: Bool) -> GuestImeMode {
-        guard isDesktopView else {
-            return .alphanumeric
-        }
-        return isComposingLanguage(macInputSourceLanguages, isInputMode: macInputSourceIsInputMode) ? .native : .alphanumeric
+    /// Windows composes from the keys in both views, as UTM and Parallels do, so its IME is on exactly when
+    /// the macOS input source is a composing one.
+    public static func desired(macInputSourceLanguages: [String], macInputSourceIsInputMode: Bool) -> GuestImeMode {
+        isComposingLanguage(macInputSourceLanguages, isInputMode: macInputSourceIsInputMode) ? .native : .alphanumeric
     }
 
     /// A Korean, Japanese, or Chinese input method, as opposed to a plain keyboard layout such as ABC.

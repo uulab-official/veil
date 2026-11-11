@@ -71,18 +71,10 @@ struct GuestTextCompositionTests {
 }
 
 struct GuestImeModeTests {
-    @Test("the apps view keeps the Windows IME off, whatever the Mac input source")
-    func appsViewIsAlphanumeric() {
-        #expect(GuestImeMode.desired(isDesktopView: false, macInputSourceLanguages: ["ko"], macInputSourceIsInputMode: true) == .alphanumeric)
-    }
-
-    @Test("the desktop view follows the Mac: Korean on, ABC off")
-    func desktopViewFollowsMac() {
-        #expect(GuestImeMode.desired(isDesktopView: true, macInputSourceLanguages: ["ko"], macInputSourceIsInputMode: true) == .native)
-        #expect(GuestImeMode.desired(isDesktopView: true, macInputSourceLanguages: ["ja", "en"], macInputSourceIsInputMode: true) == .native)
-        #expect(GuestImeMode.desired(isDesktopView: true, macInputSourceLanguages: ["en"], macInputSourceIsInputMode: false) == .alphanumeric)
-        // A plain keyboard layout that lists Korean is still not an input method.
-        #expect(GuestImeMode.desired(isDesktopView: true, macInputSourceLanguages: ["ko"], macInputSourceIsInputMode: false) == .alphanumeric)
+    @Test("a plain keyboard layout that lists Korean is still not an input method")
+    func layoutIsNotInputMethod() {
+        #expect(GuestImeMode.desired(macInputSourceLanguages: ["ko"], macInputSourceIsInputMode: false) == .alphanumeric)
+        #expect(GuestImeMode.desired(macInputSourceLanguages: ["ja", "en"], macInputSourceIsInputMode: true) == .native)
     }
 
     @Test("input.ime.set encodes the documented shape")

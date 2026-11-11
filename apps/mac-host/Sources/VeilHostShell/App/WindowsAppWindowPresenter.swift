@@ -34,6 +34,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     var onTextInput: ((String, String, Int) -> Void)?
     /// Whether the agent can show an open IME composition (`capabilities.textComposition`).
     var textCompositionSupported: (() -> Bool)?
+    /// Whether keys go to Windows by position for the Windows IME to compose (`capabilities.imeMode`).
+    var keysPassThrough: (() -> Bool)?
     var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
     /// `(appId, windowId, fileName, contentBase64)`. Carries the window id so a failure that only Windows
     /// can report can still be shown on the window the file was dropped onto.
@@ -911,6 +913,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             textCompositionSupported: { [weak self] in
                 self?.textCompositionSupported?() ?? false
             },
+            keysPassThrough: { [weak self] in
+                self?.keysPassThrough?() ?? false
+            },
             onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, content in
                 self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, content)
             },
@@ -1029,6 +1034,7 @@ private struct WindowsAppMirrorView: View {
     var onKeyInput: (String, String, String, Int, [String]) -> Void
     var onTextInput: (String, String, Int) -> Void
     var textCompositionSupported: () -> Bool
+    var keysPassThrough: () -> Bool
     var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
     /// Called synchronously on the main actor with the accepted providers. Loading them is the presenter's job.
     var onDropProviders: ([NSItemProvider]) -> Void
@@ -1054,6 +1060,7 @@ private struct WindowsAppMirrorView: View {
                 onKeyInput: onKeyInput,
                 onTextInput: onTextInput,
                 textCompositionSupported: textCompositionSupported,
+                keysPassThrough: keysPassThrough,
                 onPasteShortcut: onPasteShortcut
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1104,6 +1111,7 @@ private struct InputCaptureView: NSViewRepresentable {
     var onKeyInput: (String, String, String, Int, [String]) -> Void
     var onTextInput: (String, String, Int) -> Void
     var textCompositionSupported: () -> Bool
+    var keysPassThrough: () -> Bool
     var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
 
     func makeNSView(context: Context) -> InputCaptureNSView {
@@ -1117,6 +1125,7 @@ private struct InputCaptureView: NSViewRepresentable {
         nsView.onKeyInput = onKeyInput
         nsView.onTextInput = onTextInput
         nsView.textCompositionSupported = textCompositionSupported
+        nsView.keysPassThrough = keysPassThrough
         nsView.onPasteShortcut = onPasteShortcut
     }
 }
@@ -1128,6 +1137,7 @@ private final class InputCaptureNSView: NSView {
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
     var onTextInput: ((String, String, Int) -> Void)?
     var textCompositionSupported: (() -> Bool)?
+    var keysPassThrough: (() -> Bool)?
     var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
     private let keyboardMapper = MacKeyboardInputMapper()
     private let textInputRouter = MacTextInputRouter()
@@ -1396,6 +1406,14 @@ private final class InputCaptureNSView: NSView {
     override func keyDown(with event: NSEvent) {
         didCommitTextForCurrentKeyPress = false
 
+        // Like UTM and Parallels: the key goes to Windows by position and the Windows IME composes, which it
+        // shows inline in the app itself. Its Korean/English state follows the macOS input source
+        // (`input.ime.set`). Composing on the Mac and correcting the guest's text afterwards swapped and
+        // duplicated syllables.
+        if keysPassThrough?() == true, sendPhysicalKey("keyDown", event) {
+            return
+        }
+
         // Text-producing keys go to the macOS input context first so an IME can compose them. The
         // context calls back into setMarkedText/insertText below. Keys whose guest meaning is the key
         // itself (Enter, Tab, arrows, shortcuts) skip it and keep the proven virtual-key path.
@@ -1413,6 +1431,9 @@ private final class InputCaptureNSView: NSView {
     }
 
     override func keyUp(with event: NSEvent) {
+        if keysPassThrough?() == true, !hasMarkedText(), sendPhysicalKey("keyUp", event) {
+            return
+        }
         // A key that produced committed text, or one still feeding an open composition, has already
         // been accounted for. Sending a key-up here would post an unmatched WM_KEYUP to the guest.
         if didCommitTextForCurrentKeyPress || hasMarkedText() {
@@ -1520,6 +1541,30 @@ private final class InputCaptureNSView: NSView {
         case .unsupported:
             return false
         }
+    }
+
+    /// Sends a key by its position, or returns false for a key with no Windows equivalent (Caps Lock, which
+    /// switches the Mac input source, and the modifiers, which travel with each key).
+    private func sendPhysicalKey(_ inputEvent: String, _ event: NSEvent) -> Bool {
+        guard let session,
+              session.connectionMode == .agent,
+              let virtualKey = MacPhysicalKeyMap.windowsVirtualKey(forMacKeyCode: event.keyCode),
+              let name = MacPhysicalKeyMap.keyName(forMacKeyCode: event.keyCode) else {
+            return false
+        }
+        let modifiers = macKeyboardModifiers(from: event)
+        var windowsModifiers: [String] = []
+        if modifiers.contains(.command) || modifiers.contains(.control) {
+            windowsModifiers.append("ctrl")
+        }
+        if modifiers.contains(.shift) {
+            windowsModifiers.append("shift")
+        }
+        if modifiers.contains(.option) {
+            windowsModifiers.append("alt")
+        }
+        onKeyInput?(session.id, inputEvent, name, virtualKey, windowsModifiers)
+        return true
     }
 
     private func sendCommittedText(_ text: String) {

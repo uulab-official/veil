@@ -39,14 +39,12 @@ enum MacInputSource {
 }
 
 extension VeilHostShellApp {
-    /// Keeps the Windows IME where the keys need it: off in the apps view, where macOS composes, and on or
-    /// off with the Mac's input source in the desktop view, where Windows composes.
+    /// Keeps the Windows IME on or off with the Mac's input source: Windows composes from the keys in both views.
     @MainActor
     func syncGuestImeMode() async {
         let source = MacInputSource.current()
         await model.syncGuestImeMode(
             GuestImeMode.desired(
-                isDesktopView: shellNavigation.viewMode == .desktop,
                 macInputSourceLanguages: source.languages,
                 macInputSourceIsInputMode: source.isInputMode
             )

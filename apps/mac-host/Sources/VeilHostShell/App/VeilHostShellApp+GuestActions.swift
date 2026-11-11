@@ -179,6 +179,9 @@ extension VeilHostShellApp {
         windowsAppWindowPresenter.textCompositionSupported = {
             model.supportsTextComposition
         }
+        windowsAppWindowPresenter.keysPassThrough = {
+            model.hasLiveAgentConnection && model.health?.capabilities.imeMode == true
+        }
         windowsAppWindowPresenter.onPasteShortcut = { windowId, key, windowsVirtualKey, modifiers, content in
             OrderedGuestInput.shared.enqueue {
                 // Ctrl+V does not fail when the clipboard write did. It pastes whatever Windows had before,
