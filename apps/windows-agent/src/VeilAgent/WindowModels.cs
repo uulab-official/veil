@@ -87,7 +87,7 @@ public sealed record WindowKeyInput(
 /// the IME and sends only finished text, so this record never carries in-progress composition.
 /// </remarks>
 /// <param name="ReplaceLength">
-/// UTF-16 code units to delete with Backspace before typing <paramref name="Text"/>: the part of an open
+/// Characters to delete, one Backspace each, before typing <paramref name="Text"/>: the part of an open
 /// host IME composition that changed (<c>input.text</c> with <c>replaceLength</c>).
 /// </param>
 public sealed record WindowTextInput(
