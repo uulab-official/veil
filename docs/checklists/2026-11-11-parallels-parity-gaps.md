@@ -19,7 +19,7 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
 | 9 | Suspend, idle pause, snapshots, shutdown | Implemented | Live: Stop now finishes when Windows shuts down without powering off (`1c3713b3`). Snapshots need qcow2. |
 | 10 | Notifications | Implemented (unit) | Delivery on the live guest is unchecked. |
 | 11 | Network | Partial | NAT and port forwarding work. Bridged networking needs Apple's vmnet entitlement. |
-| 12 | Time, battery, dark mode sync | Missing | Only `-rtc base=localtime` exists. |
+| 12 | Time, battery, dark mode sync | Implemented (unit) | Time: `time.sync.request` on agent connect, Mac wake, and session resume; correcting the clock needs the elevated-install `VeilTimeSync` task. Dark mode: `appearance.set.request`, on by default. Battery: not feasible, because QEMU `virt` has no ACPI battery (`docs/research/guest-host-state-sync.md`). Not yet checked on the live guest. |
 | 13 | DirectX acceleration | Missing | Software rendering, measured at 27–46 fps. The Triton experiment is in a separate session. |
 | 14 | Dynamic memory | Blocked (live) | The host side is done, but virtio-win 0.1.302's ARM64 Balloon driver gives wrong buffer addresses. Reported as virtio-win/kvm-guest-drivers-windows#1719. |
 
