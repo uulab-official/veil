@@ -1484,19 +1484,23 @@ On a Mac, Korean and English switch with the macOS input source (Caps Lock, Cont
 its own Korean IME with its own Hangul/English state, and the two disagreed: the Mac showed English while
 Windows turned the same keys into jamo.
 
-- `mode` is `native` (Windows IME on, for example Hangul) or `alphanumeric` (IME off).
-- The agent applies it to the foreground window through that window's default IME window
-  (`WM_IME_CONTROL` with `IMC_SETOPENSTATUS` and `IMC_SETCONVERSIONMODE`), and again whenever another
-  window comes to the foreground, so the mode holds as the user moves between apps.
-- **Both views:** with an agent that reports `imeMode`, keys reach Windows by position (`input.key` with the
-  virtual key for the Mac key code, ANSI layout) and the Windows IME composes, as UTM and Parallels do. The
-  composition shows inline in the app because the host crops the guest display. The host sends `native`
-  when the macOS input source is Korean, Japanese, or Chinese and `alphanumeric` otherwise, on every input
-  source change, view change, and agent reconnect. Caps Lock and the modifier keys are not sent: on a Mac
-  they switch the input source, and modifiers travel with each key.
+- `mode` is `native` (Windows IME on, for example Hangul), `alphanumeric` (IME off), or `unmanaged` (stop
+  setting it).
+- The agent applies `native` and `alphanumeric` to the foreground window through that window's default IME
+  window (`WM_IME_CONTROL` with `IMC_SETOPENSTATUS` and `IMC_SETCONVERSIONMODE`), and again whenever another
+  window comes to the foreground, until `unmanaged`.
+- That reliably switches Win32 windows, but TSF apps such as the Windows 11 Notepad keep their own state and
+  only appear to follow it; reading their state back from another process was not reliable either (measured
+  on 2026-11-11). So the host uses `input.ime.set` only while Veil itself types into Windows (the Run dialog
+  of the tools update), with `alphanumeric`, and sends `unmanaged` afterwards.
+- **Korean/English with the Mac:** keys reach Windows by position (`input.key` with the virtual key for the
+  Mac key code, ANSI layout) and the Windows IME composes, as in UTM and Parallels; the composition shows
+  inline because the host crops the guest display. When the user switches the macOS input source while a
+  mirrored window is key, the host also presses the Windows Hangul key (`VK_HANGUL`) in that window, so both
+  switch together. The right Command key alone presses the Hangul key in Windows only, to realign them,
+  like the right Alt key on a Korean Windows keyboard. Caps Lock and the other modifiers are not sent.
 - Composing on the Mac and correcting the guest's text with `input.text` `replaceLength` (§ Input Text)
-  swapped and duplicated syllables when the guest's caret and the host's record of the composition drifted
-  apart. It remains only for an agent without `imeMode`.
+  swapped and duplicated syllables. It remains only for an agent without `imeMode`.
 - The reply is `operation.ack`. An unknown `mode` is rejected with `invalid_message`. For diagnostics the ack
   also carries `ime`: `openBefore`, `openAfter`, and `conversionAfter` as read back from the foreground
   window's IME (null when it does not answer), and that window's `windowClass`. Apps built on TSF, such as

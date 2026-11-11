@@ -1111,7 +1111,7 @@ export function validateInputKey(input) {
 // corrected in place: `replaceLength` code units are deleted with Backspace before `text` is typed.
 // Keeps the Windows IME in step with the macOS input source: off in the apps view, where macOS composes, and
 // following the Mac's Korean/English state in the desktop view, where Windows composes.
-export const InputImeModes = Object.freeze(["native", "alphanumeric"]);
+export const InputImeModes = Object.freeze(["native", "alphanumeric", "unmanaged"]);
 
 export function validateInputImeSet(input) {
   if (!input || input.type !== MessageType.InputImeSet) {
