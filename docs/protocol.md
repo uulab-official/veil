@@ -1437,9 +1437,10 @@ it: the last Hangul syllable appeared only after Space. So an agent that reports
 }
 ```
 
-- `replaceLength` (optional, default 0) is how many UTF-16 code units to delete before typing `text`.
-  The guest presses Backspace that many times and then types `text`, in one `SendInput` call, so nothing
-  can land between the two.
+- `replaceLength` (optional, default 0) is how many characters to delete before typing `text`. The guest
+  presses Backspace that many times and then types `text`, in one `SendInput` call, so nothing can land
+  between the two. It counts Backspace presses, not UTF-16 code units, because one Backspace deletes a
+  whole character, surrogate pair included.
 - The host keeps what it last typed for the open composition. Each change to the composition sends only
   the difference: Backspace over the part that changed, then the new part. When the IME commits, the
   committed text replaces the composition the same way, and the host forgets it.
