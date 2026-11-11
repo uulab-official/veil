@@ -88,4 +88,5 @@ Two more defects of 0.1.302 are fixed upstream but not yet in a signed release:
   buffer. This is `d92b9c07`, 2026-10-09.
 
 0.1.302 is still the newest release on fedorapeople.org. QEMU cannot work around the address offset
-safely, so ballooning Windows waits for a fixed driver.
+safely, so ballooning Windows waits for a fixed driver. Reported as
+virtio-win/kvm-guest-drivers-windows#1719.
