@@ -95,6 +95,16 @@ public interface IWindowsDesktop
         throw new NotSupportedException("This desktop implementation cannot write clipboard files.");
 
     /// <summary>
+    /// Whether the clipboard currently offers <c>CF_HDROP</c>. Checked without opening the clipboard, so the
+    /// watcher can prefer files over the text some apps also write for a file copy.
+    /// </summary>
+    bool IsClipboardFileDropAvailable() => false;
+
+    /// <summary>The full paths in the clipboard's <c>CF_HDROP</c>, or null when there is none.</summary>
+    Task<IReadOnlyList<string>?> GetClipboardFileDropAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<string>?>(null);
+
+    /// <summary>
     /// True for an existing regular file that is not a reparse point. A junction or symlink inside the
     /// share could otherwise point a host-named path at any file in the guest.
     /// </summary>
