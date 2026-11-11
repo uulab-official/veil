@@ -172,6 +172,26 @@ struct ProtocolMessageTests {
         #expect(input.modifiers == [])
     }
 
+    @Test("decodes a trackpad pinch as a Ctrl+wheel scroll")
+    func decodesPinchZoomMouseInput() throws {
+        let input: InputMouseEvent = try decodeFixture("input.mouse.pinch-zoom")
+
+        #expect(input.event == "scroll")
+        #expect(input.modifiers == ["ctrl"])
+        #expect(input.deltaX == nil)
+        #expect(input.deltaY == 40)
+    }
+
+    @Test("decodes a page swipe as the browser Back key")
+    func decodesBrowserBackKeyInput() throws {
+        let input: InputKeyEvent = try decodeFixture("input.key.browser-back")
+
+        #expect(input.event == "keyDown")
+        #expect(input.key == "browserBack")
+        #expect(input.windowsVirtualKey == WindowsTrackpadGesture.NavigationKey.back.windowsVirtualKey)
+        #expect(input.modifiers == [])
+    }
+
     @Test("decodes key input event")
     func decodesKeyInputEvent() throws {
         let input: InputKeyEvent = try decodeFixture("input.key.copy")

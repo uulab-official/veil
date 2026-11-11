@@ -1165,6 +1165,37 @@ A `scroll` event may carry `deltaX` and `deltaY`, wheel units with 120 per notch
 right and up as Windows counts them. Hosts send trackpad gestures as many small amounts, which Windows
 scrolls smoothly; an event with neither field is one notch up. Other events omit both.
 
+`modifiers` applies to `scroll` as well as to button-down events: the agent presses the listed keys
+before the wheel input and releases them after it. Hosts send a trackpad pinch as `scroll` with
+`["ctrl"]`, so Windows receives Ctrl+wheel, which Paint, Edge, Office, File Explorer and most other
+Windows apps treat as zoom. A pinch outward (magnifying) is a positive `deltaY`, as an upward wheel
+zooms in:
+
+```json
+{
+  "type": "input.mouse",
+  "windowId": "hwnd:0003029A",
+  "event": "scroll",
+  "x": 240,
+  "y": 130,
+  "modifiers": ["ctrl"],
+  "deltaY": 40
+}
+```
+
+Fixture: `harness/protocol-fixtures/input.mouse.pinch-zoom.json`.
+
+Why Ctrl+wheel and not an injected touch pinch: `CreateSyntheticPointerDevice` accepts only
+`PT_TOUCH` or `PT_PEN` (https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createsyntheticpointerdevice),
+so a precision-touchpad gesture cannot be injected; a two-contact touch pinch would reach apps as a
+touchscreen gesture, which desktop apps without touch support ignore. Ctrl+wheel
+arrives as `WM_MOUSEWHEEL` with `MK_CONTROL` set
+(https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-mousewheel), which is the zoom input
+every Windows app that zooms already handles. Agents that predate this ignore `modifiers` on
+`scroll` and simply scroll, so the change is backward compatible.
+
+Trackpad rotation has no input Windows apps share a meaning for, so hosts do not send it.
+
 Implementation note: `x` and `y` are pixels in the window's frame bitmap, measured from the top-left of the window's visible frame. The Windows agent brings the window to the foreground, moves it fully onto its monitor's work area when it fits, and delivers each event as real input with `SendInput` at the matching absolute screen position. Posting window messages to the HWND did not reach XAML and DirectComposition content such as Paint's canvas, and posted moves carried no button state, so drags could not work.
 
 Rules:
@@ -1190,6 +1221,28 @@ Event from host to guest:
 The host maps macOS command shortcuts to Windows control shortcuts for app windows.
 
 Implementation note: the first Windows agent implementation maps `input.key` to HWND `WM_KEYDOWN` and `WM_KEYUP` messages. Modifier entries such as `ctrl`, `shift`, and `alt` are posted around the key event.
+
+A Mac page swipe (a two- or three-finger horizontal swipe, as Safari uses for back and forward) is sent
+as a `keyDown` and `keyUp` pair of the Windows browser navigation keys, `VK_BROWSER_BACK` (166, `key`
+`browserBack`) for a swipe to the right and `VK_BROWSER_FORWARD` (167, `key` `browserForward`) for a
+swipe to the left (https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes).
+`DefWindowProc` turns these keys into `WM_APPCOMMAND` with `APPCOMMAND_BROWSER_BACKWARD` or
+`APPCOMMAND_BROWSER_FORWARD` (https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-appcommand),
+which Edge, File Explorer, Settings and other apps with history navigate by. The agent marks both as
+extended keys, as a keyboard's browser keys are.
+
+```json
+{
+  "type": "input.key",
+  "windowId": "hwnd:0003029A",
+  "event": "keyDown",
+  "key": "browserBack",
+  "windowsVirtualKey": 166,
+  "modifiers": []
+}
+```
+
+Fixture: `harness/protocol-fixtures/input.key.browser-back.json`.
 
 Rules:
 

@@ -14,7 +14,7 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
 | 4 | Shared folders | Partial | `C:\VeilShared` is available on the Mac over SMB. Mac folders inside Windows are not. |
 | 5 | Retina | Partial | The resolution follows the window. Windows' scale is never set to 200%, so text is soft on Retina. |
 | 6 | Keyboard and IME | Implemented (unit) | Korean input on the live guest is still unchecked. |
-| 7 | Trackpad | Partial | Smooth scrolling works. There are no pinch, swipe, or rotate gestures. |
+| 7 | Trackpad | Implemented (unit) | Smooth scrolling works. Pinch is sent as Ctrl+wheel zoom and the three-finger page swipe as Browser Back/Forward. A two-finger horizontal swipe stays a horizontal scroll, and rotation has no Windows mapping. Not yet checked on the live guest. |
 | 8 | Printers, camera, USB, audio | Partial | USB works. The printer bridge is research only. Camera is missing. |
 | 9 | Suspend, idle pause, snapshots, shutdown | Implemented | Live: Stop now finishes when Windows shuts down without powering off (`1c3713b3`). Snapshots need qcow2. |
 | 10 | Notifications | Implemented (unit) | Delivery on the live guest is unchecked. |

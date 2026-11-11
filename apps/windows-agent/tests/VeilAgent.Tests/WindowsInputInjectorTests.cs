@@ -98,6 +98,25 @@ public class WindowsInputInjectorTests
         Assert.False(WindowsInputInjector.IsExtendedKey(0x5A));
     }
 
+    [Fact]
+    public void MarksBrowserNavigationKeysAsExtended()
+    {
+        // A trackpad page swipe arrives as VK_BROWSER_BACK or VK_BROWSER_FORWARD, E0-prefixed on a keyboard.
+        Assert.True(WindowsInputInjector.IsExtendedKey(0xA6));
+        Assert.True(WindowsInputInjector.IsExtendedKey(0xA7));
+    }
+
+    [Fact]
+    public void HoldsModifiersAroundScrollsAndPressesOnly()
+    {
+        // A trackpad pinch is a Ctrl+wheel scroll, which Windows apps read as zoom.
+        Assert.Equal(new[] { 0x11 }, WindowsInputInjector.MouseModifierVirtualKeys("scroll", ["ctrl"]));
+        Assert.Equal(new[] { 0x10 }, WindowsInputInjector.MouseModifierVirtualKeys("leftDown", ["shift"]));
+        Assert.Empty(WindowsInputInjector.MouseModifierVirtualKeys("leftUp", ["ctrl"]));
+        Assert.Empty(WindowsInputInjector.MouseModifierVirtualKeys("move", ["ctrl"]));
+        Assert.Empty(WindowsInputInjector.MouseModifierVirtualKeys("scroll", []));
+    }
+
     [Theory]
     [InlineData(50, 40, 1182, 600, 50, 40)]
     [InlineData(400, 100, 1182, 600, 98, 100)]
