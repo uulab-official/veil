@@ -52,6 +52,8 @@ export const MAX_CLIPBOARD_IMAGE_PIXELS = 33_554_432;
 export const MAX_CLIPBOARD_FILE_COUNT = 64;
 export const MAX_CLIPBOARD_FILE_RELATIVE_PATH_LENGTH = 240;
 export const CLIPBOARD_FILES_DIRECTORY = "Veil Clipboard";
+export const CLIPBOARD_GUEST_FILES_DIRECTORY = "Veil Clipboard from Windows";
+const clipboardFilesBatchName = /^[0-9]{8}-[0-9]{6}-[0-9A-F]{6}$/;
 
 const knownTypes = new Set(Object.values(MessageType));
 const mouseEvents = new Set(["leftDown", "leftUp", "rightDown", "rightUp", "move", "scroll"]);
@@ -804,15 +806,17 @@ export function validateClipboardImageSet(clipboard) {
 
 const forbiddenWindowsFileNameCharacters = /[<>:"/|?*\u0000-\u001f]/;
 
-/// Host-to-guest file paste through the shared folder. See `docs/protocol.md` "Clipboard Files".
+/// File copy through the shared folder, in either direction. See `docs/protocol.md` "Clipboard Files".
+/// Host-origin paths live under `Veil Clipboard\`; guest-origin paths are exactly
+/// `Veil Clipboard from Windows\<batch>\<name>`, all in one batch.
 export function validateClipboardFilesSet(clipboard) {
   if (!clipboard || clipboard.type !== MessageType.ClipboardFilesSet) {
     throw new TypeError("Clipboard files must use type clipboard.files.set.");
   }
 
   requireNonEmptyString(clipboard.requestId, "requestId", "Clipboard files");
-  if (clipboard.origin !== "host") {
-    throw new TypeError("Clipboard files only travel from the host.");
+  if (!clipboardOrigins.has(clipboard.origin)) {
+    throw new TypeError("Clipboard files field 'origin' must be host or guest.");
   }
   requirePositiveInteger(clipboard.sequence, "sequence", "Clipboard files");
   requireNonEmptyString(clipboard.shareName, "shareName", "Clipboard files");
@@ -822,13 +826,23 @@ export function validateClipboardFilesSet(clipboard) {
     throw new TypeError(`Clipboard files field 'relativePaths' must hold 1 to ${MAX_CLIPBOARD_FILE_COUNT} entries.`);
   }
   for (const path of clipboard.relativePaths) {
-    requireClipboardFileRelativePath(path);
+    requireClipboardFileRelativePath(path, clipboard.origin);
+  }
+  if (clipboard.origin === "guest") {
+    const batches = new Set(clipboard.relativePaths.map((path) => path.split("\\")[1]));
+    const names = clipboard.relativePaths.map((path) => path.split("\\")[2].toLowerCase());
+    if (batches.size !== 1) {
+      throw new TypeError("Guest clipboard files must all be in one batch folder.");
+    }
+    if (new Set(names).size !== names.length) {
+      throw new TypeError("Guest clipboard files must have distinct names ignoring case.");
+    }
   }
 
   return clipboard;
 }
 
-function requireClipboardFileRelativePath(path) {
+function requireClipboardFileRelativePath(path, origin) {
   if (typeof path !== "string"
     || path.length === 0
     || path.length > MAX_CLIPBOARD_FILE_RELATIVE_PATH_LENGTH) {
@@ -836,7 +850,15 @@ function requireClipboardFileRelativePath(path) {
   }
 
   const components = path.split("\\");
-  if (components.length < 2 || components[0] !== CLIPBOARD_FILES_DIRECTORY) {
+  if (origin === "guest") {
+    if (components.length !== 3
+      || components[0] !== CLIPBOARD_GUEST_FILES_DIRECTORY
+      || !clipboardFilesBatchName.test(components[1])) {
+      throw new TypeError(
+        `Clipboard file path '${path}' must be '${CLIPBOARD_GUEST_FILES_DIRECTORY}\\<batch>\\<name>'.`
+      );
+    }
+  } else if (components.length < 2 || components[0] !== CLIPBOARD_FILES_DIRECTORY) {
     throw new TypeError(`Clipboard file path '${path}' must start with '${CLIPBOARD_FILES_DIRECTORY}\\'.`);
   }
   for (const component of components) {

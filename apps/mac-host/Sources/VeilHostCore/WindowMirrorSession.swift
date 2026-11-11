@@ -269,6 +269,17 @@ public enum HostClipboardSendOutcome: Equatable, Sendable {
     case failed(reason: String)
 }
 
+/// See ``HostDashboardModel/guestFilesPasteboardMarker``.
+public struct GuestFilesPasteboardMarker: Equatable, Sendable {
+    public var pasteboardChangeCount: Int
+    public var guestSequence: Int
+
+    public init(pasteboardChangeCount: Int, guestSequence: Int) {
+        self.pasteboardChangeCount = pasteboardChangeCount
+        self.guestSequence = guestSequence
+    }
+}
+
 public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledWindowCreated(windowId: String)
     case handledWindowUpdated(windowId: String)
@@ -277,6 +288,7 @@ public enum HostProtocolMessageResult: Equatable, Sendable {
     case handledWindowClosed(windowId: String)
     case handledClipboardText(sequence: Int)
     case handledClipboardImage(sequence: Int)
+    case handledClipboardFiles(sequence: Int)
     case handledWindowsNotification(notificationId: String)
     case handledWindowLayout(sequence: Int)
     case ignored

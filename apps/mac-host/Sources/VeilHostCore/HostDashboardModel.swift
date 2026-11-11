@@ -91,7 +91,14 @@ public final class HostDashboardModel {
     /// The latest verified guest image. Its hash is what lets a later ⌘V of the same picture be
     /// recognised as Windows' own content rather than a new copy.
     public internal(set) var latestGuestClipboardImage: ClipboardImagePayload?
+    /// The latest checked guest file copy, not yet copied to the Mac. The shell copies it out of the shared
+    /// folder only while Veil is active; see ``ClipboardGuestFiles``.
+    public internal(set) var latestGuestClipboardFiles: ClipboardGuestFilesPlan?
     public internal(set) var lastGuestClipboardSequence = 0
+    /// The pasteboard change count and guest sequence of the last guest files the shell wrote to the Mac
+    /// pasteboard. While both still match, Windows' clipboard already holds those files, so a ⌘V into Windows
+    /// pastes them without copying them back into the share.
+    public var guestFilesPasteboardMarker: GuestFilesPasteboardMarker?
     public internal(set) var latestWindowsNotifications: [WindowsNotificationReceivedEvent] = []
     public internal(set) var restorableAppIds: [String] = []
     public internal(set) var restorableAppWindowCounts: [String: Int] = [:]

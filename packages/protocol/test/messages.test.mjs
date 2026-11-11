@@ -89,6 +89,7 @@ test("parses every stable fixture", async () => {
     "clipboard.image.set.host.json",
     "clipboard.image.set.guest.json",
     "clipboard.files.set.host.json",
+    "clipboard.files.set.guest.json",
     "notification.listener.request.json",
     "notification.listener.response.json",
     "notification.received.json",
@@ -610,7 +611,40 @@ test("validates the clipboard files fixture and rejects paths that escape the ba
       relativePath
     );
   }
-  assert.throws(() => validateClipboardFilesSet({ ...clipboard, origin: "guest" }), /only travel from the host/);
+  assert.throws(() => validateClipboardFilesSet({ ...clipboard, origin: "guest" }), /Clipboard file path/);
+  assert.throws(() => validateClipboardFilesSet({ ...clipboard, origin: "other" }), /origin/);
+});
+
+test("validates guest clipboard files and pins them to one batch in the guest staging folder", async () => {
+  const clipboard = validateClipboardFilesSet(await readFixture("clipboard.files.set.guest.json"));
+  assert.equal(clipboard.origin, "guest");
+
+  const batch = "Veil Clipboard from Windows\\20261111-050102-4D5E6F";
+  for (const relativePath of [
+    "Veil Clipboard\\20261111-050102-4D5E6F\\a.txt",
+    "Veil Clipboard from Windows\\a.txt",
+    "Veil Clipboard from Windows\\not-a-batch\\a.txt",
+    `${batch}\\sub\\a.txt`,
+    `${batch}\\..`,
+    `${batch}\\a.txt:stream`
+  ]) {
+    assert.throws(
+      () => validateClipboardFilesSet({ ...clipboard, relativePaths: [relativePath] }),
+      /Clipboard file path/,
+      relativePath
+    );
+  }
+  assert.throws(
+    () => validateClipboardFilesSet({
+      ...clipboard,
+      relativePaths: [`${batch}\\a.txt`, "Veil Clipboard from Windows\\20261111-050103-4D5E6F\\b.txt"]
+    }),
+    /one batch/
+  );
+  assert.throws(
+    () => validateClipboardFilesSet({ ...clipboard, relativePaths: [`${batch}\\a.txt`, `${batch}\\A.TXT`] }),
+    /distinct names/
+  );
 });
 
 test("validates file open request and response fixtures", async () => {

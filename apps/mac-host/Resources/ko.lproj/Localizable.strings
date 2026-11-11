@@ -446,6 +446,7 @@
 /* Clipboard sharing */
 "Share Clipboard with Windows" = "Windows와 클립보드 공유";
 "Copy Files into Windows on Paste" = "붙여넣을 때 파일을 Windows로 복사";
+"Copy Files from Windows" = "Windows에서 파일 복사";
 "Veil could not paste into Windows" = "Veil이 Windows에 붙여넣지 못했습니다";
 "The clipboard could not be sent, so nothing was pasted rather than pasting older content." = "클립보드를 보내지 못해 이전 내용을 붙여넣는 대신 아무것도 붙여넣지 않았습니다.";
 

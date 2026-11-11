@@ -238,7 +238,7 @@ public static class ClipboardFilePaths
         return true;
     }
 
-    private static bool IsSafeComponent(string component)
+    internal static bool IsSafeComponent(string component)
     {
         if (component.Length == 0
             || component == "."

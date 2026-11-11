@@ -119,6 +119,32 @@ internal static class WindowsClipboardFormats
         }
     }
 
+    /// <summary>Checked without <c>OpenClipboard</c>, so polling it every tick contends with no one.</summary>
+    public static bool IsFileDropAvailable() => IsClipboardFormatAvailable(CF_HDROP);
+
+    /// <summary>
+    /// Reads <c>CF_HDROP</c> as a list of full paths. The block is copied out and the clipboard closed before
+    /// it is parsed, like the image reader.
+    /// </summary>
+    public static IReadOnlyList<string>? ReadFileDrop()
+    {
+        byte[]? drop = null;
+        OpenWithRetry();
+        try
+        {
+            if (IsClipboardFormatAvailable(CF_HDROP))
+            {
+                drop = ReadGlobal(GetClipboardData(CF_HDROP), ClipboardFileExport.MaxDropFilesBytes);
+            }
+        }
+        finally
+        {
+            CloseClipboard();
+        }
+
+        return drop is null ? null : ClipboardFileExport.ParseDropFiles(drop);
+    }
+
     /// <summary>DROPFILES: pFiles, POINT pt, BOOL fNC, BOOL fWide, then double-null-terminated UTF-16 paths.</summary>
     internal static byte[] BuildDropFiles(IReadOnlyList<string> fullPaths)
     {

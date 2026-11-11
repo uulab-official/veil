@@ -772,6 +772,21 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return Task.Run(() => WindowsClipboardFormats.WriteFileDrop(fullPaths), cancellationToken);
     }
 
+    public bool IsClipboardFileDropAvailable() =>
+        OperatingSystem.IsWindows() && WindowsClipboardFormats.IsFileDropAvailable();
+
+    public Task<IReadOnlyList<string>?> GetClipboardFileDropAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("The Veil Windows agent must run inside Windows.");
+        }
+
+        return Task.Run(WindowsClipboardFormats.ReadFileDrop, cancellationToken);
+    }
+
     private static bool TryParseWindowId(string windowId, out IntPtr hwnd)
     {
         hwnd = IntPtr.Zero;

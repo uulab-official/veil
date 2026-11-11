@@ -143,6 +143,8 @@ extension VeilHostShellApp {
                         syncGuestClipboardToPasteboard()
                     case .handledClipboardImage:
                         syncGuestClipboardImageToPasteboard()
+                    case .handledClipboardFiles:
+                        syncGuestClipboardFilesToPasteboard()
                     case .handledWindowsNotification(let notificationId):
                         presentWindowsNotification(notificationId: notificationId)
                     case .handledWindowLayout:

@@ -1,0 +1,10 @@
+{
+  "type": "clipboard.files.set",
+  "requestId": "evt_clipboard_12",
+  "origin": "guest",
+  "sequence": 12,
+  "shareName": "VeilShared",
+  "relativePaths": [
+    "Veil Clipboard from Windows\\20261111-050102-4D5E6F\\budget.xlsx"
+  ]
+}
