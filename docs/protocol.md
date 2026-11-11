@@ -260,6 +260,23 @@ Response:
       "publisher": "Microsoft",
       "iconId": "icon_paint",
       "iconPngBase64": null
+    },
+    {
+      "id": "start_3f1c0a9e5b7d2c48",
+      "name": "Remote Desktop Connection",
+      "exePath": "C:\\Windows\\System32\\mstsc.exe",
+      "publisher": "Microsoft Corporation",
+      "iconId": "icon_start_3f1c0a9e5b7d2c48",
+      "iconPngBase64": "iVBORw0KGgoAAAANSUhEUgAAAIAAAACA...(base64 PNG)",
+      "folder": "Accessories"
+    },
+    {
+      "id": "start_a42e7f0c19d3b665",
+      "name": "Terminal",
+      "exePath": "shell:AppsFolder\\Microsoft.WindowsTerminal_8wekyb3d8bbwe!App",
+      "publisher": "Microsoft Corporation",
+      "iconId": "icon_start_a42e7f0c19d3b665",
+      "iconPngBase64": "iVBORw0KGgoAAAANSUhEUgAAAIAAAACA...(base64 PNG)"
     }
   ]
 }
@@ -275,6 +292,36 @@ the guest, since they never change at runtime; expect this field on every
 `app.list.response`, not on a separate per-app request. Packaged apps whose
 primary executable is only a launcher stub (e.g. Calculator) resolve the icon
 from the app's alternate executable names before falling back to no icon.
+
+### Start menu apps
+
+The list holds every app in the Windows Start menu, not only the built-in
+apps. This lets the Mac offer a Windows Start menu of its own.
+
+- The three built-in apps come first, with their `winapp_` ids.
+- Start menu apps follow, sorted by name. Their ids start with `start_`.
+- Shortcut apps come from the `.lnk` files under the all-users and per-user
+  Start menu `Programs` folders. Only shortcuts to an existing `.exe` count.
+  Uninstallers, readmes, help files, and website links are left out. A
+  shortcut that repeats another's target and arguments is listed once.
+- Packaged (Store and inbox) apps come from the package manager. Their
+  `exePath` is `shell:AppsFolder\<AppUserModelID>`, since they have no
+  executable to start.
+- An app that is already a built-in app (same AppUserModelID or same
+  executable) is not listed again.
+- `folder` is the Start menu folder the shortcut sits in, relative to
+  `Programs`, with `/` between nested folders (for example `Accessories` or
+  `Windows Tools`). It is omitted for built-in apps, packaged apps, and
+  shortcuts directly in `Programs`. Hosts can use it to group apps.
+- A `start_` id is the first 16 hex digits of the SHA-256 of the lowercased
+  shortcut target and arguments, or of the AppUserModelID. It stays the same
+  across agent restarts, so a Mac launcher made for it keeps working.
+- Discovery takes seconds, so the guest runs it in the background and keeps the
+  result. It refreshes at most every 5 minutes. `app.list.response` waits at
+  most about 2 seconds for the first discovery. If that runs out, the reply has
+  only the built-in apps. Ask again later for the rest.
+- Start menu icons are 128 px, not 256 px. Many apps share one reply, and the
+  host refuses messages over 32 MiB.
 
 ## App Launch
 
@@ -316,6 +363,15 @@ Rules:
   so its later discovery stream cannot surface them as duplicate macOS mirrors.
 - `app.launch.response.processId` must match the subsequent `window.created.processId`.
 - `window.created.appId` identifies the launched app; the launch/window acceptance contract is not Notepad-specific.
+- A `start_` app launches like a built-in one and its windows are reported the
+  same way. A shortcut app starts its target with the shortcut's arguments and
+  start folder. A packaged app is activated by AppUserModelID. Its windows are
+  matched by that id, because a UWP app's window belongs to
+  `ApplicationFrameHost.exe`, not to the app's own process.
+- After an agent restart, a `start_` launch waits up to 10 seconds for the
+  first discovery before answering `app_not_found`.
+- `file.open.request` and `file.open.shared.request` accept only the built-in
+  apps. A Start menu app is not known to take a file path as its argument.
 
 ## File Open (Drag and Drop)
 
