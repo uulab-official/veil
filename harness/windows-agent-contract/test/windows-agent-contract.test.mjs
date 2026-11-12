@@ -786,3 +786,33 @@ test("PowerShell publish and install preserve the last usable bundle until promo
   assert.match(repair, /BundleLockStream\.Dispose/);
   assert.doesNotMatch(repair, /Get-ChildItem -Path \$InstallRootApp[\s\S]+Remove-Item/);
 });
+
+test("the start script supervises the agent and restarts it only when it dies by itself", async () => {
+  const start = await readFile(resolve(agentRoot, "scripts/Start-VeilAgent.ps1"), "utf8");
+  const supervisor = start.slice(start.indexOf("$SupervisorTemplate = @'"), start.indexOf("\n'@"));
+
+  // A hidden PowerShell, started from text, so it does not depend on the console that ran the script.
+  assert.match(start, /Start-Process[\s\S]+?-FilePath\s+"powershell\.exe"[\s\S]+?-WindowStyle\s+Hidden[\s\S]+?"-EncodedCommand"/);
+  // It waits for the agent it was started for and reads how that process ended.
+  assert.match(supervisor, /Get-Process\s+-Id\s+\$AgentProcessId/);
+  assert.match(supervisor, /\$null\s*=\s*\$Agent\.Handle/);
+  assert.match(supervisor, /\$Agent\.WaitForExit\(\)/);
+  // Stop-Process, which an update and a repair use, ends the agent with -1. That, a clean exit, and
+  // Windows closing it at sign-out are not crashes.
+  assert.match(supervisor, /\$ExitCode\s+-eq\s+0\s+-or\s+\$ExitCode\s+-eq\s+-1\s+-or\s+\$ExitCode\s+-eq\s+-1073741510/);
+  // A bounded number of restarts, so an agent that dies at once does not start forever.
+  assert.match(supervisor, /\$Recent\.Count\s+-ge\s+5/);
+  assert.match(supervisor, /TotalMinutes\s+-lt\s+10/);
+  // The restart goes through the start script again, which starts the next supervisor.
+  assert.match(supervisor, /&\s+\$StartScript\s+-InstallRoot\s+\$InstallRoot\s+-Port\s+\$Port/);
+  // It restarts from the installed copy, since the update disc is ejected.
+  assert.match(start, /Join-Path\s+\$InstallRoot\s+"scripts\\Start-VeilAgent\.ps1"/);
+  // A supervisor that cannot start must not stop the agent from starting.
+  assert.match(start, /try\s*\{\s*Start-VeilAgentSupervisor[\s\S]+?\}\s*catch\s*\{/);
+  // Every placeholder in the template is filled in.
+  const placeholders = [...supervisor.matchAll(/__[A-Z_]+__/g)].map((match) => match[0]);
+  assert.ok(placeholders.length > 0);
+  for (const placeholder of new Set(placeholders)) {
+    assert.ok(start.includes(`.Replace("${placeholder}"`), placeholder);
+  }
+});
