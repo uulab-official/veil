@@ -54,6 +54,16 @@ public sealed class AgentSession
             Publisher: "Microsoft",
             IconId: "icon_paint",
             AppUserModelId: "Microsoft.Paint_8wekyb3d8bbwe!App"
+        ),
+        // The Start menu's File Explorer shortcut names a shell folder, not a program, so the Start menu
+        // discovery cannot list it. explorer.exe opens a new window in the shell's own process.
+        new WindowsAppDescriptor(
+            Id: "winapp_explorer",
+            Name: "File Explorer",
+            Executable: "explorer.exe",
+            Publisher: "Microsoft",
+            IconId: "icon_explorer",
+            AppUserModelId: "Microsoft.Windows.Explorer"
         )
     };
 

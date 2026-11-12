@@ -248,16 +248,19 @@ public class DesktopWindowDiscoveryTests
     {
         var desktop = new DesktopWithWindows();
         desktop.AppWindows.Add(Found("hwnd:0000000A", "Notepad", @"C:\Apps\Notepad.exe", title: "notes.txt - Notepad"));
-        desktop.AppWindows.Add(Found("hwnd:0000000B", "explorer", @"C:\Windows\explorer.exe", title: "문서"));
+        desktop.AppWindows.Add(Found("hwnd:0000000B", "contoso", @"C:\Tools\contoso.exe", title: "Contoso"));
+        desktop.AppWindows.Add(Found("hwnd:0000000C", "explorer", @"C:\Windows\explorer.exe", title: "문서"));
         var session = new AgentSession(desktop, new NoFrames(), startMenu: new FixedStartMenu());
 
         var broadcasts = await RunDiscoveryAsync(session, desktop);
 
-        Assert.Equal(2, broadcasts.Count);
+        Assert.Equal(3, broadcasts.Count);
         Assert.All(broadcasts, message => Assert.Equal("window.created", message["type"]!.GetValue<string>()));
         Assert.Equal("winapp_notepad", broadcasts[0]["appId"]!.GetValue<string>());
         Assert.Equal("notes.txt - Notepad", broadcasts[0]["title"]!.GetValue<string>());
         Assert.StartsWith("proc_", broadcasts[1]["appId"]!.GetValue<string>());
+        // File Explorer is a built-in app, though its window belongs to the shell's process.
+        Assert.Equal("winapp_explorer", broadcasts[2]["appId"]!.GetValue<string>());
     }
 
     [Fact]
@@ -343,7 +346,7 @@ public class DesktopWindowDiscoveryTests
     public async Task ARunningAppIsListedAsRunningAndCanBeLaunchedById()
     {
         var desktop = new DesktopWithWindows();
-        desktop.AppWindows.Add(Found("hwnd:0000000B", "explorer", @"C:\Windows\explorer.exe", title: "문서"));
+        desktop.AppWindows.Add(Found("hwnd:0000000B", "contoso", @"C:\Tools\contoso.exe", title: "Contoso"));
         var session = new AgentSession(desktop, new NoFrames(), startMenu: new FixedStartMenu(PowerShell));
         var broadcasts = await RunDiscoveryAsync(session, desktop);
         var appId = broadcasts.Single()["appId"]!.GetValue<string>();
@@ -353,7 +356,7 @@ public class DesktopWindowDiscoveryTests
         var running = apps.Single(app => app!["id"]!.GetValue<string>() == appId)!;
 
         Assert.True(running["running"]!.GetValue<bool>());
-        Assert.Equal(@"C:\Windows\explorer.exe", running["exePath"]!.GetValue<string>());
+        Assert.Equal(@"C:\Tools\contoso.exe", running["exePath"]!.GetValue<string>());
         Assert.All(
             apps.Where(app => app!["id"]!.GetValue<string>() != appId),
             app => Assert.Null(app!["running"])

@@ -280,10 +280,10 @@ public class StartMenuCatalogTests
         var replies = await session.HandleAsync(new JsonObject { ["type"] = MessageTypes.AppListRequest, ["requestId"] = "req_apps" });
 
         var apps = replies.DirectReplies[0]["apps"]!.AsArray().Select(app => app!.AsObject()).ToArray();
-        Assert.Equal(["winapp_notepad", "winapp_calculator", "winapp_paint", ContosoApp().Id], apps.Select(app => app["id"]!.GetValue<string>()));
-        Assert.All(apps.Take(3), app => Assert.False(app.ContainsKey("folder")));
-        Assert.Equal("Contoso Tools", apps[3]["folder"]!.GetValue<string>());
-        Assert.Equal(@"C:\Program Files\Contoso\contoso.exe", apps[3]["exePath"]!.GetValue<string>());
+        Assert.Equal(["winapp_notepad", "winapp_calculator", "winapp_paint", "winapp_explorer", ContosoApp().Id], apps.Select(app => app["id"]!.GetValue<string>()));
+        Assert.All(apps.Take(4), app => Assert.False(app.ContainsKey("folder")));
+        Assert.Equal("Contoso Tools", apps[4]["folder"]!.GetValue<string>());
+        Assert.Equal(@"C:\Program Files\Contoso\contoso.exe", apps[4]["exePath"]!.GetValue<string>());
     }
 
     [Fact]
