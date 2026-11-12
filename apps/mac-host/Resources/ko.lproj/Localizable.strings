@@ -698,3 +698,4 @@
 "Stop Sharing the Mac Folder" = "Mac 폴더 공유 중단";
 "Share with Windows" = "Windows와 공유";
 "Windows shows this folder as drive M:. Only this folder is shared." = "Windows에서 이 폴더가 M: 드라이브로 보입니다. 이 폴더만 공유됩니다.";
+"Close your Windows apps first. Veil types a command into Windows for this, and an open app could receive it." = "먼저 Windows 앱을 닫아 주세요. 이 작업은 Veil이 Windows에 명령을 입력하는 방식이라, 열려 있는 앱에 입력될 수 있습니다.";

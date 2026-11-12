@@ -87,6 +87,10 @@ extension HostDashboardModel {
             return receiveWindowFrameUnchanged(event)
                 ? .handledWindowFrameUnchanged(windowId: event.windowId)
                 : .ignored
+        case .windowListResponse:
+            // The windows themselves follow as `window.created`.
+            guestAnnouncesDesktopWindows = true
+            return .ignored
         case .windowLayout:
             let event = try decoder.decode(WindowLayoutEvent.self, from: message)
             return GuestWindowLayoutStore.shared.apply(event)
@@ -109,6 +113,7 @@ extension HostDashboardModel {
         var consecutiveUndecodableMessages = 0
         // A new connection may be a new agent process; its layouts describe the guest from scratch.
         GuestWindowLayoutStore.shared.reset()
+        guestAnnouncesDesktopWindows = false
         do {
             for try await message in source.eventMessages() {
                 // Only ever transitions .reconnecting -> .connected here, never touching .loading/
@@ -182,6 +187,10 @@ extension HostDashboardModel {
             return true
         }
 
+        guard !defersNewGuestWindows else {
+            return false
+        }
+
         return shouldAdoptAdditionalWindow(event)
     }
 
@@ -195,10 +204,16 @@ extension HostDashboardModel {
     ///
     /// The guest enumerates every tracked process after a reconnect, so this distinction is what keeps
     /// discovery from materializing windows nobody asked for.
+    ///
+    /// An agent with `capabilities.desktopWindows` decides this itself: it reports only windows that have
+    /// a taskbar button in Windows, which are the windows a person sees there. Each one becomes a Mac
+    /// window, so an app opened from inside Windows is not left behind on a desktop the Mac never shows.
     func shouldAdoptAdditionalWindow(_ event: WindowCreatedEvent) -> Bool {
         Self.shouldAdoptAdditionalWindow(
             event,
-            openWindowCountForApp: openWindowCount(forAppId: event.appId)
+            openWindowCountForApp: openWindowCount(forAppId: event.appId),
+            guestReportsDesktopWindows: guestAnnouncesDesktopWindows
+                || (hasLiveAgentConnection && health?.capabilities.desktopWindows == true)
         )
     }
 
@@ -208,7 +223,8 @@ extension HostDashboardModel {
     /// reachable after opening eight windows — is testable without driving the guest protocol.
     static func shouldAdoptAdditionalWindow(
         _ event: WindowCreatedEvent,
-        openWindowCountForApp: Int
+        openWindowCountForApp: Int,
+        guestReportsDesktopWindows: Bool = false
     ) -> Bool {
         // A zero-sized or untitled top-level window is far more likely a tooltip, splash, or transient
         // shell window than a document.
@@ -219,8 +235,9 @@ extension HostDashboardModel {
         }
 
         // Zero means this app has no window here, so the window belongs to something the user never
-        // opened in this session.
-        guard openWindowCountForApp > 0 else {
+        // opened in this session. An agent that reports the whole desktop has already left out everything
+        // but app windows; a popup still needs its app's window to sit on.
+        guard openWindowCountForApp > 0 || (guestReportsDesktopWindows && !event.isPopup) else {
             return false
         }
 
@@ -348,7 +365,8 @@ extension HostDashboardModel {
     }
 
     func refreshRestoreIntentFromOpenWindows() async {
-        let windows = mergedOpenWindows()
+        // An app known only from its window cannot be reopened by id once the guest's agent restarts.
+        let windows = mergedOpenWindows().filter { !$0.appId.hasPrefix(WindowsApp.runningAppIdPrefix) }
         restorableAppIds = orderedUniqueAppIds(from: windows)
         // The real count per app. This previously wrote 1 for every app regardless of how many windows
         // it had open, which made a field documented as "how many windows were open" a constant.

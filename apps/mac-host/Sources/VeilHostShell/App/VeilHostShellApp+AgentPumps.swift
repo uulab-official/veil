@@ -111,10 +111,11 @@ extension VeilHostShellApp {
                             return
                         }
 
-                        // A newly created window is raised by the presenter regardless; passing true
-                        // here only matters when the window already existed, which for this event means
-                        // the guest re-announced a window the user already has open.
-                        if presentWindowsAppWindowForEvent(session, bringToFront: true) {
+                        // A newly created window is raised by the presenter regardless. A window that
+                        // already exists is one the guest announced again, which it does for every open
+                        // window each time this connection is made. Raising those would pull every Windows
+                        // window in front of the person's work on each reconnect.
+                        if presentWindowsAppWindowForEvent(session) {
                             syncLauncherWindowVisibility()
                         }
                     case .handledWindowUpdated(let windowId):

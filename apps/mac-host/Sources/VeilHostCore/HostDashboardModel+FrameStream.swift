@@ -499,6 +499,7 @@ extension HostDashboardModel {
     /// only means the guest layout lags, so it is logged rather than shown.
     public func moveMirrorSession(windowId: String, x: Int, y: Int) async {
         guard hasLiveAgentConnection,
+              !defersNewGuestWindows,
               health?.capabilities.windowLayout == true,
               mirrorSessions.contains(where: { $0.id == windowId }) else {
             return

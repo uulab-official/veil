@@ -29,9 +29,12 @@ enum AppRuntimeProviderSelection: String, Equatable {
 
 enum AppRuntimeBooterError: LocalizedError {
     case qemuGuestAutomationUnavailable
+    case windowsAppsAreOpen
 
     var errorDescription: String? {
         switch self {
+        case .windowsAppsAreOpen:
+            String(localized: "Close your Windows apps first. Veil types a command into Windows for this, and an open app could receive it.")
         case .qemuGuestAutomationUnavailable:
             "Automatic guest setup requires QEMU control. Continue in the Apple Virtualization Windows console or install QEMU and restart Veil."
         }
@@ -48,6 +51,17 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     /// Korean Mac input source, `D:\\U.cmd` was typed as Hangul and the tools update failed.
     /// Set once at launch, before any automation runs.
     nonisolated(unsafe) var prepareGuestForTyping: (@MainActor @Sendable () async -> Void)?
+    /// Whether Windows has app windows open. The typed commands click a fixed place on the Windows screen,
+    /// select everything with Ctrl+A, and type; they assume an empty desktop. With apps open, on the live
+    /// guest, the click changed Paint's tool and the Ctrl+A and typing replaced the text of an open Notepad
+    /// document. So no command is typed while this answers true.
+    nonisolated(unsafe) var windowsAppsAreOpen: (@MainActor @Sendable () -> Bool)?
+
+    private func refuseTypingOverOpenApps() async throws {
+        if await MainActor.run(body: { windowsAppsAreOpen?() ?? false }) {
+            throw AppRuntimeBooterError.windowsAppsAreOpen
+        }
+    }
 
     init(
         provider: AppRuntimeProviderSelection,
@@ -170,6 +184,7 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
         }
+        try await refuseTypingOverOpenApps()
         await prepareGuestForTyping?()
         return try await qemuBooter.installGuestAgentFromAttachedMedia()
     }
@@ -178,6 +193,7 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
         }
+        try await refuseTypingOverOpenApps()
         await prepareGuestForTyping?()
         return try await qemuBooter.updateGuestToolsFromRemovableMedia()
     }
@@ -186,6 +202,7 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
         }
+        try await refuseTypingOverOpenApps()
         await prepareGuestForTyping?()
         return try await qemuBooter.prepareSparsePackageFromAttachedMedia()
     }

@@ -207,6 +207,8 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
         }
     }
 
+    static let windowListRequestText = #"{"type":"window.list.request","requestId":"events"}"#
+
     public func eventMessages() -> AsyncThrowingStream<Data, any Error> {
         AsyncThrowingStream(
             Data.self,
@@ -215,6 +217,10 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
             let task = session.webSocketTask(with: url)
             task.maximumMessageSize = Self.maximumMessageByteCount
             task.resume()
+            // Asks for the windows already open in Windows. The answers arrive on this connection as
+            // `window.created` events, so they are handled like any window that opens later. An agent that
+            // does not know the request answers with an error the event handler ignores.
+            task.send(.string(Self.windowListRequestText)) { _ in }
 
             continuation.onTermination = { @Sendable _ in
                 task.cancel(with: .normalClosure, reason: nil)

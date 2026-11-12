@@ -11,6 +11,8 @@ public enum MessageType: String, Codable, Sendable {
     case sharedFileOpenRequest = "file.open.shared.request"
     case fileOpenResponse = "file.open.response"
     case windowCreated = "window.created"
+    case windowListRequest = "window.list.request"
+    case windowListResponse = "window.list.response"
     case windowUpdated = "window.updated"
     case windowClosed = "window.closed"
     case windowFrame = "window.frame"
@@ -155,6 +157,9 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     public var imeMode: Bool? = nil
     /// True when the agent maps a Mac folder served over WebDAV (`host.folder.mount.request`).
     public var hostFolder: Bool? = nil
+    /// True when the agent reports every app window on the Windows desktop, not only windows of apps Veil
+    /// launched, and answers `window.list.request`.
+    public var desktopWindows: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
@@ -548,6 +553,14 @@ public struct WindowsApp: Codable, Equatable, Identifiable, Sendable {
     public var iconPngBase64: String? = nil
     /// The Start menu folder the app is in, such as `Windows Tools`; nil at the top of the Start menu.
     public var folder: String? = nil
+    /// True for an app known only from an open window, such as File Explorer. It is not a Start menu entry.
+    public var running: Bool? = nil
+
+    /// Ids of apps known only from an open window start with this. The guest forgets them when its agent
+    /// restarts, so they are not saved for reopening.
+    public static let runningAppIdPrefix = "proc_"
+
+    public var isStartMenuEntry: Bool { running != true }
 
     public init(
         id: String,
@@ -556,9 +569,11 @@ public struct WindowsApp: Codable, Equatable, Identifiable, Sendable {
         publisher: String,
         iconId: String,
         iconPngBase64: String? = nil,
-        folder: String? = nil
+        folder: String? = nil,
+        running: Bool? = nil
     ) {
         self.folder = folder
+        self.running = running
         self.id = id
         self.name = name
         self.exePath = exePath
@@ -662,6 +677,9 @@ public struct WindowCreatedEvent: Codable, Equatable, Sendable {
     public var popup: Bool?
     /// The window that owns this one, when the guest reports it.
     public var ownerWindowId: String?
+    /// False for a window Windows does not let the user resize, such as Character Map or most dialogs.
+    /// Absent for resizable windows.
+    public var resizable: Bool?
 
     public init(
         type: MessageType = .windowCreated,
@@ -673,8 +691,10 @@ public struct WindowCreatedEvent: Codable, Equatable, Sendable {
         state: String,
         focused: Bool,
         popup: Bool? = nil,
-        ownerWindowId: String? = nil
+        ownerWindowId: String? = nil,
+        resizable: Bool? = nil
     ) {
+        self.resizable = resizable
         self.type = type
         self.windowId = windowId
         self.processId = processId
@@ -688,6 +708,8 @@ public struct WindowCreatedEvent: Codable, Equatable, Sendable {
     }
 
     public var isPopup: Bool { popup == true }
+
+    public var isResizable: Bool { resizable != false }
 
     public init(updated event: WindowUpdatedEvent) {
         self.init(

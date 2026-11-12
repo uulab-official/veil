@@ -17,7 +17,9 @@ public struct WindowsStartMenuLayout: Equatable, Sendable {
         }
         var grouped: [String: [WindowsApp]] = [:]
         var topLevel: [WindowsApp] = []
-        for app in apps {
+        // An app known only from an open window, such as a program started from its folder, is not in the
+        // Windows Start menu either.
+        for app in apps where app.isStartMenuEntry {
             // Only the first folder level becomes a submenu; deeper folders join their top folder.
             let folder = app.folder?
                 .split(whereSeparator: { $0 == "\\" || $0 == "/" })

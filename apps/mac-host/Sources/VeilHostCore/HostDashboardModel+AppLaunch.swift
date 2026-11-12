@@ -41,6 +41,15 @@ extension HostDashboardModel {
         }
     }
 
+    /// Reads the app list again without changing the connection phase. Windows reports some apps, such as
+    /// File Explorer, only once they have a window, which can be after the list was loaded.
+    public func refreshApps() async {
+        guard hasLiveAgentConnection, let overview = try? await service.loadOverview() else {
+            return
+        }
+        apps = overview.apps
+    }
+
     public func refreshLiveAgentIfNeeded() async -> NotepadLaunchResult? {
         if hasLiveAgentConnection,
            canFulfillPendingLaunch {

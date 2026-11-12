@@ -25,6 +25,18 @@ struct WindowsStartMenuLayoutTests {
         #expect(layout.folders[1].apps.map(\.name) == ["Character Map", "Task Manager"])
     }
 
+    @Test("an app known only from an open window is not a Start menu entry")
+    func leavesOutRunningApps() throws {
+        let json = #"{"id":"proc_0123456789abcdef","name":"Contoso","exePath":"C:\\Tools\\contoso.exe","publisher":"","iconId":"icon","running":true}"#
+        let running = try JSONDecoder().decode(WindowsApp.self, from: Data(json.utf8))
+
+        let layout = WindowsStartMenuLayout(apps: [app("Paint"), running])
+
+        #expect(!running.isStartMenuEntry)
+        #expect(running.id.hasPrefix(WindowsApp.runningAppIdPrefix))
+        #expect(layout.topLevel.map(\.name) == ["Paint"])
+    }
+
     @Test("an older agent's apps, with no folder field, decode at the top level")
     func decodesWithoutFolder() throws {
         let json = #"{"id":"winapp_notepad","name":"Notepad","exePath":"notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}"#

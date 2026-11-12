@@ -161,7 +161,7 @@ extension VeilHostShellApp {
         let appIdsByWindowId = Dictionary(
             uniqueKeysWithValues: model.mirrorSessions.map { ($0.id, $0.window.appId) }
         )
-        let result = await model.maintainStaleFrameStreams()
+        let result = await model.maintainStaleFrameStreams(reopensWindows: !automatic)
         guard result.didPerformMaintenance else {
             if !automatic {
                 displayMessage = "No paused app screens need restart."
@@ -396,7 +396,11 @@ extension VeilHostShellApp {
                session: session,
                compositedImage: model.compositedFrameImage(for: session.id)
            ) != .ready {
-            MainWindowChrome.showMainWindow()
+            // The main window shows a launch's progress. A window Windows opened by itself has no launch to
+            // show, and bringing Veil's main window forward for it would cover what the person is doing.
+            if oneClickAppWindowPresentationGate.keepsLauncherVisible {
+                MainWindowChrome.showMainWindow()
+            }
             return false
         }
         guard oneClickAppWindowPresentationGate.allowsEventDrivenPresentation(
@@ -408,9 +412,28 @@ extension VeilHostShellApp {
             return false
         }
 
-        windowsAppWindowPresenter.showWindow(for: session, bringToFront: bringToFront)
+        // A window that opens while the person works in another Mac app appears without taking the keyboard.
+        windowsAppWindowPresenter.showWindow(
+            for: session,
+            bringToFront: bringToFront,
+            activatesApplication: NSApp.isActive
+        )
         syncWindowsAppLauncher(for: session)
+        refreshAppListForUnknownApp(session.window.appId)
         return true
+    }
+
+    /// A window can belong to an app that is not in the list yet, such as File Explorer, which Windows only
+    /// reports once it has a window. Its name and icon come with the next app list.
+    private func refreshAppListForUnknownApp(_ appId: String) {
+        guard !model.apps.contains(where: { $0.id == appId }),
+              windowsAppWindowPresenter.appIdsAwaitingIdentity.insert(appId).inserted else {
+            return
+        }
+        Task { @MainActor in
+            await model.refreshApps()
+            windowsAppWindowPresenter.refreshIdentities()
+        }
     }
 
     private func setForegroundWindowsAppMessage(windowId: String) {

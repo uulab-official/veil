@@ -24,24 +24,12 @@ public enum WindowsAppWindowPlacement {
         let sourceHeight = max(Double(bounds.height), 1)
         let maximumWidth = max(320, visibleFrame.width * 0.92)
         let maximumHeight = max(240, visibleFrame.height * 0.88)
-        let isCompactUtilityWindow = sourceWidth <= 640
-            && sourceHeight >= 640
-            && sourceHeight >= sourceWidth * 1.1
-        // Preserve a readable native-like scale for normal Windows apps instead of enlarging a
-        // small guest HWND until its text looks like a full-screen VM console.
-        let preferredMinimumWidth = isCompactUtilityWindow ? 520.0 : 720.0
-        let preferredMinimumHeight = isCompactUtilityWindow ? 360.0 : 480.0
-        let minimumWidth = min(preferredMinimumWidth, maximumWidth)
-        let minimumHeight = min(preferredMinimumHeight, maximumHeight)
 
+        // The Mac window starts at the Windows window's own size. The window's picture is drawn unscaled,
+        // so a Mac window made larger than a small Windows window, as an earlier version did up to
+        // 720 x 480, showed the app in one corner of an empty frame. Character Map is 477 x 430.
         var targetWidth = sourceWidth
         var targetHeight = sourceHeight
-
-        if targetWidth < minimumWidth || targetHeight < minimumHeight {
-            let scale = max(minimumWidth / targetWidth, minimumHeight / targetHeight)
-            targetWidth *= scale
-            targetHeight *= scale
-        }
 
         if targetWidth > maximumWidth || targetHeight > maximumHeight {
             let scale = min(maximumWidth / targetWidth, maximumHeight / targetHeight)

@@ -877,6 +877,56 @@ struct HostDashboardModelTests {
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:00010500"])
     }
 
+    @Test("maintenance that runs by itself never closes a stale window to reopen its app")
+    @MainActor
+    func automaticMaintenanceDoesNotReopen() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        service.launchWindows = [.notepad, .secondNotepad]
+        let model = HostDashboardModel(service: service)
+
+        // The same history that makes the next maintenance pass reopen the window when a person asks.
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        await model.restartFrameSubscription(windowId: "hwnd:0003029A", restartedAt: Date(timeIntervalSince1970: 1_001))
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_002))
+        await model.restartFrameSubscription(windowId: "hwnd:0003029A", restartedAt: Date(timeIntervalSince1970: 1_003))
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_004))
+        await model.recoverFrameCapture(windowId: "hwnd:0003029A", recoveredAt: Date(timeIntervalSince1970: 1_005))
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_006))
+
+        let result = await model.maintainStaleFrameStreams(
+            generatedAt: Date(timeIntervalSince1970: 1_012),
+            reopensWindows: false
+        )
+
+        // Closing the window could discard unsaved work. Its capture is refreshed instead.
+        #expect(result.reopenedWindows.isEmpty)
+        #expect(service.closedWindowIds.isEmpty)
+        #expect(result.recoveredFrameWindowIds == ["hwnd:0003029A"])
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
+    }
+
+    @Test("a guest that answers the window list gets a Mac window for an app Veil never opened")
+    @MainActor
+    func adoptsWindowAfterWindowListResponse() async throws {
+        // The health still describes an agent without the capability, as it does when a new agent's first
+        // windows arrive before the host has asked it for its health.
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.load()
+        let created = Data("""
+        {"type":"window.created","windowId":"hwnd:000103A4","processId":7,"appId":"winapp_paint",
+         "title":"제목 없음 - 그림판","bounds":{"x":59,"y":9,"width":1180,"height":700},
+         "state":"normal","focused":false}
+        """.utf8)
+
+        #expect(try await model.receiveProtocolMessage(created) == .ignored)
+
+        let list = Data(#"{"type":"window.list.response","requestId":"events","windowIds":["hwnd:000103A4"]}"#.utf8)
+        #expect(try await model.receiveProtocolMessage(list) == .ignored)
+        #expect(try await model.receiveProtocolMessage(created) == .handledWindowCreated(windowId: "hwnd:000103A4"))
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:000103A4"])
+    }
+
     @Test("routes a protocol frame message into the matching mirror session")
     @MainActor
     func routesProtocolFrameMessageIntoMirrorSession() async throws {
@@ -3529,6 +3579,62 @@ struct MultiDocumentWindowAdoptionTests {
         // Zero is refused for a different reason than the bound: the app was never opened here, so no
         // count makes the window wanted.
         #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(event, openWindowCountForApp: 0))
+    }
+
+    @Test("adopts a window of an unopened app from a guest that reports the whole desktop")
+    func adoptsDesktopWindowOfUnopenedApp() {
+        let event = Self.window(windowId: "hwnd:00ff", appId: "proc_0123456789abcdef", title: "문서")
+
+        // The guest reports only windows with a taskbar button. An app opened from inside Windows gets its
+        // Mac window instead of being left on a desktop the Mac never shows.
+        #expect(HostDashboardModel.shouldAdoptAdditionalWindow(
+            event,
+            openWindowCountForApp: 0,
+            guestReportsDesktopWindows: true
+        ))
+        // The per-app bound and the title and size checks still hold.
+        #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(
+            event,
+            openWindowCountForApp: HostDashboardModel.maximumAdoptedWindowsPerApp,
+            guestReportsDesktopWindows: true
+        ))
+        #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(
+            Self.window(windowId: "hwnd:00fe", appId: "proc_0123456789abcdef", title: " "),
+            openWindowCountForApp: 0,
+            guestReportsDesktopWindows: true
+        ))
+    }
+
+    @Test("a popup still needs its app's window, even from a guest that reports the whole desktop")
+    func refusesPopupOfUnopenedApp() {
+        var popup = Self.window(windowId: "hwnd:00ff", appId: "winapp_paint", title: "Popup Host")
+        popup.popup = true
+
+        #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(
+            popup,
+            openWindowCountForApp: 0,
+            guestReportsDesktopWindows: true
+        ))
+        #expect(HostDashboardModel.shouldAdoptAdditionalWindow(
+            popup,
+            openWindowCountForApp: 1,
+            guestReportsDesktopWindows: true
+        ))
+    }
+
+    @Test("a window that cannot be resized decodes, and an event without the field is resizable")
+    func decodesResizableFlag() throws {
+        let fixed = try JSONDecoder().decode(WindowCreatedEvent.self, from: Data("""
+        {"type":"window.created","windowId":"hwnd:1","processId":7,"appId":"start_a","title":"문자표",
+         "bounds":{"x":0,"y":0,"width":477,"height":430},"state":"normal","focused":true,"resizable":false}
+        """.utf8))
+        let ordinary = try JSONDecoder().decode(WindowCreatedEvent.self, from: Data("""
+        {"type":"window.created","windowId":"hwnd:2","processId":7,"appId":"start_a","title":"메모장",
+         "bounds":{"x":0,"y":0,"width":800,"height":600},"state":"normal","focused":true}
+        """.utf8))
+
+        #expect(!fixed.isResizable)
+        #expect(ordinary.isResizable)
     }
 
     @Test("counts windows per app rather than in total")

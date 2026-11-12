@@ -66,13 +66,30 @@ extension VeilHostShellApp {
 
     @MainActor
     func startGuestImeModeSync() {
+        // Windows that were open when the agent was last heard from count too: when the agent is the thing
+        // being repaired, they are still there.
+        vmRuntimeBooter.windowsAppsAreOpen = {
+            !model.mirrorSessions.isEmpty
+                || GuestWindowLayoutStore.shared.latest?.windows.contains(where: \.isShown) == true
+        }
         vmRuntimeBooter.prepareGuestForTyping = {
             GuestAutomatedTyping.begin()
+            model.defersNewGuestWindows = true
             await syncGuestImeMode()
             // Back to the Mac's input source once the command has run.
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(GuestAutomatedTyping.holdSeconds + 1))
                 await syncGuestImeMode()
+                guard !GuestAutomatedTyping.isActive else {
+                    // Another command started typing meanwhile; its own wait ends the deferral.
+                    return
+                }
+                model.defersNewGuestWindows = false
+                // A new event connection asks Windows for its open windows, including any that opened
+                // while the command was being typed.
+                agentEventTask?.cancel()
+                agentEventTask = nil
+                startAgentEventPumpIfNeeded()
             }
         }
         // Switching the Mac input source while a Windows app is in front switches Windows too, with its Hangul key.

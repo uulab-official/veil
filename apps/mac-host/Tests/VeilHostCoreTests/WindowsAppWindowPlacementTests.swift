@@ -17,15 +17,17 @@ struct WindowsAppWindowPlacementTests {
         #expect(frame.y == 90)
     }
 
-    @Test("scales small HWND bounds without distorting aspect ratio")
-    func scalesSmallWindowsByAspectRatio() throws {
+    @Test("a small window keeps the Windows window's own size")
+    func keepsSmallWindowsAtGuestSize() throws {
+        // Character Map on the live guest. The Mac window used to be enlarged to 720 x 649 around a picture
+        // drawn unscaled, which left the app in one corner of an empty frame.
         let frame = WindowsAppWindowPlacement.initialFrame(
-            for: WindowBounds(x: 0, y: 0, width: 400, height: 300),
+            for: WindowBounds(x: 0, y: 0, width: 477, height: 430),
             visibleFrame: HostVisibleFrameGeometry(x: 0, y: 0, width: 1440, height: 900)
         )
 
-        #expect(frame.width == 720)
-        #expect(frame.height == 540)
+        #expect(frame.width == 477)
+        #expect(frame.height == 430)
     }
 
     @Test("keeps normal app windows close to their guest scale")

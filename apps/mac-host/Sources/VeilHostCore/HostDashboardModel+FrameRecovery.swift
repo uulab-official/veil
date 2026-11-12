@@ -220,8 +220,13 @@ extension HostDashboardModel {
     }
 
     @discardableResult
+    /// - Parameter reopensWindows: Whether a window whose picture stays stale is closed in Windows and its
+    ///   app started again. Only for a request from the person. Maintenance that runs by itself must not:
+    ///   closing a window can discard unsaved work, and a window that another window covers looked stale
+    ///   and was closed and reopened every few seconds.
     public func maintainStaleFrameStreams(
-        generatedAt: Date = Date()
+        generatedAt: Date = Date(),
+        reopensWindows: Bool = true
     ) async -> WindowsAppFrameStreamMaintenanceResult {
         let assessments = mirrorSessions.map {
             (
@@ -229,11 +234,11 @@ extension HostDashboardModel {
                 assessment: WindowFrameStreamAssessment.assess(session: $0, generatedAt: generatedAt)
             )
         }
-        let reopenWindowIds = assessments
-            .filter { $0.assessment.reopenEscalated }
-            .map(\.windowId)
+        let reopenWindowIds = reopensWindows
+            ? assessments.filter { $0.assessment.reopenEscalated }.map(\.windowId)
+            : []
         let recoverWindowIds = assessments
-            .filter { $0.assessment.recoveryEscalated }
+            .filter { $0.assessment.recoveryEscalated || (!reopensWindows && $0.assessment.reopenEscalated) }
             .map(\.windowId)
         let restartWindowIds = assessments
             .filter {

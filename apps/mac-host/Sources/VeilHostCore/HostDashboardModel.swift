@@ -67,6 +67,18 @@ public final class HostDashboardModel {
     /// Held here rather than as a field on `WindowMirrorSession` because that type is `Codable`, and a
     /// non-optional property added to it would make previously encoded JSON fail to decode.
     var pausedFrameStreamWindowIds: Set<String> = []
+    /// True once the guest has answered `window.list.request` on the current event connection, which only
+    /// an agent that reports every app window does. Known from the connection itself, because the agent's
+    /// health can still be the previous agent's when its first windows arrive.
+    var guestAnnouncesDesktopWindows = false
+    /// True while Veil types a command into the Windows Run dialog, which takes the keyboard for as long as
+    /// the typing lasts. Anything the host sends that makes another window the foreground one sends the rest
+    /// of the command there: a focus request, a click or a key meant for a mirrored window, or a new Mac
+    /// window whose order Windows is then made to follow. On the live guest, two characters of a command
+    /// ended up in an open Notepad document. So while this is set the host does not show new guest windows
+    /// and does not focus, resize, or send input to mirrored ones. It asks for the open windows again
+    /// afterwards.
+    public var defersNewGuestWindows = false
     /// Serializes minimize/restore transitions per HWND. AppKit can deliver a restore before the guest has
     /// acknowledged the preceding unsubscribe; keeping the tail here preserves unsubscribe -> subscribe order
     /// and prevents a fast visibility toggle from leaving a visible window paused forever.
@@ -285,6 +297,7 @@ public final class HostDashboardModel {
 
     public func canFocusMirrorSession(windowId: String) -> Bool {
         phase != .loading
+            && !defersNewGuestWindows
             && (
                 mirrorSessions.contains { $0.id == windowId }
                     || activeWindows.contains { $0.windowId == windowId }
@@ -301,12 +314,14 @@ public final class HostDashboardModel {
 
     public func canSendInput(to windowId: String) -> Bool {
         mirrorSessions.contains { $0.id == windowId }
+            && !defersNewGuestWindows
             && hasLiveAgentConnection
             && health?.capabilities.input == true
     }
 
     public func canResizeMirrorSession(windowId: String) -> Bool {
         mirrorSessions.contains { $0.id == windowId }
+            && !defersNewGuestWindows
             && hasLiveAgentConnection
             && health?.capabilities.windowResize == true
     }

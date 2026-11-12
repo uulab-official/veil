@@ -225,6 +225,12 @@ extension VeilHostShellApp {
                                    detail: "No app with this id in the latest app list (\(model.apps.count) apps)")
                 continue
             }
+            guard app.isStartMenuEntry else {
+                // Windows forgets the id when its agent restarts, so a launcher for it would stop working.
+                library.recordSkip(appId: appId, appName: app.name, status: "skipped-running-app",
+                                   detail: "The app is known only from its open window")
+                continue
+            }
             apps.append(app)
         }
         library.ensureLaunchers(for: apps)

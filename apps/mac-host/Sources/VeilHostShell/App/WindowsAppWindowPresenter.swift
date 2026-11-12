@@ -53,6 +53,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     /// Resolves the current app identity for window chrome. The catalog can refresh after reconnects, so
     /// this is deliberately a provider rather than a snapshot held by the presenter.
     var appIdentityProvider: ((String) -> WindowsAppWindowIdentity)?
+    /// Apps a window arrived for before the app list knew them. Each gets one app list refresh.
+    var appIdsAwaitingIdentity: Set<String> = []
     var onRestartFrameStream: ((String) -> Void)?
     /// `(windowId, isVisible)`. Fires when a mirrored window is minimized or restored, so frame streaming can
     /// stop for a window that cannot show anything.
@@ -105,13 +107,24 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     ///   background window steal focus from whatever the user is actually working in. Only a
     ///   deliberate launch, restore, or focus action should raise a window that already exists.
     ///   Newly created windows are always raised, since an app the user just opened has to appear.
-    func showWindow(for session: WindowMirrorSession, bringToFront: Bool = false) {
+    /// - Parameter activatesApplication: False for a window Windows opened while the person is working in
+    ///   another Mac app. The window comes to the front of Veil's windows without taking the keyboard.
+    func showWindow(
+        for session: WindowMirrorSession,
+        bringToFront: Bool = false,
+        activatesApplication: Bool = true
+    ) {
         if session.latestFrame != nil {
             windowsWithFirstFrame.insert(session.id)
         }
         if let window = windowsById[session.id] {
             // The desktop shows this app already; raising its Mac window would put it on screen twice.
-            updateExistingWindow(window, for: session, bringToFront: bringToFront && !isHiddenForDesktop)
+            updateExistingWindow(
+                window,
+                for: session,
+                bringToFront: bringToFront && !isHiddenForDesktop,
+                activatesApplication: activatesApplication
+            )
             return
         }
 
@@ -130,7 +143,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
         let window = NSWindow(
             contentRect: frame(for: session.window.bounds, existingWindowCount: windowsById.count),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            // A window Windows keeps at one size, such as Character Map, has no resize edges on the Mac
+            // either. Dragging them would only uncover an empty frame around the app.
+            styleMask: session.window.isResizable
+                ? [.titled, .closable, .miniaturizable, .resizable]
+                : [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
@@ -152,7 +169,23 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             }
             return
         }
-        present(window, windowId: session.id)
+        present(window, windowId: session.id, activatesApplication: activatesApplication)
+    }
+
+    /// Applies the app list's names and icons to windows that opened before the list knew their app.
+    func refreshIdentities() {
+        for (windowId, window) in windowsById {
+            guard let appId = identitiesById[windowId]?.appId,
+                  let identity = appIdentityProvider?(appId),
+                  identity != identitiesById[windowId] else {
+                continue
+            }
+            identitiesById[windowId] = identity
+            window.miniwindowImage = WindowsAppDockIcon.image(for: identity)
+            if foregroundWindowId == windowId, window.isKeyWindow {
+                WindowsAppDockIcon.showInDock(identity)
+            }
+        }
     }
 
     /// Shows a Windows popup, such as Paint's text formatting bar or a menu, the way it looks in Windows: a
@@ -690,13 +723,19 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         return false
     }
 
-    private func present(_ window: NSWindow, windowId: String) {
+    private func present(_ window: NSWindow, windowId: String, activatesApplication: Bool = true) {
         rememberWindowId(windowId)
-        foregroundWindowId = windowId
         if QuietLaunch.isActive {
+            foregroundWindowId = windowId
             window.orderBack(nil)
             return
         }
+        guard activatesApplication else {
+            // Shown, but the app the person is typing in keeps the keyboard.
+            window.orderFront(nil)
+            return
+        }
+        foregroundWindowId = windowId
         MacWindowRestorePolicy.restoreToFront(window)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -704,7 +743,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private func updateExistingWindow(
         _ window: NSWindow,
         for session: WindowMirrorSession,
-        bringToFront: Bool
+        bringToFront: Bool,
+        activatesApplication: Bool = true
     ) {
         if session.window.isPopup {
             configurePopup(window, for: session)
@@ -741,7 +781,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             return
         }
 
-        present(window, windowId: session.id)
+        present(window, windowId: session.id, activatesApplication: activatesApplication)
     }
 
     private func rememberWindowId(_ windowId: String) {

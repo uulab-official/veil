@@ -34,6 +34,30 @@ enum QuietLaunch {
         }
     }
 
+#if DEBUG
+    /// Development builds only: a script that drives Veil goes back to quiet mode first, so the windows it
+    /// opens stay behind the app the person is using even after they have used Veil in this run.
+    static func resumeForScript() {
+        guard !isActive else {
+            return
+        }
+        isActive = true
+        observer = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                isActive = false
+                if let observer {
+                    NotificationCenter.default.removeObserver(observer)
+                }
+                observer = nil
+            }
+        }
+    }
+#endif
+
     /// Activates Veil unless this is a quiet launch the user has not yet brought forward.
     static func activateApplication() {
         guard !isActive else {

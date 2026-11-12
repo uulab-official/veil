@@ -421,8 +421,9 @@ extension VeilHostShellApp {
         ) { notification in
             let appId = notification.userInfo?["appId"] as? String
             Task { @MainActor in
-                // The same one-click launch the Dock menu and the app list use.
+                // The same one-click launch the Dock menu and the app list use, kept behind the app in use.
                 if let appId {
+                    QuietLaunch.resumeForScript()
                     runOneClickAppLaunch(appId: appId)
                 }
             }
