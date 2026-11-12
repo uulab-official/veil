@@ -1067,6 +1067,11 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    /// Has the agent start the tools update from the tools disc. The agent answers before the update stops it.
+    public func startToolsUpdate(_ request: ToolsUpdateRequest) async throws -> ToolsUpdateResponse {
+        try await requestRejectingErrors(request, context: "tools update requires one response")
+    }
+
     /// Removes the drive mapping for the Mac folder. The reply has the mount reply's shape.
     public func unmountHostFolder(_ request: HostFolderUnmountRequest) async throws -> HostFolderMountResponse {
         try await requestRejectingErrors(request, context: "host folder unmount requires one response")

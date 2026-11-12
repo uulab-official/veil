@@ -906,6 +906,48 @@ struct HostDashboardModelTests {
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
     }
 
+    @Test("the agent starts the tools update once Windows has mounted the disc")
+    @MainActor
+    func agentStartsToolsUpdateAfterTheDiscMounts() async throws {
+        var health = AgentHealthResponse.captureReady
+        health.capabilities.toolsUpdate = true
+        let service = FakeDashboardService(health: health)
+        // Windows has not mounted the disc at the first request.
+        service.toolsUpdateResults = [
+            .failure(VeilHostError.agentError(code: "tools_media_missing", message: "No disc.")),
+            .success(ToolsUpdateResponse(requestId: "req_tools_update", accepted: true, entryPoint: #"H:\Veil Guest Agent\U.cmd"#)),
+        ]
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        let entryPoint = await model.startToolsUpdateThroughAgent(retryDelay: .milliseconds(1))
+
+        #expect(model.agentStartsToolsUpdate)
+        #expect(entryPoint == #"H:\Veil Guest Agent\U.cmd"#)
+        #expect(service.toolsUpdateRequests == 2)
+    }
+
+    @Test("without the capability, or without a disc, the agent is not what starts the update")
+    @MainActor
+    func toolsUpdateFallsBackWhenTheAgentCannot() async throws {
+        let older = FakeDashboardService(health: .captureReady)
+        let olderModel = HostDashboardModel(service: older)
+        await olderModel.load()
+
+        #expect(await olderModel.startToolsUpdateThroughAgent(retryDelay: .milliseconds(1)) == nil)
+        // An agent that does not know the message is never sent it.
+        #expect(older.toolsUpdateRequests == 0)
+
+        var health = AgentHealthResponse.captureReady
+        health.capabilities.toolsUpdate = true
+        let noDisc = FakeDashboardService(health: health)
+        let noDiscModel = HostDashboardModel(service: noDisc)
+        await noDiscModel.load()
+
+        #expect(await noDiscModel.startToolsUpdateThroughAgent(attempts: 3, retryDelay: .milliseconds(1)) == nil)
+        #expect(noDisc.toolsUpdateRequests == 3)
+    }
+
     @Test("a guest that answers the window list gets a Mac window for an app Veil never opened")
     @MainActor
     func adoptsWindowAfterWindowListResponse() async throws {
@@ -4027,6 +4069,18 @@ private actor FrameRecoveryPendingStore: PendingLaunchIntentStore {
 
 @MainActor
 private final class FakeDashboardService: HostDashboardService {
+    /// What each `tools.update.request` gets, in order. An empty list refuses, as an agent with no disc does.
+    var toolsUpdateResults: [Result<ToolsUpdateResponse, any Error>] = []
+    private(set) var toolsUpdateRequests = 0
+
+    func startToolsUpdate(_ request: ToolsUpdateRequest) async throws -> ToolsUpdateResponse {
+        toolsUpdateRequests += 1
+        guard !toolsUpdateResults.isEmpty else {
+            throw VeilHostError.agentError(code: "tools_media_missing", message: "No disc.")
+        }
+        return try toolsUpdateResults.removeFirst().get()
+    }
+
     var error: (any Error)?
     var inputError: (any Error)?
     var frameSubscriptionError: (any Error)?

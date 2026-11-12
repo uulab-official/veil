@@ -56,6 +56,8 @@ public protocol HostDashboardService: Sendable {
     func setGuestImeMode(_ mode: GuestImeMode) async throws
     func mountHostFolder(_ request: HostFolderMountRequest) async throws -> HostFolderMountResponse
     func unmountHostFolder(_ request: HostFolderUnmountRequest) async throws -> HostFolderMountResponse
+    /// Asks the agent to start the tools update from the disc in the removable drive.
+    func startToolsUpdate(_ request: ToolsUpdateRequest) async throws -> ToolsUpdateResponse
 }
 
 public extension HostDashboardService {
@@ -99,6 +101,10 @@ public extension HostDashboardService {
     }
 
     func unmountHostFolder(_ request: HostFolderUnmountRequest) async throws -> HostFolderMountResponse {
+        throw HostDashboardServiceError.guestStateSyncUnsupported
+    }
+
+    func startToolsUpdate(_ request: ToolsUpdateRequest) async throws -> ToolsUpdateResponse {
         throw HostDashboardServiceError.guestStateSyncUnsupported
     }
 

@@ -46,6 +46,8 @@ public enum MessageType: String, Codable, Sendable {
     case timeSyncResponse = "time.sync.response"
     case appearanceSetRequest = "appearance.set.request"
     case appearanceSetResponse = "appearance.set.response"
+    case toolsUpdateRequest = "tools.update.request"
+    case toolsUpdateResponse = "tools.update.response"
     case hostFolderMountRequest = "host.folder.mount.request"
     case hostFolderMountResponse = "host.folder.mount.response"
     case hostFolderUnmountRequest = "host.folder.unmount.request"
@@ -160,6 +162,9 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// True when the agent reports every app window on the Windows desktop, not only windows of apps Veil
     /// launched, and answers `window.list.request`.
     public var desktopWindows: Bool? = nil
+    /// True when the agent starts the tools update from the tools disc itself (`tools.update.request`), so
+    /// the host does not type a command into Windows.
+    public var toolsUpdate: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
@@ -500,6 +505,37 @@ public struct HostFolderStatus: Codable, Equatable, Sendable {
     public var driveLetter: String
     public var uncPath: String?
     public var message: String?
+}
+
+/// Asks the agent to start the tools update from the disc in the removable drive. It names nothing to run:
+/// the agent starts one fixed file from a disc with Veil's label.
+public struct ToolsUpdateRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+
+    public init(requestId: String = "req_tools_update", protocolVersion: Int = 1) {
+        self.type = .toolsUpdateRequest
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+    }
+}
+
+public struct ToolsUpdateResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int?
+    public var accepted: Bool
+    /// The file the agent started, for the log.
+    public var entryPoint: String?
+
+    public init(requestId: String, accepted: Bool, entryPoint: String? = nil, protocolVersion: Int? = 1) {
+        self.type = .toolsUpdateResponse
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.accepted = accepted
+        self.entryPoint = entryPoint
+    }
 }
 
 public struct HostFolderMountResponse: Codable, Equatable, Sendable {

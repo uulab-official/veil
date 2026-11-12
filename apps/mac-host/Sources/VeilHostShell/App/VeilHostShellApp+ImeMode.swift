@@ -66,11 +66,15 @@ extension VeilHostShellApp {
 
     @MainActor
     func startGuestImeModeSync() {
-        // Windows that were open when the agent was last heard from count too: when the agent is the thing
-        // being repaired, they are still there.
-        vmRuntimeBooter.windowsAppsAreOpen = {
-            !model.mirrorSessions.isEmpty
-                || GuestWindowLayoutStore.shared.latest?.windows.contains(where: \.isShown) == true
+        vmRuntimeBooter.typingRefusal = {
+            GuestTypingSafety.refusal(
+                hasLiveAgent: model.hasLiveAgentConnection,
+                openWindowCount: model.mirrorSessions.count
+                    + model.restorableAppIds.count
+                    + (GuestWindowLayoutStore.shared.latest?.windows.filter(\.isShown).count ?? 0),
+                toolsWereInstalled: hasObservedLiveAgentConnection
+                    || vmModel.snapshot?.configurationSummary?.guestAgent.isInstalled == true
+            )
         }
         vmRuntimeBooter.prepareGuestForTyping = {
             GuestAutomatedTyping.begin()

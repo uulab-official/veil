@@ -155,6 +155,41 @@ extension HostDashboardModel {
         }
     }
 
+    /// Whether the connected agent can start the tools update itself, with nothing typed into Windows.
+    public var agentStartsToolsUpdate: Bool {
+        hasLiveAgentConnection && health?.capabilities.toolsUpdate == true
+    }
+
+    /// Has the agent start the tools update from the disc the host just inserted. Returns the file it
+    /// started, or nil when the agent cannot or would not.
+    ///
+    /// Windows takes a moment to mount a disc that was just inserted, and until then the agent answers that
+    /// there is none. So the request is repeated for a while before giving up.
+    public func startToolsUpdateThroughAgent(
+        attempts: Int = 10,
+        retryDelay: Duration = .milliseconds(1_500)
+    ) async -> String? {
+        guard agentStartsToolsUpdate else {
+            return nil
+        }
+        for attempt in 1...max(1, attempts) {
+            do {
+                let response = try await service.startToolsUpdate(ToolsUpdateRequest())
+                if response.accepted {
+                    return response.entryPoint ?? ""
+                }
+            } catch {
+                VeilLog.runtime.notice(
+                    "Tools update through the agent, attempt \(attempt, privacy: .public): \(String(describing: error), privacy: .public)"
+                )
+            }
+            if attempt < attempts {
+                try? await Task.sleep(for: retryDelay)
+            }
+        }
+        return nil
+    }
+
     /// Removes the Windows drive for the Mac folder. Nil when the agent cannot, or did not answer.
     public func unmountHostFolder(driveLetter: String) async -> HostFolderStatus? {
         guard hasLiveAgentConnection, health?.capabilities.hostFolder == true else {

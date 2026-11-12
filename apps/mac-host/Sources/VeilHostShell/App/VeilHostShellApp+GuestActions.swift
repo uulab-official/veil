@@ -713,13 +713,19 @@ extension VeilHostShellApp {
                 displayMessage = String(localized: "Windows tools could not be updated: \(refusal)")
                 return
             }
-            do {
-                _ = try await vmRuntimeBooter.updateGuestToolsFromRemovableMedia()
-            } catch {
-                VeilLog.runtime.notice("Tools update command failed: \(String(describing: error), privacy: .public)")
-                displayMessage = String(localized: "Windows tools could not be updated: \(userMessage(for: error))")
-                await vmModel.ejectRemovableMedia()
-                return
+            // The agent starts the update itself when it can. Typing the command into Windows is only for
+            // an agent that cannot, or when there is none to ask, and only with no app open in Windows.
+            if let entryPoint = await model.startToolsUpdateThroughAgent() {
+                VeilLog.runtime.notice("Tools update started by the agent: \(entryPoint, privacy: .public)")
+            } else {
+                do {
+                    _ = try await vmRuntimeBooter.updateGuestToolsFromRemovableMedia()
+                } catch {
+                    VeilLog.runtime.notice("Tools update command failed: \(String(describing: error), privacy: .public)")
+                    displayMessage = String(localized: "Windows tools could not be updated: \(userMessage(for: error))")
+                    await vmModel.ejectRemovableMedia()
+                    return
+                }
             }
 
             // The repair restarts the agent only after the Windows approval, which the user may answer
