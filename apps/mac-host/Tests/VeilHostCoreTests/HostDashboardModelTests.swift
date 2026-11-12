@@ -877,7 +877,7 @@ struct HostDashboardModelTests {
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:00010500"])
     }
 
-    @Test("maintenance that runs by itself never closes a stale window to reopen its app")
+    @Test("maintenance that runs by itself never closes or focuses a stale window")
     @MainActor
     func automaticMaintenanceDoesNotReopen() async throws {
         let service = FakeDashboardService(health: .captureReady)
@@ -894,15 +894,20 @@ struct HostDashboardModelTests {
         await model.recoverFrameCapture(windowId: "hwnd:0003029A", recoveredAt: Date(timeIntervalSince1970: 1_005))
         model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_006))
 
+        // The history above includes one recovery the person asked for, which focused the window.
+        let focusedBefore = service.focusedWindowIds
         let result = await model.maintainStaleFrameStreams(
             generatedAt: Date(timeIntervalSince1970: 1_012),
             reopensWindows: false
         )
 
-        // Closing the window could discard unsaved work. Its capture is refreshed instead.
+        // Closing the window could discard unsaved work, and focusing it brings it in front of whatever
+        // the person just opened. Only its frame subscription is restarted.
         #expect(result.reopenedWindows.isEmpty)
         #expect(service.closedWindowIds.isEmpty)
-        #expect(result.recoveredFrameWindowIds == ["hwnd:0003029A"])
+        #expect(result.recoveredFrameWindowIds.isEmpty)
+        #expect(service.focusedWindowIds == focusedBefore)
+        #expect(result.restartedFrameWindowIds == ["hwnd:0003029A"])
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
     }
 

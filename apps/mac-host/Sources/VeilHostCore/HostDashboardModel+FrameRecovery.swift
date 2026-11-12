@@ -220,10 +220,13 @@ extension HostDashboardModel {
     }
 
     @discardableResult
-    /// - Parameter reopensWindows: Whether a window whose picture stays stale is closed in Windows and its
-    ///   app started again. Only for a request from the person. Maintenance that runs by itself must not:
-    ///   closing a window can discard unsaved work, and a window that another window covers looked stale
-    ///   and was closed and reopened every few seconds.
+    /// - Parameter reopensWindows: Whether maintenance may act on the Windows windows themselves: focus a
+    ///   window to recover its capture, or close it and start its app again. Only for a request from the
+    ///   person. Maintenance that runs by itself only restarts the frame subscription. Closing a window can
+    ///   discard unsaved work, and a window that another window covers looked stale and was closed and
+    ///   reopened every few seconds. Focusing is no better: a covered window, such as Paint's formatting
+    ///   bar, was brought to the front in Windows again and again, which pushed an app that had just been
+    ///   opened behind it before its first picture could be taken.
     public func maintainStaleFrameStreams(
         generatedAt: Date = Date(),
         reopensWindows: Bool = true
@@ -237,14 +240,13 @@ extension HostDashboardModel {
         let reopenWindowIds = reopensWindows
             ? assessments.filter { $0.assessment.reopenEscalated }.map(\.windowId)
             : []
-        let recoverWindowIds = assessments
-            .filter { $0.assessment.recoveryEscalated || (!reopensWindows && $0.assessment.reopenEscalated) }
-            .map(\.windowId)
+        let recoverWindowIds = reopensWindows
+            ? assessments.filter { $0.assessment.recoveryEscalated }.map(\.windowId)
+            : []
         let restartWindowIds = assessments
             .filter {
                 $0.assessment.status == .stale
-                    && !$0.assessment.recoveryEscalated
-                    && !$0.assessment.reopenEscalated
+                    && (!reopensWindows || (!$0.assessment.recoveryEscalated && !$0.assessment.reopenEscalated))
             }
             .map(\.windowId)
 

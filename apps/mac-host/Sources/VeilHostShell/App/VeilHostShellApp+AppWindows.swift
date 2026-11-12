@@ -396,11 +396,10 @@ extension VeilHostShellApp {
                session: session,
                compositedImage: model.compositedFrameImage(for: session.id)
            ) != .ready {
-            // The main window shows a launch's progress. A window Windows opened by itself has no launch to
-            // show, and bringing Veil's main window forward for it would cover what the person is doing.
-            if oneClickAppWindowPresentationGate.keepsLauncherVisible {
-                MainWindowChrome.showMainWindow()
-            }
+            // The main window shows a launch's progress, and only while no Windows app is on screen yet. A
+            // window Windows opened by itself has no launch to show, and with other apps already open the
+            // new one simply appears; Veil's main window coming forward would cover what the person is doing.
+            syncLauncherWindowVisibility()
             return false
         }
         guard oneClickAppWindowPresentationGate.allowsEventDrivenPresentation(
@@ -408,7 +407,7 @@ extension VeilHostShellApp {
             windowId: session.id,
             isAlreadyVisible: isAlreadyVisible
         ) else {
-            MainWindowChrome.showMainWindow()
+            syncLauncherWindowVisibility()
             return false
         }
 
