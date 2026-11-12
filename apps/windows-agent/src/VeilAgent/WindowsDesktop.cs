@@ -154,8 +154,10 @@ public sealed class WindowsDesktop : IWindowsDesktop
                 return true;
             }
 
-            // File Explorer's process also owns the desktop and the taskbar, which are not its windows.
-            if (IsShellWindow(hwnd))
+            // File Explorer's process also owns the desktop, the taskbar, and one-pixel helper windows, none
+            // of which is a window of the app. A minimized window has no frame to show: with the taskbar
+            // hidden, Windows draws it as a small title bar stub at the bottom of the desktop.
+            if (!DesktopAppWindowScanner.IsAppOrOwnedWindow(hwnd))
             {
                 return true;
             }

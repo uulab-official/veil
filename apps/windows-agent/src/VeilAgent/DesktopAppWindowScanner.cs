@@ -54,10 +54,7 @@ public static class AppWindowRules
         "EdgeUiInputTopWndClass",
         "Shell_InputSwitchTopLevelWindow",
         "LockScreenBackstopFrame",
-        "TaskListThumbnailWnd",
-        "tooltips_class32",
-        "IME",
-        "MSCTFIME UI"
+        "TaskListThumbnailWnd"
     };
 
     // Shell processes whose windows pass the Alt+Tab rule while they are showing: the touch keyboard and
@@ -133,19 +130,7 @@ internal static class DesktopAppWindowScanner
                 ? ProcessNameFallback(processId)
                 : Path.GetFileNameWithoutExtension(executablePath);
             var title = Title(hwnd);
-            var extendedStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
-            var facts = new TopLevelWindowFacts(
-                Visible: true,
-                Minimized: IsIconic(hwnd),
-                Cloaked: DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out var cloaked, sizeof(int)) == 0 && cloaked != 0,
-                HasOwner: GetWindow(hwnd, GW_OWNER) != IntPtr.Zero,
-                ToolWindow: (extendedStyle & WS_EX_TOOLWINDOW) != 0,
-                AppWindow: (extendedStyle & WS_EX_APPWINDOW) != 0,
-                NoActivate: (extendedStyle & WS_EX_NOACTIVATE) != 0,
-                ClassName: ClassName(hwnd),
-                Title: title,
-                ProcessName: processName
-            );
+            var facts = Facts(hwnd, title, processName);
             if (!AppWindowRules.IsAppWindow(facts))
             {
                 return true;
@@ -163,9 +148,52 @@ internal static class DesktopAppWindowScanner
         return found;
     }
 
+    /// <summary>
+    /// Whether a visible window of an app that already has a tracked window is worth reporting: another app
+    /// window, or a window one of them owns, such as a dialog, a menu, or a tooltip. Programs also keep
+    /// unowned helper windows visible, File Explorer several of one pixel, which are neither.
+    /// </summary>
+    public static bool IsAppOrOwnedWindow(nint hwnd)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return true;
+        }
+
+        var facts = Facts(hwnd, Title(hwnd), string.Empty);
+        if (facts.Minimized || facts.Cloaked || AppWindowRules.IsShellWindow(facts.ClassName, string.Empty))
+        {
+            return false;
+        }
+
+        return facts.HasOwner || AppWindowRules.IsAppWindow(facts);
+    }
+
+    private static TopLevelWindowFacts Facts(nint hwnd, string title, string processName)
+    {
+        var extendedStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+        return new TopLevelWindowFacts(
+            Visible: IsWindowVisible(hwnd),
+            Minimized: IsIconic(hwnd),
+            Cloaked: DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out var cloaked, sizeof(int)) == 0 && cloaked != 0,
+            HasOwner: GetWindow(hwnd, GW_OWNER) != IntPtr.Zero,
+            ToolWindow: (extendedStyle & WS_EX_TOOLWINDOW) != 0,
+            AppWindow: (extendedStyle & WS_EX_APPWINDOW) != 0,
+            NoActivate: (extendedStyle & WS_EX_NOACTIVATE) != 0,
+            ClassName: ClassName(hwnd),
+            Title: title,
+            ProcessName: processName
+        );
+    }
+
     /// <summary>The window's class, for telling shell windows from an app's.</summary>
     public static string ClassName(nint hwnd)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return string.Empty;
+        }
+
         var builder = new StringBuilder(256);
         return GetClassName(hwnd, builder, builder.Capacity) > 0 ? builder.ToString() : string.Empty;
     }

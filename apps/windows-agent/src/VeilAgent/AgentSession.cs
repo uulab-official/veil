@@ -1833,9 +1833,10 @@ public sealed class AgentSession
         CancellationToken cancellationToken
     )
     {
-        // Never waits for a Start menu discovery: a window found before the first one finishes becomes a
-        // running app, which opens and closes like any other.
-        var startMenuApps = await StartMenuAppsAsync(TimeSpan.Zero, cancellationToken);
+        // Right after the agent starts the Start menu is still being read. Waiting for it keeps a Start menu
+        // app's window from being reported as a running app under a different id. Once the list is known
+        // this returns at once.
+        var startMenuApps = await StartMenuAppsAsync(AppLaunchCatalogWait, cancellationToken);
         if (RunningAppCatalog.Match(window, AppCatalog.Concat(startMenuApps).ToArray()) is { } known)
         {
             return known;
