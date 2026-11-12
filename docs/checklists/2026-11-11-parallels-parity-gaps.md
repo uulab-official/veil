@@ -8,7 +8,7 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 1 | Coherence: one Mac window per app, desktop hidden | Partial (live) | Windows come from the guest framebuffer (`window.layout`, `window.crop.set`, `window.move.request`). The Windows taskbar still covers the bottom of the guest display and can cover windows there, so this slice hides it. The Dock menu and the menu bar menu have a Windows Start Menu with every Start menu app in its folders (live: 59 apps with icons and Korean names from the agent; launching one from it is not yet checked live). |
+| 1 | Coherence: one Mac window per app, desktop hidden | Partial (live) | Windows come from the guest framebuffer (`window.layout`, `window.crop.set`, `window.move.request`). Every app window on the Windows desktop now gets a Mac window, whoever opened it (`capabilities.desktopWindows`, `window.list.request`). Live, 2026-11-12: Notepad and Paint left open in Windows and Character Map appeared as three Mac windows after a Veil relaunch, with no helper windows, and Character Map at its own 477 x 430. Not done: a window another one covers is still shown from captured frames every few seconds, and the Windows taskbar was visible in the guest during this check. The Dock menu and the menu bar menu have a Windows Start Menu; Character Map was opened from it live, File Explorer and UWP apps were not tried. |
 | 2 | Apps in Dock, Launchpad, Applications; "Open with" | Implemented (live, partly) | Opening a Windows app writes a signed launcher to `~/Applications/Veil Apps` (`09dfe151`). Live: Notepad's launcher was created, passes `codesign --verify --strict`, and is listed by Launch Services for `.txt` files. Opening a file through it was not tried, because that brings Veil forward. |
 | 3 | Clipboard and drag and drop | Implemented | Text and images go both ways. Files go Mac to Windows by drop or paste, and Windows to the Mac by copying in Explorer (CF_HDROP through the shared folder to Downloads). Drops travel as base64. |
 | 4 | Shared folders | Implemented (live) | Windows to Mac: `C:\VeilShared` over SMB. Mac to Windows, as UTM does for Windows guests: a folder chosen with Share a Mac Folder with Windows is served over WebDAV on 127.0.0.1 under a random token and mapped as `Mac (M:)` (`host.folder.mount.request`). Live: Explorer listed the test folder's file and subfolder; turning sharing off removed the drive and closed the port. Writing from Windows is unit-tested only. |
@@ -31,3 +31,18 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
 4. Files from Windows to the Mac (gap 3).
 5. GPU acceleration (gap 13). Triton session.
 6. Sync dark mode, time after resume, and battery state (gap 12).
+
+## Found on the live guest on 2026-11-12
+
+- **Typed commands are not safe with apps open.** The tools update and the agent repair type into the Windows
+  Run dialog through QEMU: a click at a fixed place, Ctrl+A, then the command. With Notepad and Paint open,
+  one run replaced the text of an open Notepad document and changed Paint's tool. The text was restored with
+  undo. The host now refuses to type while Windows has app windows open
+  (`AppRuntimeBooterError.windowsAppsAreOpen`). The update should be run by the agent itself, from the tools
+  disc, with no typing. That is not built yet.
+- **Maintenance closed windows by itself.** A window covered by another one looked stale and was closed and
+  reopened every few seconds. Maintenance that runs by itself no longer closes a window.
+- **`input.text` lost characters.** A command typed through the agent into Command Prompt arrived without
+  seven of its characters while the host was also raising another window. Not investigated.
+- **The guest clock is 65 minutes off.** `time.sync.request` fails with `install-time-sync-task-elevated`.
+
