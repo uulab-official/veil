@@ -297,12 +297,19 @@ public sealed class WindowsDesktop : IWindowsDesktop
     }
 
     /// <summary>
-    /// A packaged Start menu app is also matched by AppUserModelID, which finds its window whichever process
-    /// owns it. Built-in apps keep matching by process name only.
+    /// A packaged app is also matched by AppUserModelID, which finds its window whichever process owns it.
     /// </summary>
     private static bool DoesWindowMatchApp(IntPtr hwnd, uint processId, WindowsAppDescriptor app) =>
         DoesProcessMatchApp(processId, app)
-        || (app.LaunchAumid is { } aumid && PackagedAppActivation.WindowBelongsTo(hwnd, processId, aumid));
+        || (PackagedIdentity(app) is { } aumid && PackagedAppActivation.WindowBelongsTo(hwnd, processId, aumid));
+
+    /// <summary>
+    /// The AppUserModelID a window of the app carries. A built-in app has one too: Calculator's window is
+    /// an ApplicationFrameHost.exe frame, which no process name of Calculator's matches, and its title is
+    /// localized (계산기), so the id is the only thing that finds it. Before this the launch returned
+    /// Calculator's inner CoreWindow, which is not the window on screen and has a different size.
+    /// </summary>
+    internal static string? PackagedIdentity(WindowsAppDescriptor app) => app.LaunchAumid ?? app.AppUserModelId;
 
     internal static IEnumerable<string> CandidateProcessNames(WindowsAppDescriptor app) =>
         (app.AlternateExecutables ?? [])
@@ -672,7 +679,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             return Task.FromResult(false);
         }
 
-        if (!EnsureWindowReadyForInput(hwnd))
+        if (WindowsInputInjector.RaisesTarget(input.Event) && !EnsureWindowReadyForInput(hwnd))
         {
             return Task.FromResult(false);
         }
