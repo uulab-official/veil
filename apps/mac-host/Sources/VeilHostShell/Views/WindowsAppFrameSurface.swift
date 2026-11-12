@@ -92,7 +92,10 @@ struct WindowsAppFrameSurface: View {
     @ViewBuilder
     private func frameQualityOverlay(_ assessment: WindowFrameStreamAssessment) -> some View {
         switch assessment.status {
-        case .delayed, .stale:
+        // A picture one to five seconds old is not announced. A window that is cropped from the guest
+        // display is only captured once a second, and a window another one covers every few seconds, so
+        // the badge sat on windows whose picture was current or that nobody was looking at.
+        case .stale:
             HStack(spacing: 8) {
                 Image(systemName: assessment.status == .stale ? "pause.circle.fill" : "clock.badge.exclamationmark")
                     .foregroundStyle(assessment.status == .stale ? .orange : .yellow)
@@ -120,7 +123,7 @@ struct WindowsAppFrameSurface: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(.black.opacity(0.66), in: Capsule())
-        case .fresh, .waitingForFirstFrame, .unavailable:
+        case .fresh, .delayed, .waitingForFirstFrame, .unavailable:
             EmptyView()
         }
     }
