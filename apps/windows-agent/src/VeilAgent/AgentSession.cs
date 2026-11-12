@@ -79,6 +79,7 @@ public sealed class AgentSession
     private readonly GuestAppearanceSync appearanceSync;
     private readonly Action<string> imeModeSink;
     private readonly HostFolderMount hostFolderMount;
+    private readonly ToolsUpdate toolsUpdate;
     private readonly IStartMenuCatalogSource startMenu;
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
@@ -101,7 +102,8 @@ public sealed class AgentSession
         GuestAppearanceSync? appearanceSync = null,
         Action<string>? imeModeSink = null,
         HostFolderMount? hostFolderMount = null,
-        IStartMenuCatalogSource? startMenu = null
+        IStartMenuCatalogSource? startMenu = null,
+        ToolsUpdate? toolsUpdate = null
     )
     {
         this.desktop = desktop;
@@ -117,6 +119,7 @@ public sealed class AgentSession
         this.appearanceSync = appearanceSync ?? new GuestAppearanceSync();
         this.imeModeSink = imeModeSink ?? GuestImeMode.Set;
         this.hostFolderMount = hostFolderMount ?? new HostFolderMount();
+        this.toolsUpdate = toolsUpdate ?? new ToolsUpdate();
         this.startMenu = startMenu ?? new StartMenuCatalog();
     }
 
@@ -181,6 +184,7 @@ public sealed class AgentSession
                 MessageTypes.SharedFolderRequest => await HandleSharedFolderRequestAsync(request, requestId, cancellationToken),
                 MessageTypes.TimeSyncRequest => HandleTimeSyncRequest(request, requestId),
                 MessageTypes.AppearanceSetRequest => HandleAppearanceSetRequest(request, requestId),
+                MessageTypes.ToolsUpdateRequest => HandleToolsUpdate(requestId),
                 MessageTypes.HostFolderMountRequest => HandleHostFolderMount(request, requestId),
                 MessageTypes.HostFolderUnmountRequest => HandleHostFolderUnmount(request, requestId),
                 _ => AgentReplies.Direct(ErrorResponse(requestId, "unknown_message_type", $"Unsupported message type {type}"))
@@ -190,6 +194,32 @@ public sealed class AgentSession
         {
             return AgentReplies.Direct(ErrorResponse(requestId, "handler_failed", error.Message));
         }
+    }
+
+    /// <summary>
+    /// Starts the tools update from the disc the host inserted. The request carries nothing to run; see
+    /// <see cref="ToolsUpdate"/>. Answers before the script stops this agent.
+    /// </summary>
+    private AgentReplies HandleToolsUpdate(string? requestId)
+    {
+        var result = toolsUpdate.Run();
+        if (!result.Started)
+        {
+            return AgentReplies.Direct(ErrorResponse(
+                requestId,
+                result.ErrorCode ?? "tools_update_failed",
+                result.Message ?? "The tools update could not be started."
+            ));
+        }
+
+        return AgentReplies.Direct(new JsonObject
+        {
+            ["type"] = MessageTypes.ToolsUpdateResponse,
+            ["requestId"] = requestId,
+            ["protocolVersion"] = 1,
+            ["accepted"] = true,
+            ["entryPoint"] = result.EntryPoint
+        });
     }
 
     private async Task<AgentReplies> WhileLaunchingAsync(Func<Task<AgentReplies>> launch)
@@ -1176,6 +1206,7 @@ public sealed class AgentSession
                 // host.folder.mount.request: a Mac folder served over WebDAV, mapped as a drive letter.
                 ["hostFolder"] = OperatingSystem.IsWindows(),
                 ["desktopWindows"] = OperatingSystem.IsWindows(),
+                ["toolsUpdate"] = OperatingSystem.IsWindows(),
                 ["packageIdentity"] = hasPackageIdentity
             },
             ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity),
