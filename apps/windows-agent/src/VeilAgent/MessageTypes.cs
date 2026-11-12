@@ -12,6 +12,8 @@ public static class MessageTypes
     public const string SharedFileOpenRequest = "file.open.shared.request";
     public const string FileOpenResponse = "file.open.response";
     public const string WindowCreated = "window.created";
+    public const string WindowListRequest = "window.list.request";
+    public const string WindowListResponse = "window.list.response";
     public const string WindowUpdated = "window.updated";
     public const string WindowClosed = "window.closed";
     public const string WindowFrame = "window.frame";

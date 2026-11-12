@@ -10,6 +10,19 @@ public interface IWindowsDesktop
 
     IReadOnlyList<LaunchedWindow> DiscoverAdditionalWindows(WindowsAppDescriptor app, IReadOnlySet<string> knownWindowIds);
 
+    /// <summary>
+    /// Every app window on the desktop that is not in <paramref name="knownWindowIds"/>, whichever app it
+    /// belongs to and however it was opened. Test doubles and desktops that cannot enumerate windows report
+    /// none.
+    /// </summary>
+    IReadOnlyList<DiscoveredAppWindow> DiscoverAppWindows(IReadOnlySet<string> knownWindowIds) => [];
+
+    /// <summary>
+    /// The window as it is now: its current title, frame, and style. A tracked window is recorded when it is
+    /// found, and Windows moves, resizes, and retitles it afterwards.
+    /// </summary>
+    LaunchedWindow CurrentWindow(LaunchedWindow window) => window;
+
     bool IsWindowStillOpen(string windowId);
 
     Task<bool> FocusWindowAsync(string windowId, CancellationToken cancellationToken);

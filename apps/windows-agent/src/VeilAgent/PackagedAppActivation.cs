@@ -71,6 +71,23 @@ internal static class PackagedAppActivation
             || HostedChildProcessIds(hwnd, processId).Any(child => Matches(ProcessAppUserModelId(child), appUserModelId));
     }
 
+    /// <summary>
+    /// The AppUserModelID of the packaged app showing in a window, or null for an unpackaged app. A UWP
+    /// app's frame belongs to ApplicationFrameHost.exe, so the app is the process of a child window.
+    /// </summary>
+    public static string? AppUserModelIdForWindow(IntPtr hwnd, uint processId)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        return ProcessAppUserModelId(processId)
+            ?? HostedChildProcessIds(hwnd, processId)
+                .Select(ProcessAppUserModelId)
+                .FirstOrDefault(candidate => candidate is not null);
+    }
+
     private static bool Matches(string? candidate, string appUserModelId) =>
         candidate is not null && string.Equals(candidate, appUserModelId, StringComparison.OrdinalIgnoreCase);
 

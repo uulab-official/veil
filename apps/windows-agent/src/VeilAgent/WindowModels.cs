@@ -45,7 +45,9 @@ public sealed record LaunchedWindow(
     // shows it as a borderless overlay on its owner instead of as a Mac window of its own.
     bool IsPopup = false,
     // The window Windows says owns this one, when there is one.
-    string? OwnerWindowId = null
+    string? OwnerWindowId = null,
+    // False for a window Windows does not let the user resize, such as a dialog or Character Map.
+    bool Resizable = true
 );
 
 public sealed record WindowFrame(

@@ -73,6 +73,9 @@ public sealed class AgentSession
     private readonly Dictionary<string, LaunchedWindow> trackedWindowsById = new();
     private readonly Dictionary<string, WindowsAppDescriptor> appByWindowId = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> appLaunchGates = new();
+    // Apps known only from a window found on the desktop, by id, so app.list and app.launch can find them.
+    private readonly ConcurrentDictionary<string, WindowsAppDescriptor> runningApps = new(StringComparer.Ordinal);
+    private int launchesInFlight;
     private readonly object trackedWindowsGate = new();
 
     public AgentSession(
@@ -139,9 +142,13 @@ public sealed class AgentSession
             {
                 MessageTypes.AgentHealthRequest => AgentReplies.Direct(HealthResponse(requestId)),
                 MessageTypes.AppListRequest => AgentReplies.Direct(await AppListResponseAsync(requestId, cancellationToken)),
-                MessageTypes.AppLaunchRequest => await HandleAppLaunchAsync(request, requestId, cancellationToken),
-                MessageTypes.FileOpenRequest => await HandleFileOpenAsync(request, requestId, cancellationToken),
-                MessageTypes.SharedFileOpenRequest => await HandleSharedFileOpenAsync(request, requestId, cancellationToken),
+                MessageTypes.AppLaunchRequest => await WhileLaunchingAsync(
+                    () => HandleAppLaunchAsync(request, requestId, cancellationToken)),
+                MessageTypes.FileOpenRequest => await WhileLaunchingAsync(
+                    () => HandleFileOpenAsync(request, requestId, cancellationToken)),
+                MessageTypes.SharedFileOpenRequest => await WhileLaunchingAsync(
+                    () => HandleSharedFileOpenAsync(request, requestId, cancellationToken)),
+                MessageTypes.WindowListRequest => await HandleWindowListAsync(requestId, cancellationToken),
                 MessageTypes.WindowFrameSubscribe => HandleWindowFrameSubscribeAsync(request, requestId),
                 MessageTypes.WindowFrameUnsubscribe => HandleWindowFrameUnsubscribeAsync(request, requestId),
                 MessageTypes.WindowFocusRequest => await HandleWindowFocusAsync(request, requestId, cancellationToken),
@@ -173,6 +180,63 @@ public sealed class AgentSession
         {
             return AgentReplies.Direct(ErrorResponse(requestId, "handler_failed", error.Message));
         }
+    }
+
+    private async Task<AgentReplies> WhileLaunchingAsync(Func<Task<AgentReplies>> launch)
+    {
+        Interlocked.Increment(ref launchesInFlight);
+        try
+        {
+            return await launch();
+        }
+        finally
+        {
+            Interlocked.Decrement(ref launchesInFlight);
+        }
+    }
+
+    /// <summary>
+    /// Announces every app window on the desktop to a host that has just connected: it tracks the windows
+    /// nothing has reported yet, then answers with a <c>window.created</c> for each tracked window. Windows
+    /// come before the popups they own.
+    /// </summary>
+    private async Task<AgentReplies> HandleWindowListAsync(string? requestId, CancellationToken cancellationToken)
+    {
+        if (!IsLaunching)
+        {
+            foreach (var found in desktop.DiscoverAppWindows(SnapshotTrackedWindowIds()))
+            {
+                var app = await AppForDiscoveredWindowAsync(found, cancellationToken);
+                _ = TryTrackDiscoveredWindow(app, found.Window);
+            }
+        }
+
+        List<(WindowsAppDescriptor App, LaunchedWindow Window)> tracked;
+        lock (trackedWindowsGate)
+        {
+            tracked = trackedWindowsById.Values
+                .Where(window => appByWindowId.ContainsKey(window.WindowId))
+                .Select(window => (appByWindowId[window.WindowId], window))
+                .ToList();
+        }
+
+        // A window that closed since the last discovery pass would get a Mac window with nothing to show.
+        var open = tracked
+            .Where(pair => desktop.IsWindowStillOpen(pair.Window.WindowId))
+            .Select(pair => (pair.App, Window: desktop.CurrentWindow(pair.Window)))
+            .OrderBy(pair => pair.Window.IsPopup)
+            .ToList();
+        var replies = new List<JsonObject>
+        {
+            new()
+            {
+                ["type"] = MessageTypes.WindowListResponse,
+                ["requestId"] = requestId,
+                ["windowIds"] = new JsonArray(open.Select(pair => (JsonNode?)pair.Window.WindowId).ToArray())
+            }
+        };
+        replies.AddRange(open.Select(pair => WindowCreatedEvent(pair.App, pair.Window)));
+        return new AgentReplies(replies, Array.Empty<JsonObject>());
     }
 
     private async Task<AgentReplies> HandleAppLaunchAsync(
@@ -1101,6 +1165,7 @@ public sealed class AgentSession
                 ["imeMode"] = OperatingSystem.IsWindows(),
                 // host.folder.mount.request: a Mac folder served over WebDAV, mapped as a drive letter.
                 ["hostFolder"] = OperatingSystem.IsWindows(),
+                ["desktopWindows"] = OperatingSystem.IsWindows(),
                 ["packageIdentity"] = hasPackageIdentity
             },
             ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity),
@@ -1390,6 +1455,8 @@ public sealed class AgentSession
             ["apps"] = new JsonArray(
                 AppCatalog.Select(BuiltInAppObject)
                     .Concat(startMenuApps.Select(StartMenuAppObject))
+                    .Concat(runningApps.Values.OrderBy(app => app.Name, StringComparer.CurrentCultureIgnoreCase)
+                        .Select(RunningAppObject))
                     .ToArray<JsonNode?>()
             )
         };
@@ -1413,6 +1480,11 @@ public sealed class AgentSession
         if (AppCatalog.FirstOrDefault(candidate => candidate.Id == appId) is { } builtIn)
         {
             return builtIn;
+        }
+
+        if (appId is not null && runningApps.TryGetValue(appId, out var running))
+        {
+            return running;
         }
 
         if (appId is null || !appId.StartsWith(StartMenuCatalog.IdPrefix, StringComparison.Ordinal))
@@ -1444,6 +1516,16 @@ public sealed class AgentSession
         return appObject;
     }
 
+    /// <summary>
+    /// An app known only from an open window. <c>running</c> tells the host it is not a Start menu entry.
+    /// </summary>
+    private static JsonObject RunningAppObject(WindowsAppDescriptor app)
+    {
+        var appObject = AppObject(app, StartMenuCatalog.IconPngBase64(app));
+        appObject["running"] = true;
+        return appObject;
+    }
+
     private static JsonObject AppObject(WindowsAppDescriptor app, string? iconPngBase64) => new()
     {
         ["id"] = app.Id,
@@ -1472,7 +1554,7 @@ public sealed class AgentSession
 
     private static JsonObject WindowCreatedEvent(WindowsAppDescriptor app, LaunchedWindow window)
     {
-        var message = WindowCreatedEventFields(app, window);
+        var message = WithResizable(WindowCreatedEventFields(app, window), window);
         // Only sent for popups so ordinary window events, and their fixtures, stay as they were.
         if (window.IsPopup)
         {
@@ -1502,6 +1584,17 @@ public sealed class AgentSession
         ["state"] = window.State,
         ["focused"] = window.Focused
     };
+
+    private static JsonObject WithResizable(JsonObject message, LaunchedWindow window)
+    {
+        // Only sent when false, so events for ordinary windows, and their fixtures, stay as they were.
+        if (!window.Resizable)
+        {
+            message["resizable"] = false;
+        }
+
+        return message;
+    }
 
     private static JsonObject WindowFrameEvent(WindowFrame frame) => new()
     {
@@ -1705,6 +1798,41 @@ public sealed class AgentSession
         {
             return trackedWindowsById.ToDictionary(pair => pair.Key, pair => pair.Value.OwnerWindowId);
         }
+    }
+
+    /// <summary>
+    /// True while an app launch or file open is looking for its window. Desktop-wide discovery waits, so it
+    /// does not announce the window the launch is about to report itself.
+    /// </summary>
+    internal bool IsLaunching => Volatile.Read(ref launchesInFlight) > 0;
+
+    internal IReadOnlySet<string> SnapshotTrackedWindowIds()
+    {
+        lock (trackedWindowsGate)
+        {
+            return trackedWindowsById.Keys.ToHashSet();
+        }
+    }
+
+    /// <summary>
+    /// The app a window found on the desktop belongs to: a built-in or Start menu app when one matches, and
+    /// otherwise an app made from the window's program and remembered for app.list and app.launch.
+    /// </summary>
+    internal async Task<WindowsAppDescriptor> AppForDiscoveredWindowAsync(
+        DiscoveredAppWindow window,
+        CancellationToken cancellationToken
+    )
+    {
+        // Never waits for a Start menu discovery: a window found before the first one finishes becomes a
+        // running app, which opens and closes like any other.
+        var startMenuApps = await StartMenuAppsAsync(TimeSpan.Zero, cancellationToken);
+        if (RunningAppCatalog.Match(window, AppCatalog.Concat(startMenuApps).ToArray()) is { } known)
+        {
+            return known;
+        }
+
+        var described = RunningAppCatalog.Describe(window, RunningAppCatalog.FileDescription);
+        return runningApps.GetOrAdd(described.Id, described);
     }
 
     internal IReadOnlyList<(WindowsAppDescriptor App, IReadOnlySet<string> KnownWindowIds)> SnapshotTrackedAppsForDiscovery()

@@ -154,11 +154,40 @@ public sealed class WindowsDesktop : IWindowsDesktop
                 return true;
             }
 
+            // File Explorer's process also owns the desktop and the taskbar, which are not its windows.
+            if (AppWindowRules.IsShellWindow(DesktopAppWindowScanner.ClassName(hwnd), string.Empty))
+            {
+                return true;
+            }
+
             discovered.Add(CreateLaunchedWindow(hwnd, (int)windowProcessId, GetWindowTitle(hwnd), app.Name));
             return true;
         }, IntPtr.Zero);
 
         return discovered;
+    }
+
+    public LaunchedWindow CurrentWindow(LaunchedWindow window)
+    {
+        if (!OperatingSystem.IsWindows() || !IsWindow(window.Hwnd))
+        {
+            return window;
+        }
+
+        return CreateLaunchedWindow(window.Hwnd, window.ProcessId, GetWindowTitle(window.Hwnd), window.Title);
+    }
+
+    public IReadOnlyList<DiscoveredAppWindow> DiscoverAppWindows(IReadOnlySet<string> knownWindowIds)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return [];
+        }
+
+        return DesktopAppWindowScanner.Scan(
+            knownWindowIds,
+            (hwnd, processId, title) => CreateLaunchedWindow(hwnd, processId, title, title)
+        );
     }
 
     /// <summary>
@@ -311,6 +340,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             : title;
 
         var owner = GetWindow(hwnd, GW_OWNER);
+        var style = GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64();
         return new LaunchedWindow(
             WindowId: FormatWindowId(hwnd),
             Hwnd: hwnd,
@@ -319,8 +349,9 @@ public sealed class WindowsDesktop : IWindowsDesktop
             Bounds: GetWindowBounds(hwnd),
             State: "normal",
             Focused: true,
-            IsPopup: IsPopup(GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64(), hasOwner: owner != IntPtr.Zero),
-            OwnerWindowId: owner == IntPtr.Zero ? null : FormatWindowId(owner)
+            IsPopup: IsPopup(style, hasOwner: owner != IntPtr.Zero),
+            OwnerWindowId: owner == IntPtr.Zero ? null : FormatWindowId(owner),
+            Resizable: IsResizable(style)
         );
     }
 
@@ -330,12 +361,19 @@ public sealed class WindowsDesktop : IWindowsDesktop
     /// </summary>
     internal static bool IsPopup(long style, bool hasOwner) => hasOwner && (style & WS_CAPTION) != WS_CAPTION;
 
+    /// <summary>
+    /// Whether Windows lets the user drag the window's edges. A window that draws its own frame, as UWP
+    /// apps' ApplicationFrameWindow does, still has the sizing border style.
+    /// </summary>
+    internal static bool IsResizable(long style) => (style & WS_THICKFRAME) != 0;
+
     private static bool IsPopupWindow(IntPtr hwnd) =>
         IsPopup(GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64(), hasOwner: GetWindow(hwnd, GW_OWNER) != IntPtr.Zero);
 
     private const int GW_OWNER = 4;
     private const int GWL_STYLE = -16;
     private const long WS_CAPTION = 0x00C00000;
+    private const long WS_THICKFRAME = 0x00040000;
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetWindow(IntPtr hWnd, int command);
