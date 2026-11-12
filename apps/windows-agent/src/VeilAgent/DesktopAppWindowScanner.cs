@@ -169,6 +169,40 @@ internal static class DesktopAppWindowScanner
         return facts.HasOwner || AppWindowRules.IsAppWindow(facts);
     }
 
+    /// <summary>
+    /// Whether a window could be the one an app launch opened. Like <see cref="IsAppOrOwnedWindow"/>, but a
+    /// main window may not have its title yet when it first appears, so an untitled window counts when it is
+    /// large enough to be one. File Explorer's untitled helper windows are one pixel.
+    /// </summary>
+    public static bool IsLaunchCandidate(nint hwnd)
+    {
+        if (!OperatingSystem.IsWindows() || IsAppOrOwnedWindow(hwnd))
+        {
+            return true;
+        }
+
+        var facts = Facts(hwnd, UntitledPlaceholder, string.Empty);
+        return AppWindowRules.IsAppWindow(facts)
+            && GetWindowRect(hwnd, out var rect)
+            && rect.Right - rect.Left >= MinimumUntitledSide
+            && rect.Bottom - rect.Top >= MinimumUntitledSide;
+    }
+
+    private const string UntitledPlaceholder = "-";
+    private const int MinimumUntitledSide = 64;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect rect);
+
     private static TopLevelWindowFacts Facts(nint hwnd, string title, string processName)
     {
         var extendedStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();

@@ -169,9 +169,6 @@ public sealed class WindowsDesktop : IWindowsDesktop
         return discovered;
     }
 
-    private static bool IsShellWindow(IntPtr hwnd) =>
-        AppWindowRules.IsShellWindow(DesktopAppWindowScanner.ClassName(hwnd), string.Empty);
-
     public LaunchedWindow CurrentWindow(LaunchedWindow window)
     {
         if (!OperatingSystem.IsWindows() || !IsWindow(window.Hwnd))
@@ -227,7 +224,7 @@ public sealed class WindowsDesktop : IWindowsDesktop
             }
 
             _ = GetWindowThreadProcessId(hwnd, out var windowProcessId);
-            if (DoesWindowMatchApp(hwnd, windowProcessId, app) && !IsShellWindow(hwnd))
+            if (DoesWindowMatchApp(hwnd, windowProcessId, app) && DesktopAppWindowScanner.IsLaunchCandidate(hwnd))
             {
                 handles.Add(hwnd);
             }
@@ -260,9 +257,9 @@ public sealed class WindowsDesktop : IWindowsDesktop
             var matchesTitle = !string.IsNullOrWhiteSpace(title)
                 && title.Contains(app.Name, StringComparison.OrdinalIgnoreCase);
 
-            // File Explorer's process also owns the desktop and the taskbar, which were there before the
-            // launch and are never the window it opened.
-            if ((matchesProcess || matchesExecutable || matchesTitle) && !IsShellWindow(hwnd))
+            // File Explorer's process also owns the desktop, the taskbar, and one-pixel helper windows, which
+            // were there before the launch and are never the window it opened.
+            if ((matchesProcess || matchesExecutable || matchesTitle) && DesktopAppWindowScanner.IsLaunchCandidate(hwnd))
             {
                 candidates.Add(new WindowCandidate(
                     Hwnd: hwnd,
