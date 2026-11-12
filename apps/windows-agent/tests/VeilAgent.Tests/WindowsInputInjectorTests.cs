@@ -129,4 +129,16 @@ public class WindowsInputInjectorTests
 
         Assert.Equal((expectedLeft, expectedTop), placed);
     }
+
+    [Theory]
+    [InlineData("move", false)]
+    [InlineData("leftDown", true)]
+    [InlineData("leftUp", true)]
+    [InlineData("rightDown", true)]
+    [InlineData("scroll", true)]
+    public void OnlyPointingLeavesTheWindowOrderAlone(string inputEvent, bool raises)
+    {
+        // Moving the Mac pointer over a mirrored window must not bring it to the front in Windows.
+        Assert.Equal(raises, WindowsInputInjector.RaisesTarget(inputEvent));
+    }
 }

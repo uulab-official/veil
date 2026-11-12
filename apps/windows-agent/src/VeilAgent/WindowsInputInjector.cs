@@ -55,6 +55,15 @@ internal static class WindowsInputInjector
     ];
 
     /// <summary>The mouse button flags for a protocol mouse event, or null for an unknown event.</summary>
+    /// <summary>
+    /// Whether a mouse event brings its window to the front first. A click or a scroll belongs to its
+    /// window. Pointing does not: in Windows, moving the pointer over a window never raises it. Raising on
+    /// every move meant the Mac pointer resting on one mirrored window kept that window in front in
+    /// Windows, so an app that had just opened was pushed behind it before its first picture was taken, and
+    /// a dialog being typed into lost the keyboard.
+    /// </summary>
+    internal static bool RaisesTarget(string inputEvent) => inputEvent != "move";
+
     internal static uint? MouseButtonFlags(string inputEvent) => inputEvent switch
     {
         "leftDown" => MOUSEEVENTF_LEFTDOWN,
