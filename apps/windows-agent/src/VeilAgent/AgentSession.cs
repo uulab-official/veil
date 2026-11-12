@@ -203,6 +203,10 @@ public sealed class AgentSession
     private AgentReplies HandleToolsUpdate(string? requestId)
     {
         var result = toolsUpdate.Run();
+        // In the agent's log, since the script that follows stops this process.
+        Console.Error.WriteLine(result.Started
+            ? $"ToolsUpdate: started {result.EntryPoint}."
+            : $"ToolsUpdate: not started. {result.ErrorCode}: {result.Message}");
         if (!result.Started)
         {
             return AgentReplies.Direct(ErrorResponse(
