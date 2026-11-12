@@ -56,6 +56,9 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
   mouse event, pointer moves included. And the host's automatic frame maintenance focused a window whose
   stream looked stale, so Paint's covered formatting bar kept coming to the front. Live: Calculator opened
   from the Mac stays in front in Windows and its Mac window appears within 3 seconds.
-- **Not built: restarting the agent when it dies.** The agent starts at logon only. Since typing is refused
-  when the tools do not answer, a crashed agent stays down until Windows restarts.
-
+- **The agent restarts when it dies.** `Start-VeilAgent.ps1` leaves a hidden PowerShell waiting on the agent
+  process. A crash code starts the agent again, at most five times in ten minutes; a clean exit,
+  `Stop-Process` (exit code -1, which updates and repairs use), and sign-out are left alone. Live:
+  `taskkill /f` took the agent down and it answered again 2 seconds later, with a new supervisor; after
+  `Stop-Process` it stayed down and the log says `ended with code -1 ...; left stopped`. The hidden
+  PowerShell stays in memory for as long as the agent runs. The five-restart limit is not checked live.
