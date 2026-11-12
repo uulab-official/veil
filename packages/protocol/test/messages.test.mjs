@@ -49,6 +49,9 @@ import {
   validateDisplayResizeResponse,
   validateSystemShutdownRequest,
   validateSystemShutdownResponse,
+  validateWindowListRequest,
+  validateWindowListResponse,
+  validateWindowLifecycleMetadata,
   validateWindowUpdated
 } from "../src/messages.mjs";
 
@@ -112,6 +115,8 @@ test("parses every stable fixture", async () => {
     "time.sync.response.json",
     "appearance.set.request.json",
     "appearance.set.response.json",
+    "window.list.request.json",
+    "window.list.response.json",
     "error.app_not_found.json"
   ];
 
@@ -1004,4 +1009,34 @@ test("host folder mount fixtures validate and unsafe shapes are refused", async 
   for (const change of [{ token: "a&calc" }, { token: "short" }, { driveLetter: "C" }, { port: 0 }, { label: "" }]) {
     assert.throws(() => validateHostFolderMountRequest({ ...request, ...change }), TypeError, JSON.stringify(change));
   }
+});
+
+test("validates the window list request and response", async () => {
+  const request = validateWindowListRequest(await readFixture("window.list.request.json"));
+  const response = validateWindowListResponse(await readFixture("window.list.response.json"));
+
+  assert.equal(request.requestId, response.requestId);
+  assert.deepEqual(response.windowIds, ["hwnd:0003029A", "hwnd:000F0254"]);
+  assert.throws(() => validateWindowListResponse({ ...response, windowIds: [""] }), /windowIds/);
+  assert.throws(() => validateWindowListResponse({ ...response, windowIds: undefined }), /windowIds/);
+});
+
+test("accepts a window that cannot be resized and rejects a non-boolean flag", async () => {
+  const created = await readFixture("window.created.json");
+
+  assert.equal(validateWindowLifecycleMetadata({ ...created, resizable: false }).resizable, false);
+  assert.throws(() => validateWindowLifecycleMetadata({ ...created, resizable: "no" }), /resizable/);
+});
+
+test("accepts the desktop windows capability as an optional boolean", async () => {
+  const health = await readFixture("agent.health.response.json");
+
+  assert.equal(validateAgentHealthResponse(health).capabilities.desktopWindows, true);
+  assert.throws(
+    () => validateAgentHealthResponse({
+      ...health,
+      capabilities: { ...health.capabilities, desktopWindows: "yes" }
+    }),
+    /desktopWindows/
+  );
 });

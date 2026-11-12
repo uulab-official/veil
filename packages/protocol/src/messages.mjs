@@ -9,6 +9,8 @@ export const MessageType = Object.freeze({
   SharedFileOpenRequest: "file.open.shared.request",
   FileOpenResponse: "file.open.response",
   WindowCreated: "window.created",
+  WindowListRequest: "window.list.request",
+  WindowListResponse: "window.list.response",
   WindowUpdated: "window.updated",
   WindowClosed: "window.closed",
   WindowFrame: "window.frame",
@@ -151,7 +153,7 @@ export function validateAgentHealthResponse(response) {
   // Optional so an older agent keeps image and file clipboards on the Mac instead of receiving a message
   // it cannot route. timeSync and appearanceSync are optional for the same reason: without them the host
   // never sends time.sync.request or appearance.set.request.
-  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync", "textComposition", "imeMode", "hostFolder"]) {
+  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync", "textComposition", "imeMode", "hostFolder", "desktopWindows"]) {
     if (response.capabilities[field] !== undefined && typeof response.capabilities[field] !== "boolean") {
       throw new TypeError(`Agent health response field 'capabilities.${field}' must be a boolean.`);
     }
@@ -653,8 +655,32 @@ export function validateWindowLifecycleMetadata(window, expectedType = MessageTy
   if (typeof window.focused !== "boolean") {
     throw new TypeError("Window lifecycle event field 'focused' must be a boolean.");
   }
+  // Optional: only a window the user cannot resize carries it, as false.
+  if (window.resizable !== undefined && typeof window.resizable !== "boolean") {
+    throw new TypeError("Window lifecycle event field 'resizable' must be a boolean.");
+  }
 
   return window;
+}
+
+export function validateWindowListRequest(request) {
+  if (!request || request.type !== MessageType.WindowListRequest) {
+    throw new TypeError(`Window list request must use type ${MessageType.WindowListRequest}.`);
+  }
+  requireNonEmptyString(request.requestId, "requestId", "Window list request");
+  return request;
+}
+
+export function validateWindowListResponse(response) {
+  if (!response || response.type !== MessageType.WindowListResponse) {
+    throw new TypeError(`Window list response must use type ${MessageType.WindowListResponse}.`);
+  }
+  requireNonEmptyString(response.requestId, "requestId", "Window list response");
+  if (!Array.isArray(response.windowIds)
+    || response.windowIds.some((windowId) => typeof windowId !== "string" || windowId.length === 0)) {
+    throw new TypeError("Window list response field 'windowIds' must be an array of window ids.");
+  }
+  return response;
 }
 
 // Windows reserves these names for device files regardless of extension ("CON.txt" still resolves

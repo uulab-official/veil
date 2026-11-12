@@ -27,6 +27,7 @@
     "textComposition": true,
     "imeMode": true,
     "hostFolder": true,
+    "desktopWindows": true,
     "packageIdentity": false
   },
   "packageIdentityStatus": {

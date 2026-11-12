@@ -12,6 +12,8 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `app.launch.response.json`
 - `window.created.json`
 - `window.created.popup.json`
+- `window.list.request.json`
+- `window.list.response.json`
 - `window.updated.json`
 - `window.layout.json`
 - `window.crop.set.json`

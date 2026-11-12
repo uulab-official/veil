@@ -87,6 +87,7 @@ Response:
     "textComposition": true,
     "imeMode": true,
     "hostFolder": true,
+    "desktopWindows": true,
     "packageIdentity": false
   },
   "sharedFolder": {
@@ -154,6 +155,9 @@ an absent value means it predates the message, and the host uses the ACPI power 
 
 `capabilities.windowLayout` is optional. `true` means the agent sends `window.layout` events. When the value
 is absent, the host receives every window's pixels through `window.frame` as before.
+
+`capabilities.desktopWindows` is optional. `true` means the agent reports every app window on the desktop
+and answers `window.list.request` (see "Desktop windows" and "Window List").
 
 `capabilities.packageIdentity` is `true` only when the Windows agent is running
 with Windows package identity. The agent reads this from Windows' app model
@@ -322,6 +326,19 @@ apps. This lets the Mac offer a Windows Start menu of its own.
   only the built-in apps. Ask again later for the rest.
 - Start menu icons are 128 px, not 256 px. Many apps share one reply, and the
   host refuses messages over 32 MiB.
+
+### Running apps
+
+An app that has a window open but is neither built-in nor in the Start menu is
+listed too, after the Start menu apps. Examples are File Explorer and a program
+started from its folder.
+
+- Its id starts with `proc_`: the first 16 hex digits of the SHA-256 of the
+  lowercased program path, or of the AppUserModelID for a packaged app.
+- Its name is the program's file description, as Task Manager shows it.
+- It carries `"running": true`. Hosts leave such apps out of a Start menu,
+  since Windows does not list them there either.
+- It stays listed, and can be launched by id, until the agent restarts.
 
 ## App Launch
 
@@ -567,9 +584,11 @@ Rules:
 
 - `window.created` can arrive as part of a host launch response or as an async guest lifecycle event.
 - Several apps can be mirrored at once, each as its own macOS window, cascaded so a new window does not land exactly on top of an existing one. One macOS window per HWND is the invariant: frame events, window updates, and reconnect races all re-present the same session repeatedly and must never duplicate a window.
-- Multiple windows of the **same** app are mirrored too, which is how a second document window appears. Since a second window of one app can only arrive from the async discovery stream, the host distinguishes two kinds of window it did not launch:
-  - A window whose `appId` **already has a tracked window** in this session is adopted. The user opened the app, so the app opening another document window is it doing what they asked.
-  - A window whose `appId` was **never opened** in this session is ignored. That is a leftover process or something Windows started on its own, and an unrequested window appearing on screen is worse than a missing one. The guest enumerates every tracked process after a reconnect, so this rule is what keeps discovery from materializing windows nobody asked for.
+- Multiple windows of the **same** app are mirrored too, which is how a second document window appears.
+- With `capabilities.desktopWindows`, the guest announces **every app window on the desktop**, whoever opened it: an app started from inside Windows, a window another app opened, or one that was open before the host connected. Each gets a Mac window, as each has a taskbar button in Windows. See "Desktop windows" below.
+- Without that capability the guest only announces windows of apps that already have a tracked window, and the host keeps the older rule for a window it did not launch:
+  - A window whose `appId` **already has a tracked window** in this session is adopted.
+  - A window whose `appId` was **never opened** in this session is ignored.
 - An adopted window must have a non-empty title and non-zero bounds; an untitled or zero-sized top-level window is far more likely a tooltip, splash, or transient shell window than a document. The number of windows adopted per app is bounded, which limits guest-driven creation the host does not control rather than expressing a preference about how many windows a user may have.
 - The host tracks explicit-launch HWNDs, persists its restore targets per app, and subscribes to frame capture when the connected agent advertises `windowCapture`. Restore issues one launch per app rather than replaying a window count, because a launch for an app that already owns a window reuses that HWND.
 
@@ -595,6 +614,51 @@ Popups carry two optional fields:
 - The host shows a popup as a borderless, transparent overlay at the same offset from its owner's top-left as in Windows, attached so it moves with the owner and never taking key focus from it. Popup windows are often larger than what they draw, and capture records the transparent part as black, so the host clears black that reaches the frame's edge and keeps black content enclosed by the popup.
 
 Fixture: `harness/protocol-fixtures/window.created.popup.json`.
+
+A window the user cannot resize carries one more optional field:
+
+- `resizable: false` marks a window without a sizing border, such as Character Map or most dialogs. The host shows it at the guest's size and does not let the Mac window be resized. Resizable windows omit the field.
+
+### Desktop windows
+
+A guest with `capabilities.desktopWindows` reports every app window, not only the windows of apps the host launched.
+
+- **Which windows count.** The rule is the taskbar's: a visible, titled, top-level window that is not cloaked or minimized, and is either marked `WS_EX_APPWINDOW` or is unowned, not a tool window, and able to take focus. The Windows shell's own windows are left out: the desktop, the taskbar, Start, Search, the notification center, Task View, and the touch keyboard. So are the agent's own windows.
+- **Which app.** A window is reported under the built-in or Start menu app it belongs to, matched by AppUserModelID, then by program path, then by program name. A window that matches none is reported under a `proc_` app made from its program (see "Running apps" under App List).
+- **When.** The guest scans every 2 seconds. It skips the scan while an `app.launch.request` or a file open is waiting for its window, so that window is reported once, by the launch.
+- **After the first window.** Once an app has a tracked window, its dialogs and popups are reported as before.
+- **Minimized windows** are reported when they are restored.
+
+## Window List
+
+A host that has just connected asks for the windows that are already open:
+
+```json
+{
+  "type": "window.list.request",
+  "requestId": "req_040"
+}
+```
+
+The guest answers on the same connection with a `window.list.response`, followed by one `window.created` for every tracked window:
+
+```json
+{
+  "type": "window.list.response",
+  "requestId": "req_040",
+  "windowIds": ["hwnd:0003029A", "hwnd:000F0254"]
+}
+```
+
+Rules:
+
+- The guest first tracks the app windows nothing has reported yet (see "Desktop windows"), so the reply is complete without waiting for the next scan.
+- Each `window.created` carries the window's current title and bounds, not the ones it had when it was first reported.
+- Windows come before the popups they own.
+- The host sends the request on its event connection, so the `window.created` events arrive where async window events do and are handled the same way. A window the host already shows is updated, not duplicated.
+- An agent without `capabilities.desktopWindows` answers with an `unknown_message_type` error, which the host ignores.
+
+Fixtures: `harness/protocol-fixtures/window.list.request.json`, `harness/protocol-fixtures/window.list.response.json`.
 
 ## Window Updated
 
