@@ -47,6 +47,7 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
         return Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
+            using var captureTurn = EnterCapture(window.WindowId);
 
             var diagnostics = FrameCaptureDiagnostics.Shared;
             var total = System.Diagnostics.Stopwatch.StartNew();
@@ -194,13 +195,60 @@ public sealed class GdiWindowFrameCapture : IWindowFrameCapture
 
         duplicationVersionsByWindowId.TryRemove(windowId, out _);
         geometrySettling.Forget(windowId);
-        lock (bitmapsByWindowId)
+        // A capture that is still running reads from the bitmap. Disposing it then is what crashed the
+        // agent, so the bitmap is left to the garbage collector when the capture does not finish in time.
+        var idle = CaptureGate(windowId).Wait(CaptureTurnWait);
+        try
         {
-            if (bitmapsByWindowId.Remove(windowId, out var bitmap))
+            lock (bitmapsByWindowId)
             {
-                bitmap.Dispose();
+                if (bitmapsByWindowId.Remove(windowId, out var bitmap) && idle)
+                {
+                    bitmap.Dispose();
+                }
             }
         }
+        finally
+        {
+            if (idle)
+            {
+                CaptureGate(windowId).Release();
+            }
+        }
+    }
+
+    /// <summary>
+    /// One capture at a time per window. The streamer gives up on a capture after two seconds, but the
+    /// capture itself keeps running, and a second one for the same window then shared its bitmap: reading
+    /// it while the first wrote, or disposing it after a resize while the first still copied from it. The
+    /// second case is an access violation, which no handler catches, and it ended the agent process on the
+    /// live guest.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> captureGates = new();
+
+    internal static readonly TimeSpan CaptureTurnWait = TimeSpan.FromSeconds(2);
+
+    private SemaphoreSlim CaptureGate(string windowId) =>
+        captureGates.GetOrAdd(windowId, _ => new SemaphoreSlim(1, 1));
+
+    /// <summary>
+    /// Waits for the window's previous capture to finish. A capture that waited its whole turn fails like
+    /// any other capture, and the streamer tries again on its next tick.
+    /// </summary>
+    private CaptureTurn EnterCapture(string windowId)
+    {
+        var gate = CaptureGate(windowId);
+        if (!gate.Wait(CaptureTurnWait))
+        {
+            throw new TimeoutException($"The previous capture of {windowId} is still running.");
+        }
+
+        return new CaptureTurn(gate);
+    }
+
+    private readonly struct CaptureTurn(SemaphoreSlim gate) : IDisposable
+    {
+        public void Dispose() => gate.Release();
     }
 
     /// <summary>
