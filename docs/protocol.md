@@ -302,7 +302,9 @@ from the app's alternate executable names before falling back to no icon.
 The list holds every app in the Windows Start menu, not only the built-in
 apps. This lets the Mac offer a Windows Start menu of its own.
 
-- The three built-in apps come first, with their `winapp_` ids.
+- The built-in apps come first, with their `winapp_` ids: Notepad, Calculator,
+  Paint, and File Explorer. File Explorer's Start menu shortcut names a shell
+  folder, not a program, so Start menu discovery cannot list it.
 - Start menu apps follow, sorted by name. Their ids start with `start_`.
 - Shortcut apps come from the `.lnk` files under the all-users and per-user
   Start menu `Programs` folders. Only shortcuts to an existing `.exe` count.
