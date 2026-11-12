@@ -28,6 +28,7 @@
     "imeMode": true,
     "hostFolder": true,
     "desktopWindows": true,
+    "toolsUpdate": true,
     "packageIdentity": false
   },
   "packageIdentityStatus": {

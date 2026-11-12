@@ -1,0 +1,5 @@
+{
+  "type": "tools.update.request",
+  "requestId": "req_tools_update",
+  "protocolVersion": 1
+}

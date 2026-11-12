@@ -9,6 +9,8 @@ export const MessageType = Object.freeze({
   SharedFileOpenRequest: "file.open.shared.request",
   FileOpenResponse: "file.open.response",
   WindowCreated: "window.created",
+  ToolsUpdateRequest: "tools.update.request",
+  ToolsUpdateResponse: "tools.update.response",
   WindowListRequest: "window.list.request",
   WindowListResponse: "window.list.response",
   WindowUpdated: "window.updated",
@@ -153,7 +155,7 @@ export function validateAgentHealthResponse(response) {
   // Optional so an older agent keeps image and file clipboards on the Mac instead of receiving a message
   // it cannot route. timeSync and appearanceSync are optional for the same reason: without them the host
   // never sends time.sync.request or appearance.set.request.
-  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync", "textComposition", "imeMode", "hostFolder", "desktopWindows"]) {
+  for (const field of ["clipboardImage", "clipboardFiles", "timeSync", "appearanceSync", "textComposition", "imeMode", "hostFolder", "desktopWindows", "toolsUpdate"]) {
     if (response.capabilities[field] !== undefined && typeof response.capabilities[field] !== "boolean") {
       throw new TypeError(`Agent health response field 'capabilities.${field}' must be a boolean.`);
     }
@@ -661,6 +663,35 @@ export function validateWindowLifecycleMetadata(window, expectedType = MessageTy
   }
 
   return window;
+}
+
+export function validateToolsUpdateRequest(request) {
+  if (!request || request.type !== MessageType.ToolsUpdateRequest) {
+    throw new TypeError(`Tools update request must use type ${MessageType.ToolsUpdateRequest}.`);
+  }
+  requireNonEmptyString(request.requestId, "requestId", "Tools update request");
+  // The agent runs one fixed file from the tools disc. A request that names a path or a command is a
+  // different, far more dangerous message.
+  for (const field of ["path", "command", "entryPoint", "arguments"]) {
+    if (request[field] !== undefined) {
+      throw new TypeError(`Tools update request must not carry '${field}'.`);
+    }
+  }
+  return request;
+}
+
+export function validateToolsUpdateResponse(response) {
+  if (!response || response.type !== MessageType.ToolsUpdateResponse) {
+    throw new TypeError(`Tools update response must use type ${MessageType.ToolsUpdateResponse}.`);
+  }
+  requireNonEmptyString(response.requestId, "requestId", "Tools update response");
+  if (typeof response.accepted !== "boolean") {
+    throw new TypeError("Tools update response field 'accepted' must be a boolean.");
+  }
+  if (response.entryPoint !== undefined && typeof response.entryPoint !== "string") {
+    throw new TypeError("Tools update response field 'entryPoint' must be a string.");
+  }
+  return response;
 }
 
 export function validateWindowListRequest(request) {

@@ -49,6 +49,8 @@ import {
   validateDisplayResizeResponse,
   validateSystemShutdownRequest,
   validateSystemShutdownResponse,
+  validateToolsUpdateRequest,
+  validateToolsUpdateResponse,
   validateWindowListRequest,
   validateWindowListResponse,
   validateWindowLifecycleMetadata,
@@ -117,6 +119,8 @@ test("parses every stable fixture", async () => {
     "appearance.set.response.json",
     "window.list.request.json",
     "window.list.response.json",
+    "tools.update.request.json",
+    "tools.update.response.json",
     "error.app_not_found.json"
   ];
 
@@ -1039,4 +1043,17 @@ test("accepts the desktop windows capability as an optional boolean", async () =
     }),
     /desktopWindows/
   );
+});
+
+test("validates the tools update request and refuses one that names what to run", async () => {
+  const request = validateToolsUpdateRequest(await readFixture("tools.update.request.json"));
+  const response = validateToolsUpdateResponse(await readFixture("tools.update.response.json"));
+
+  assert.equal(request.requestId, response.requestId);
+  assert.equal(response.accepted, true);
+  assert.equal(response.entryPoint, "H:\\Veil Guest Agent\\U.cmd");
+  for (const field of ["path", "command", "entryPoint", "arguments"]) {
+    assert.throws(() => validateToolsUpdateRequest({ ...request, [field]: "C:\\evil.cmd" }), new RegExp(field));
+  }
+  assert.throws(() => validateToolsUpdateResponse({ ...response, accepted: "yes" }), /accepted/);
 });

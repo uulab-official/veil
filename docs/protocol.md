@@ -88,6 +88,7 @@ Response:
     "imeMode": true,
     "hostFolder": true,
     "desktopWindows": true,
+    "toolsUpdate": true,
     "packageIdentity": false
   },
   "sharedFolder": {
@@ -158,6 +159,9 @@ is absent, the host receives every window's pixels through `window.frame` as bef
 
 `capabilities.desktopWindows` is optional. `true` means the agent reports every app window on the desktop
 and answers `window.list.request` (see "Desktop windows" and "Window List").
+
+`capabilities.toolsUpdate` is optional. `true` means the agent accepts `tools.update.request` and can start
+the update from the tools disc itself (see "Tools Update").
 
 `capabilities.packageIdentity` is `true` only when the Windows agent is running
 with Windows package identity. The agent reads this from Windows' app model
@@ -2152,6 +2156,57 @@ Guest response:
 - `host.folder.unmount.request` with `driveLetter` removes a Veil mapping and answers
   `host.folder.unmount.response` with the same `hostFolder` shape.
 - An agent that reports `capabilities.hostFolder` understands both.
+
+## Tools Update
+
+The host updates the Windows tools from a disc it puts in the VM's removable drive. An agent that reports
+`capabilities.toolsUpdate` starts the update itself, so the host does not have to type a command into
+Windows.
+
+Typing was the only way before: a click at a fixed place on the Windows screen, Ctrl+A, then the command in
+the Run dialog, all sent through QEMU. With apps open in Windows the click and the keys reached those apps.
+On the live guest one run replaced the text of an open Notepad document.
+
+Request (host → agent), after the host has inserted the disc:
+
+```json
+{
+  "type": "tools.update.request",
+  "requestId": "req_tools_update",
+  "protocolVersion": 1
+}
+```
+
+Response:
+
+```json
+{
+  "type": "tools.update.response",
+  "requestId": "req_tools_update",
+  "protocolVersion": 1,
+  "accepted": true,
+  "entryPoint": "H:\\Veil Guest Agent\\U.cmd"
+}
+```
+
+Rules:
+
+- The agent looks for an optical drive whose volume label is `VEIL_TOOLS` and that has
+  `Veil Guest Agent\U.cmd`. It starts that file with `cmd.exe`, with no window, and answers at once. The
+  script then stops the agent, replaces its files, and starts the new one, so the connection drops a few
+  seconds after the response.
+- The request carries no path and no command. The agent runs only that one file from a disc with that
+  label, as the user the agent runs as, without elevation.
+- This gives the host nothing it could not already do: it attaches the disc, and it can type into Windows.
+  A program inside Windows that mounts its own disc image with that label and sends the request gets its
+  script run as the same user it already runs as.
+- With no such disc the agent answers with a `tools_media_missing` error. When the file cannot be started
+  it answers `tools_update_failed`.
+- A host connected to an agent without the capability, or to no agent, still types the command, and only
+  while no app window is open in Windows.
+
+Fixtures: `harness/protocol-fixtures/tools.update.request.json`,
+`harness/protocol-fixtures/tools.update.response.json`.
 
 ## Guest Time Sync
 
