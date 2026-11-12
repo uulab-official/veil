@@ -37,9 +37,16 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
 - **Typed commands are not safe with apps open.** The tools update and the agent repair type into the Windows
   Run dialog through QEMU: a click at a fixed place, Ctrl+A, then the command. With Notepad and Paint open,
   one run replaced the text of an open Notepad document and changed Paint's tool. The text was restored with
-  undo. The host now refuses to type while Windows has app windows open
-  (`AppRuntimeBooterError.windowsAppsAreOpen`). The update should be run by the agent itself, from the tools
-  disc, with no typing. That is not built yet.
+  undo. Two changes followed.
+  - The agent now starts the update itself from the tools disc (`tools.update.request`), with nothing typed.
+    Live: with Notepad and Paint open, the agent went from `81e9f0ca5511` to `2e7d41908223` in 11 seconds.
+  - Typing is refused while Windows has app windows open, and when the tools were installed but do not
+    answer (`GuestTypingSafety`). The second rule came from a second accident: after the agent had crashed,
+    the host no longer saw the open apps and typed again. That rule is unit-tested only.
+- **The agent crashed while capturing.** Two captures of one window shared a bitmap after the streamer's
+  two-second timeout, and one disposed it under the other: an access violation in `CopyPixels`. Captures of
+  a window now run one at a time. Live: the agent stayed up for a minute with four windows shown; a longer
+  run has not been watched.
 - **Maintenance closed windows by itself.** A window covered by another one looked stale and was closed and
   reopened every few seconds. Maintenance that runs by itself no longer closes a window.
 - **`input.text` lost characters.** A command typed through the agent into Command Prompt arrived without
