@@ -1,5 +1,0 @@
-Package.swift
-Sources
-Tests
-VeilHostShell.entitlements
-veil-write-probe.txt
