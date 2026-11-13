@@ -39,6 +39,21 @@ internal readonly record struct WindowGeometry(WindowRect Outer, WindowRect Visi
     }
 
     /// <summary>
+    /// The window's rectangle alone, for a window that is not drawn: its visible frame is not asked for,
+    /// which costs a call to the Desktop Window Manager.
+    /// </summary>
+    public static WindowGeometry? ReadOuter(nint hwnd)
+    {
+        if (!GetWindowRect(hwnd, out var outer))
+        {
+            return null;
+        }
+
+        var outerRect = ToWindowRect(outer);
+        return new WindowGeometry(outerRect, outerRect);
+    }
+
+    /// <summary>
     /// Keeps the visible frame inside the outer rectangle; a frame DWM reports outside it (or empty) is
     /// ignored and the outer rectangle used as is.
     /// </summary>

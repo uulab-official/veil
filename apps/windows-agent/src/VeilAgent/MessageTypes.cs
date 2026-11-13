@@ -53,6 +53,8 @@ public static class MessageTypes
     public const string TimeSyncResponse = "time.sync.response";
     public const string AppearanceSetRequest = "appearance.set.request";
     public const string AppearanceSetResponse = "appearance.set.response";
+    public const string VisualEffectsSetRequest = "visual.effects.set.request";
+    public const string VisualEffectsSetResponse = "visual.effects.set.response";
     public const string ToolsUpdateRequest = "tools.update.request";
     public const string ToolsUpdateResponse = "tools.update.response";
     public const string HostFolderMountRequest = "host.folder.mount.request";

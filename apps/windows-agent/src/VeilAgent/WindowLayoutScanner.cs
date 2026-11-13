@@ -25,14 +25,17 @@ public static class WindowLayoutScanner
         var entries = new List<WindowLayoutEntry>();
         EnumWindows((hwnd, _) =>
         {
-            var geometry = WindowGeometry.Read(hwnd);
+            // Most top-level windows are hidden helpers. They draw nothing and cover nothing, so they are
+            // given their plain rectangle and none of the calls below, which run for every window on every
+            // scan, up to 125 times a second.
+            var shown = IsWindowVisible(hwnd) && !IsIconic(hwnd) && !IsCloaked(hwnd);
+            var geometry = shown ? WindowGeometry.Read(hwnd) : WindowGeometry.ReadOuter(hwnd);
             if (geometry is null)
             {
                 return true;
             }
 
             GetWindowThreadProcessId(hwnd, out var processId);
-            var shown = IsWindowVisible(hwnd) && !IsIconic(hwnd) && !IsCloaked(hwnd);
             var frame = geometry.Value.Visible;
             entries.Add(new WindowLayoutEntry(
                 FormatWindowId(hwnd),

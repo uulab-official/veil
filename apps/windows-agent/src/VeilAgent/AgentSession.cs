@@ -77,6 +77,7 @@ public sealed class AgentSession
     private readonly DisplayScaleManager displayScale;
     private readonly GuestTimeSync timeSync;
     private readonly GuestAppearanceSync appearanceSync;
+    private readonly GuestVisualEffects visualEffects;
     private readonly Action<string> imeModeSink;
     private readonly HostFolderMount hostFolderMount;
     private readonly ToolsUpdate toolsUpdate;
@@ -100,6 +101,7 @@ public sealed class AgentSession
         DisplayScaleManager? displayScale = null,
         GuestTimeSync? timeSync = null,
         GuestAppearanceSync? appearanceSync = null,
+        GuestVisualEffects? visualEffects = null,
         Action<string>? imeModeSink = null,
         HostFolderMount? hostFolderMount = null,
         IStartMenuCatalogSource? startMenu = null,
@@ -117,6 +119,7 @@ public sealed class AgentSession
             ?? new DisplayScaleManager(new WindowsDisplayScaleBackend(), new UserDisplayScaleFile());
         this.timeSync = timeSync ?? new GuestTimeSync();
         this.appearanceSync = appearanceSync ?? new GuestAppearanceSync();
+        this.visualEffects = visualEffects ?? new GuestVisualEffects();
         this.imeModeSink = imeModeSink ?? GuestImeMode.Set;
         this.hostFolderMount = hostFolderMount ?? new HostFolderMount();
         this.toolsUpdate = toolsUpdate ?? new ToolsUpdate();
@@ -184,6 +187,7 @@ public sealed class AgentSession
                 MessageTypes.SharedFolderRequest => await HandleSharedFolderRequestAsync(request, requestId, cancellationToken),
                 MessageTypes.TimeSyncRequest => HandleTimeSyncRequest(request, requestId),
                 MessageTypes.AppearanceSetRequest => HandleAppearanceSetRequest(request, requestId),
+                MessageTypes.VisualEffectsSetRequest => HandleVisualEffectsSetRequest(request, requestId),
                 MessageTypes.ToolsUpdateRequest => HandleToolsUpdate(requestId),
                 MessageTypes.HostFolderMountRequest => HandleHostFolderMount(request, requestId),
                 MessageTypes.HostFolderUnmountRequest => HandleHostFolderUnmount(request, requestId),
@@ -1202,6 +1206,7 @@ public sealed class AgentSession
                 // time.sync.request or appearance.set.request.
                 ["timeSync"] = true,
                 ["appearanceSync"] = true,
+                ["visualEffects"] = OperatingSystem.IsWindows(),
                 // input.text accepts replaceLength, so the host can show an open IME composition inline
                 // instead of only after it is committed.
                 ["textComposition"] = OperatingSystem.IsWindows(),
@@ -1231,6 +1236,9 @@ public sealed class AgentSession
         // Diagnostic and optional: per-step capture times, so the host can see where mirrored frame time
         // goes inside the guest without reading guest logs.
         response["frameCapture"] = FrameCaptureDiagnostics.Shared.Snapshot();
+        // Also diagnostic and optional: how much processor time the agent and all of Windows have used, so
+        // the cost of mirroring inside the guest can be read from two health answers a few seconds apart.
+        response["processor"] = ProcessorDiagnostics.Snapshot();
         return response;
     }
 
@@ -1435,6 +1443,41 @@ public sealed class AgentSession
             ["hangulToggledAfter"] = last.HangulToggledAfter
         };
         return AgentReplies.Direct(reply);
+    }
+
+    private AgentReplies HandleVisualEffectsSetRequest(JsonObject request, string? requestId)
+    {
+        bool reduced;
+        try
+        {
+            if (request["reduced"] is not { } value)
+            {
+                throw new InvalidOperationException();
+            }
+            reduced = value.GetValue<bool>();
+        }
+        catch (Exception error) when (error is InvalidOperationException or FormatException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "invalid_message", "visual.effects.set.request reduced must be true or false."));
+        }
+
+        JsonObject status;
+        try
+        {
+            status = visualEffects.Apply(reduced);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return AgentReplies.Direct(ErrorResponse(requestId, "visual_effects_set_failed", error.Message));
+        }
+
+        return AgentReplies.Direct(new JsonObject
+        {
+            ["type"] = MessageTypes.VisualEffectsSetResponse,
+            ["requestId"] = requestId,
+            ["protocolVersion"] = 1,
+            ["visualEffects"] = status
+        });
     }
 
     private AgentReplies HandleAppearanceSetRequest(JsonObject request, string? requestId)

@@ -10,19 +10,28 @@ namespace Veil.Agent;
 /// <remarks>
 /// It polls rather than hooking WinEvents: a scan of the top-level windows takes well under a
 /// millisecond, needs no message loop, and the comparison sends nothing while the layout holds still.
-/// The fast interval only runs while windows are tracked, under a 1 ms timer resolution so the 8 ms
-/// interval is not rounded up to Windows' 15.6 ms tick.
+/// The fast interval only runs while windows are tracked and something moved within the last second,
+/// under a 1 ms timer resolution so the 8 ms interval is not rounded up to Windows' 15.6 ms tick.
 /// </remarks>
 public sealed class WindowLayoutStreamer
 {
     public static readonly TimeSpan ActiveInterval = TimeSpan.FromMilliseconds(8);
+    /// <summary>
+    /// The pace once nothing has moved for a second. Windows do not move by themselves, so the fast pace
+    /// only earns its cost while something is moving; the first change after a pause is seen at most this
+    /// much later, well inside the time the host waits for a moved window to settle.
+    /// </summary>
+    public static readonly TimeSpan SettledInterval = TimeSpan.FromMilliseconds(33);
     public static readonly TimeSpan IdleInterval = TimeSpan.FromMilliseconds(250);
+    /// <summary>Scans without a change, at the fast pace, before the settled pace: one second's worth.</summary>
+    public const int UnchangedScansBeforeSettled = 125;
 
     private readonly Func<IReadOnlyDictionary<string, string?>> trackedOwners;
     private readonly Func<WindowLayoutScan?> scan;
     private readonly Func<TimeSpan, CancellationToken, Task> delay;
     private readonly Func<bool> inputDesktopIsSecure;
     private int sequence;
+    private int unchangedScans;
     private string? lastSent;
     private JsonObject? lastEvent;
 
@@ -58,6 +67,7 @@ public sealed class WindowLayoutStreamer
                 {
                     await onEvent(layoutEvent, cancellationToken);
                 }
+                NoteScan(changed: layoutEvent is not null);
                 EnforceTaskbar();
 
                 var active = lastSent is not null;
@@ -71,7 +81,7 @@ public sealed class WindowLayoutStreamer
                     timerResolution = null;
                 }
 
-                await delay(active ? ActiveInterval : IdleInterval, cancellationToken);
+                await delay(CurrentInterval, cancellationToken);
             }
         }
         finally
@@ -79,6 +89,25 @@ public sealed class WindowLayoutStreamer
             timerResolution?.Dispose();
         }
     }
+
+    /// <summary>Counts scans that found nothing new, for <see cref="CurrentInterval"/>.</summary>
+    internal void NoteScan(bool changed)
+    {
+        if (changed)
+        {
+            unchangedScans = 0;
+        }
+        else if (unchangedScans < UnchangedScansBeforeSettled)
+        {
+            unchangedScans += 1;
+        }
+    }
+
+    /// <summary>How long to wait before the next scan.</summary>
+    internal TimeSpan CurrentInterval =>
+        lastSent is null
+            ? IdleInterval
+            : unchangedScans >= UnchangedScansBeforeSettled ? SettledInterval : ActiveInterval;
 
     private long lastTaskbarCheck;
 

@@ -255,6 +255,141 @@ public class GuestStateSyncTests
         Assert.Equal("appearance_set_failed", failed["code"]!.GetValue<string>());
     }
 
+    private sealed class FakeVisualEffectsStore : IVisualEffectsStore
+    {
+        public bool IsWindows { get; init; } = true;
+        public VisualEffectsState Current { get; set; } = new(true, true, true);
+        public VisualEffectsState? Backup { get; set; }
+        public bool FailWrites { get; init; }
+        public int Writes { get; private set; }
+        public int Broadcasts { get; private set; }
+
+        public VisualEffectsState Read() => Current;
+
+        public void Write(VisualEffectsState state)
+        {
+            if (FailWrites)
+            {
+                throw new UnauthorizedAccessException("registry is read-only");
+            }
+            Writes++;
+            Current = new VisualEffectsState(
+                state.Transparency ?? Current.Transparency,
+                state.WindowAnimation ?? Current.WindowAnimation,
+                state.ClientAnimation ?? Current.ClientAnimation);
+        }
+
+        public VisualEffectsState? ReadBackup() => Backup;
+
+        public void WriteBackup(VisualEffectsState state) => Backup = state;
+
+        public void ClearBackup() => Backup = null;
+
+        public bool BroadcastChange()
+        {
+            Broadcasts++;
+            return true;
+        }
+    }
+
+    [Fact]
+    public void TurnsVisualEffectsDownOnceAndKeepsWhatTheUserHad()
+    {
+        // The user already had window animations off.
+        var store = new FakeVisualEffectsStore { Current = new VisualEffectsState(true, false, true) };
+        var effects = new GuestVisualEffects(store);
+
+        var first = effects.Apply(reduced: true);
+
+        Assert.True(first["isSupported"]!.GetValue<bool>());
+        Assert.True(first["changed"]!.GetValue<bool>());
+        Assert.False(first["transparency"]!.GetValue<bool>());
+        Assert.False(first["clientAnimation"]!.GetValue<bool>());
+        Assert.Equal(new VisualEffectsState(true, false, true), store.Backup);
+        Assert.Equal(1, store.Broadcasts);
+
+        // Asked again, as on every new connection: nothing is written, and the saved values are not
+        // replaced with the turned-down ones.
+        var second = effects.Apply(reduced: true);
+
+        Assert.False(second["changed"]!.GetValue<bool>());
+        Assert.Equal(1, store.Writes);
+        Assert.Equal(1, store.Broadcasts);
+        Assert.Equal(new VisualEffectsState(true, false, true), store.Backup);
+    }
+
+    [Fact]
+    public void PutsBackWhatTheUserHadAndForgetsIt()
+    {
+        var store = new FakeVisualEffectsStore { Current = new VisualEffectsState(true, false, true) };
+        var effects = new GuestVisualEffects(store);
+        effects.Apply(reduced: true);
+
+        var restored = effects.Apply(reduced: false);
+
+        Assert.True(restored["changed"]!.GetValue<bool>());
+        Assert.Equal(new VisualEffectsState(true, false, true), store.Current);
+        Assert.Null(store.Backup);
+
+        // With nothing saved there is nothing to put back: a user who turned effects off stays that way.
+        store.Current = new VisualEffectsState(false, false, false);
+        var untouched = effects.Apply(reduced: false);
+        Assert.False(untouched["changed"]!.GetValue<bool>());
+        Assert.Equal(new VisualEffectsState(false, false, false), store.Current);
+    }
+
+    [Fact]
+    public void AValueWindowsNeverHadSetGoesBackToOn()
+    {
+        var store = new FakeVisualEffectsStore { Current = new VisualEffectsState(null, true, true) };
+        var effects = new GuestVisualEffects(store);
+
+        effects.Apply(reduced: true);
+        Assert.False(store.Current.Transparency);
+
+        effects.Apply(reduced: false);
+        Assert.True(store.Current.Transparency);
+    }
+
+    [Fact]
+    public void ReportsVisualEffectsUnsupportedOffWindows()
+    {
+        var store = new FakeVisualEffectsStore { IsWindows = false };
+
+        var status = new GuestVisualEffects(store).Apply(reduced: true);
+
+        Assert.False(status["isSupported"]!.GetValue<bool>());
+        Assert.Equal(0, store.Writes);
+    }
+
+    [Fact]
+    public async Task SessionRoutesVisualEffectsAndMapsFailuresToStructuredErrors()
+    {
+        JsonObject Request(JsonNode? reduced) => new()
+        {
+            ["type"] = MessageTypes.VisualEffectsSetRequest,
+            ["requestId"] = "req_visual_effects",
+            ["protocolVersion"] = 1,
+            ["reduced"] = reduced
+        };
+        AgentSession Session(FakeVisualEffectsStore store) => new(
+            new NoOpWindowsDesktop(), new NoOpFrameCapture(), visualEffects: new GuestVisualEffects(store));
+
+        var response = Assert.Single((await Session(new FakeVisualEffectsStore()).HandleAsync(Request(true))).DirectReplies);
+        Assert.Equal(MessageTypes.VisualEffectsSetResponse, response["type"]!.GetValue<string>());
+        Assert.True(response["visualEffects"]!["reduced"]!.GetValue<bool>());
+        Assert.False(response["visualEffects"]!["transparency"]!.GetValue<bool>());
+
+        var invalid = Assert.Single((await Session(new FakeVisualEffectsStore()).HandleAsync(Request("yes"))).DirectReplies);
+        Assert.Equal("invalid_message", invalid["code"]!.GetValue<string>());
+        var missing = Assert.Single((await Session(new FakeVisualEffectsStore()).HandleAsync(Request(null))).DirectReplies);
+        Assert.Equal("invalid_message", missing["code"]!.GetValue<string>());
+
+        var failed = Assert.Single(
+            (await Session(new FakeVisualEffectsStore { FailWrites = true }).HandleAsync(Request(true))).DirectReplies);
+        Assert.Equal("visual_effects_set_failed", failed["code"]!.GetValue<string>());
+    }
+
     private static JsonObject AppearanceRequest(string theme) => new()
     {
         ["type"] = MessageTypes.AppearanceSetRequest,

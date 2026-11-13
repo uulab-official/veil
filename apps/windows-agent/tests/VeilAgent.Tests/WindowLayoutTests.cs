@@ -325,4 +325,33 @@ public class WindowLayoutTests
         // A hole that misses changes nothing.
         Assert.Single(WindowLayoutComposer.Subtract(new[] { new WindowRect(0, 0, 100, 100) }, new WindowRect(200, 0, 10, 10)));
     }
+
+    [Fact]
+    public void StreamerScansSlowerOnceNothingHasMovedForASecond()
+    {
+        var tracked = new Dictionary<string, string?> { ["hwnd:00000001"] = null };
+        var frame = new WindowRect(0, 0, 800, 600);
+        var streamer = new WindowLayoutStreamer(
+            () => tracked,
+            () => new WindowLayoutScan(new[] { new WindowLayoutEntry("hwnd:00000001", 1, frame, true) }, Display, null),
+            inputDesktopIsSecure: () => false);
+
+        // Nothing tracked yet as far as the streamer knows.
+        Assert.Equal(WindowLayoutStreamer.IdleInterval, streamer.CurrentInterval);
+
+        void Scan() => streamer.NoteScan(changed: streamer.NextEvent() is not null);
+
+        Scan();
+        Assert.Equal(WindowLayoutStreamer.ActiveInterval, streamer.CurrentInterval);
+        for (var scan = 0; scan < WindowLayoutStreamer.UnchangedScansBeforeSettled; scan++)
+        {
+            Scan();
+        }
+        Assert.Equal(WindowLayoutStreamer.SettledInterval, streamer.CurrentInterval);
+
+        // A move brings the fast pace straight back.
+        frame = new WindowRect(40, 0, 800, 600);
+        Scan();
+        Assert.Equal(WindowLayoutStreamer.ActiveInterval, streamer.CurrentInterval);
+    }
 }
