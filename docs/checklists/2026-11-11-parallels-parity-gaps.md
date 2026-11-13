@@ -101,7 +101,7 @@ checks are unit tests, a read-only screen dump of the guest, and screens drawn t
 
 ## Found in the running app on 2026-11-13
 
-One relaunch, in the background, with the user's go-ahead. Checks were window captures and a guest screen
+Two relaunches, in the background, each with the user's go-ahead. Checks were window captures and a guest screen
 dump; nothing was sent to the guest.
 
 - **Mac windows showed the wrong part of the guest display.** Notepad's Mac window showed the wallpaper and
@@ -110,7 +110,13 @@ dump; nothing was sent to the guest.
   host sent `window.list.request` on its event connection, and the agent stops sending events to a
   connection that has sent a request. Every event after the answer was lost: `window.layout`, windows
   opening and closing, the clipboard, notifications. The request now goes out on a connection of its own
-  and its answers are passed into the event stream. Unit-tested; not yet seen fixed in the running app.
+  and its answers are passed into the event stream. After a second relaunch with the fix, Notepad's Mac
+  window matched the guest display at the window's frame (26,112 sampled pixels, mean difference 0.16 of
+  255, none far off; the broken capture had 9% far off). That relaunch did not move any window, so it does
+  not show a layout event arriving after the list: no layout changed in the 90 seconds watched. That part
+  rests on the unit tests and on reading the agent's connection handling.
 - The main window stayed hidden after the relaunch and Veil did not come to the front.
 - Paint and File Explorer, covered in Windows and so shown from captured frames, had clean edges. The edge
   fix for screen-copied frames could not be seen at work: no window was in that state.
+- **Load with three windows mirrored and nothing changing:** Veil about 10% of one core, this guest's QEMU
+  about a third of one. Not measured while typing or dragging.
