@@ -229,3 +229,33 @@ dump, and requests to the agent that change nothing.
   have frozen every window.
 - Not seen yet: a real User Account Control prompt or the lock screen. Nothing was run in Windows to raise
   one, so the window for the secure desktop, its input, and its closing are still unit-tested only.
+
+## Lag with several windows open, 2026-11-13
+
+The user reported that Windows apps on the Mac still stutter, run at a low frame rate, and show "the
+Windows screen behind". Nothing was opened or moved to look into it; the numbers come from the agent's own
+capture counters, read twice ten seconds apart, and from process listings.
+
+- **Windows behind another were printed all the time.** With Paint in front of Notepad and File Explorer and
+  nothing changing, the agent ran `PrintWindow` 6.8 times a second, 40 ms on average and up to 531 ms, to
+  see whether the two covered windows had changed. Each print makes the app draw itself again, in a guest
+  that renders on the CPU. When a covered window does change, its stream goes to the fast pace and prints
+  back to back.
+- **Now:** the agent reports which parts of a covered window the display shows (`visibleRegion`). The host
+  crops those parts from the guest display like a whole window, keeps the captured frame for the rest, and
+  slows such a window's captures to one a second. A window hidden behind others entirely is slowed too.
+  Three overlapping windows should cost about two prints a second in place of seven, and the visible parts
+  of a window behind update at the display's pace.
+- **A window that just opened** was cropped at once, while Windows was still fading it in over the desktop.
+  It now waits out the same 0.3 seconds a moved window does, showing its captured frame. This may be the
+  desktop the user saw; it was not reproduced.
+- **Two app windows of one process** (two File Explorer windows) no longer count as one: the lower one was
+  reported fully visible and showed the upper one's pixels.
+- **The Mac was overloaded when this was measured:** a load average of 24 on 18 cores, with another virtual
+  machine at 108% of a core, a second QEMU, Spotlight indexing, and four Simulator windows. Veil took 24%
+  of a core and this guest's QEMU 40 to 47% with nothing changing. Some of the lag is that.
+- Not done: the guest still renders on the CPU (gap 13), which bounds the frame rate of the window in use.
+  A covering window's Windows shadow now shows on the visible part of the window behind it, next to the
+  Mac shadow that is drawn there anyway. One agent test failed once in a 23-second run on the loaded Mac
+  and passed in three runs after; which one was not captured.
+- Not seen in the app: all of the above is unit-tested only until Veil is relaunched and the agent updated.
