@@ -11,6 +11,12 @@ Frame payloads: separate stream or base64 only for early harness spikes
 
 The protocol must remain testable without a real VM. Every stable message should have a fixture in `harness/protocol-fixtures`.
 
+Who may connect:
+
+- QEMU forwards the agent's port to `127.0.0.1` on the Mac, where a page open in any web browser can try to open a WebSocket to it.
+- The agent answers a handshake that carries an `Origin` header with `403 Forbidden`. A browser sends that header with every WebSocket handshake and a page cannot remove it ([RFC 6455, section 10.2](https://www.rfc-editor.org/rfc/rfc6455#section-10.2)). A host must not send one; `URLSessionWebSocketTask` and Node's `WebSocket` do not.
+- Not covered: another program on the Mac, including one run by another user account, can connect without the header. Closing that needs a secret the host and the agent both hold, which the protocol does not have yet.
+
 Executable protocol helpers live in `packages/protocol`. Harness tools should import that package instead of duplicating message type strings or structured error shapes.
 
 ## Envelope
