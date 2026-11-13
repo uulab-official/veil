@@ -339,3 +339,26 @@ throughout (load average 28 to 39 on 18 cores), so the numbers are rough.
   Notepad counts as hidden behind Paint.
 - **Next, not yet in the running agent:** streams held Windows' timer at 1 ms for as long as they ran, for
   every window open, even at one sample a second. They now hold it only while ticking fast.
+
+## Administrator windows and the clock, 2026-11-13
+
+Done without relaunching Veil or touching the guest. Tests: host core 1,028, host shell 301, agent 405,
+all passing. None of it has run in the app or on the live guest; each needs an administrator prompt in
+Windows, which only the user raises.
+
+- **Windows run as administrator took no input.** Once an installer's prompt is approved its window runs
+  above the agent, and Windows discards what the agent injects there without reporting it. The window was
+  shown on the Mac and ignored every click and key. The agent now marks such windows in `window.layout`
+  (`elevated`), and the host sends their mouse, keys, and plain text over QEMU's display connection as
+  hardware input, aimed with the window's frame on the guest display. A press on a point another window
+  covers in Windows is not sent, since it would land on that window. Text a US keyboard cannot type,
+  Hangul included, is not sent to such a window; keys typed on the Mac keyboard go by position as usual.
+- **The guest clock was 15 hours off and nothing said so.** This guest's tools were installed without
+  administrator rights, so the task that corrects the clock is missing. The Veil menu now offers Set
+  Windows Clock while that is the case; the agent asks Windows for approval and registers the task.
+- **SYSTEM ran a file the user can write.** The clock task ran a script from the tools' folder under
+  `%LOCALAPPDATA%`. It now runs two programs from the Windows directory. A guest that already has the
+  older task keeps it until its tools are installed again as administrator.
+- To check, in this order, once the next relaunch and agent update are in: Set Windows Clock from the Veil
+  menu, which raises the approval prompt, which should open in its own Mac window; approving it there;
+  then any installer, whose window should take clicks after its own prompt.
