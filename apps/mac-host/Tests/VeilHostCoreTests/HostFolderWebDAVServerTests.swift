@@ -123,6 +123,24 @@ struct HostFolderWebDAVServerTests {
         xml.components(separatedBy: "<D:href>").dropFirst().compactMap { $0.components(separatedBy: "</D:href>").first }
     }
 
+    @Test("skips a flood of blank lines before a request without recursing")
+    func skipsBlankLinesBeforeARequest() throws {
+        let fixture = try Fixture()
+        try fixture.write("note.txt", "hello")
+        // 100,000 blank lines, sent before any token is checked.
+        var raw = Data(repeating: 0, count: 200_000)
+        for index in stride(from: 0, to: raw.count, by: 2) {
+            raw[index] = 0x0D
+            raw[index + 1] = 0x0A
+        }
+        raw.append(Data("GET /\(Self.token)/note.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n".utf8))
+
+        let replies = try fixture.exchange(raw)
+
+        #expect(replies.first?.status == 200)
+        #expect(replies.first.map { String(decoding: $0.body, as: UTF8.self) } == "hello")
+    }
+
     @Test("binds to loopback and returns a real port")
     func startsOnLoopback() throws {
         let fixture = try Fixture()

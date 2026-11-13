@@ -559,6 +559,16 @@ final class WebDAVConnection: @unchecked Sendable {
 
     private func readRequest() {
         guard !closed else { return }
+        // Blank lines before a request line are skipped, as RFC 9112 asks, and skipped here in one pass.
+        // They used to be handled by calling this function again per blank request, before any token
+        // check: a peer sending nothing but line breaks drove the recursion tens of thousands deep.
+        var skipped = buffer.startIndex
+        while skipped + 1 < buffer.endIndex, buffer[skipped] == 0x0D, buffer[skipped + 1] == 0x0A {
+            skipped += 2
+        }
+        if skipped > buffer.startIndex {
+            buffer.removeSubrange(buffer.startIndex..<skipped)
+        }
         guard let end = buffer.range(of: Self.headerEnd) else {
             if buffer.count > Self.maximumHeaderBytes {
                 sendAndClose(WebDAVResponse(status: 431))
@@ -574,7 +584,7 @@ final class WebDAVConnection: @unchecked Sendable {
         // Tolerate stray blank lines between pipelined requests, as RFC 9112 asks.
         while lines.first == "" { lines.removeFirst() }
         guard let requestLine = lines.first else {
-            readRequest()
+            sendAndClose(WebDAVResponse(status: 400))
             return
         }
         let parts = requestLine.split(separator: " ", omittingEmptySubsequences: true)
