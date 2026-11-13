@@ -619,6 +619,52 @@ public struct WindowsApp: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+extension WindowsApp {
+    /// Decodes an app the guest described, keeping its icon only when it is a small PNG.
+    ///
+    /// The icon bytes go to AppKit's image decoding in the sidebar, the Dock, and the app launchers. The
+    /// guest is not trusted: a "PNG" declaring tens of thousands of pixels a side decodes to gigabytes on
+    /// the main thread, and bytes in another format reach whichever image parser recognizes them. An icon
+    /// that fails the check is dropped and the app shows Veil's generic icon.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(String.self, forKey: .id),
+            name: try container.decode(String.self, forKey: .name),
+            exePath: try container.decode(String.self, forKey: .exePath),
+            publisher: try container.decode(String.self, forKey: .publisher),
+            iconId: try container.decode(String.self, forKey: .iconId),
+            iconPngBase64: GuestAppIcon.validatedPNGBase64(
+                try container.decodeIfPresent(String.self, forKey: .iconPngBase64)
+            ),
+            folder: try container.decodeIfPresent(String.self, forKey: .folder),
+            running: try container.decodeIfPresent(Bool.self, forKey: .running)
+        )
+    }
+}
+
+/// The limits an app icon from the guest must meet before the host decodes it.
+public enum GuestAppIcon {
+    /// The agent sends icons of at most 256 pixels a side; this leaves room for larger ones.
+    public static let maximumSide = 1_024
+    public static let maximumByteCount = 1_048_576
+
+    /// The icon as given when it is a PNG within the limits, otherwise nil.
+    public static func validatedPNGBase64(_ base64: String?) -> String? {
+        guard let base64,
+              // Checked before decoding, so an oversized string is never expanded.
+              base64.utf8.count <= maximumByteCount / 3 * 4 + 4,
+              let data = Data(base64Encoded: base64),
+              data.count <= maximumByteCount,
+              let (width, height) = try? ClipboardImagePayload.headerDimensions(of: data),
+              (1...maximumSide).contains(width),
+              (1...maximumSide).contains(height) else {
+            return nil
+        }
+        return base64
+    }
+}
+
 public struct AppLaunchRequest: Codable, Equatable, Sendable {
     public var type: MessageType
     public var requestId: String
