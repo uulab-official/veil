@@ -757,7 +757,7 @@ Rules:
 - **Purpose:** this lets the host take a window's pixels from the guest display it already receives and crop each window into its Mac window, instead of having the agent capture, encode, and send frames. The design is in `docs/superpowers/specs/2026-11-10-coherence-framebuffer-design.md`.
 - **When it is sent:**
   - The agent sends a layout only when it differs from the previous one.
-  - It checks every 8 ms while windows are tracked and something changed within the last second, every 33 ms while windows are tracked and nothing has, and every 250 ms otherwise.
+  - It checks every 8 ms while windows are tracked and something changed within the last second, about every 33 ms while windows are tracked and nothing has (on Windows' own timer tick, so up to 47 ms), and every 250 ms otherwise.
   - When the last tracked window goes away it sends one layout with no windows.
   - While `secureDesktop` is true it sends layouts with no window tracked as well, and one more when it ends: a prompt can come up before the app asking for it has a window.
   - A host that connects while windows are tracked receives the current layout first, before any other event.

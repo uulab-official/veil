@@ -313,3 +313,29 @@ update. Tests: host core 1,015, host shell 301, agent 394, all passing.
 - **The shadow margin is 64 pixels** (see the seventh relaunch).
 - The host was looked at and left alone: with three windows and nothing changing Veil takes about 6% of a
   core, and a sample shows it mostly waiting.
+
+## Eighth relaunch and agent update on 2026-11-13
+
+In the background, with the user's go-ahead; nothing was opened or moved in Windows. The Mac was busy
+throughout (load average 28 to 39 on 18 cores), so the numbers are rough.
+
+- Veil did not come to the front, the three Mac windows opened where they were, and the agent went from
+  `3eb6f3c5562b` to `724862e1027c` with them open.
+- **This guest's QEMU fell from 35 to 47% of a Mac core to 10 to 15%** with three windows open and nothing
+  changing, read three times each. The earlier readings were taken before the window scan was cut down;
+  the load on the Mac differed between them.
+- **Inside Windows, mirroring now costs about 4% of one of its 8 cores at rest**, which is the two prints a
+  second of the covered windows. All of Windows used 8 to 12% of one core.
+- **Turning visual effects down made no difference that could be measured at rest**, and changed no pixel
+  of the guest display: the agent read back transparency and both animations as off, and a screen dump
+  before and after is identical in 40,960 sampled pixels. Without graphics acceleration Windows was
+  apparently not drawing transparency in the first place. What it saves while windows open, close, and
+  animate was not measured, since nothing was opened.
+- **A setting changed from outside the app is not picked up.** `defaults write` on the running app's
+  setting sent nothing in 30 seconds; the request was sent to the agent directly for this measurement.
+  The switch in the Veil menu changes the setting inside the app, which is the path that is wired. Not
+  tried, since that needs a click.
+- With the shadow margin at 64 pixels, the 64-pixel strip of Notepad below Paint is left out whole, and
+  Notepad counts as hidden behind Paint.
+- **Next, not yet in the running agent:** streams held Windows' timer at 1 ms for as long as they ran, for
+  every window open, even at one sample a second. They now hold it only while ticking fast.
