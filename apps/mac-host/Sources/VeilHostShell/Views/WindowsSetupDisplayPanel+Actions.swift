@@ -147,7 +147,7 @@ extension WindowsSetupDisplayPanel {
             .buttonStyle(.bordered)
             .controlSize(.regular)
             .disabled(isLoading)
-            .help("Refresh embedded Windows display evidence")
+            .help("Reconnect to the Windows display")
         }
     }
 

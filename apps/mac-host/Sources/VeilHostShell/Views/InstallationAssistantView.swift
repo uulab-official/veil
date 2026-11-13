@@ -500,7 +500,7 @@ struct InstallationAssistantChecklistItem: Identifiable, Equatable {
     }
 }
 
-private struct AssistantChecklistRow: View {
+struct AssistantChecklistRow: View {
     var item: InstallationAssistantChecklistItem
 
     var body: some View {

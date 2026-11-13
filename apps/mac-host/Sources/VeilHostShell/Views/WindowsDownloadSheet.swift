@@ -1089,7 +1089,7 @@ struct WindowsDownloadSheet: View {
                 HStack {
                     Text(transferSummary)
                     Spacer(minLength: 12)
-                    Text(controller.transfer?.remainingText ?? "Estimating time left…")
+                    Text(localized: controller.transfer?.remainingText ?? "Estimating time left…")
                 }
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)

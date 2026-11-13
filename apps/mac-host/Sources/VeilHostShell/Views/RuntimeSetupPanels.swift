@@ -11,14 +11,14 @@ struct DevicePlanPanel: View {
         ShellPanel(spacing: 12) {
             ShellPanelHeader(
                 title: "Device Plan",
-                subtitle: "Local runtime devices Veil will attach at boot.",
+                subtitle: "The virtual hardware Windows starts with.",
                 symbolName: "cpu"
             )
 
             if let deviceSummary = snapshot.deviceSummary {
                 ResourcePlanRow(
                     title: "Boot",
-                    value: "\(deviceSummary.platform) platform with \(deviceSummary.bootLoader) boot.",
+                    value: "\(deviceSummary.platform), \(deviceSummary.bootLoader)",
                     symbolName: "power",
                     state: .ready
                 )
@@ -26,19 +26,19 @@ struct DevicePlanPanel: View {
                     title: "Storage",
                     value: storageValue(for: deviceSummary.storageDevices),
                     symbolName: "externaldrive.connected.to.line.below",
-                    state: snapshot.virtualDiskPath == nil ? .blocked : .partial
+                    state: snapshot.virtualDiskPath == nil ? .blocked : .ready
                 )
                 ResourcePlanRow(
                     title: "Network",
-                    value: "\(deviceSummary.networkMode) shared networking.",
+                    value: deviceSummary.networkMode,
                     symbolName: "network",
                     state: .ready
                 )
                 ResourcePlanRow(
                     title: "Graphics",
-                    value: "\(deviceSummary.graphics.widthInPixels)x\(deviceSummary.graphics.heightInPixels) Apple Virtio scanout; Windows installer display is still experimental.",
+                    value: "\(deviceSummary.graphics.widthInPixels) × \(deviceSummary.graphics.heightInPixels)",
                     symbolName: "display",
-                    state: .partial
+                    state: .ready
                 )
                 ResourcePlanRow(
                     title: "Input",
@@ -49,7 +49,7 @@ struct DevicePlanPanel: View {
             } else {
                 ResourcePlanRow(
                     title: "Devices",
-                    value: "Create a VM profile to inspect the boot device plan.",
+                    value: String(localized: "Shown once Windows is set up."),
                     symbolName: "rectangle.stack.badge.plus",
                     state: .blocked
                 )
@@ -72,7 +72,7 @@ struct ResourcePlanPanel: View {
         ShellPanel(spacing: 12) {
             ShellPanelHeader(
                 title: "Resource Plan",
-                subtitle: "The local Windows resource model Veil applies and hardens through the boot spike.",
+                subtitle: "The processors, memory, and storage Windows gets from this Mac.",
                 symbolName: "gauge.with.dots.needle.50percent"
             )
 
@@ -89,50 +89,45 @@ struct ResourcePlanPanel: View {
                 state: snapshot.memoryMB == nil ? .planned : .ready
             )
             ResourcePlanRow(
-                title: "Embedded Display",
-                value: "Retina-scaled desktop and seamless app windows are planned.",
-                symbolName: "display",
-                state: .planned
-            )
-            ResourcePlanRow(
                 title: "Storage",
                 value: storageValue,
                 symbolName: "internaldrive",
-                state: snapshot.virtualDiskPath == nil ? .blocked : .partial
+                state: snapshot.virtualDiskPath == nil ? .blocked : .ready
             )
         }
     }
 
     private var cpuValue: String {
         guard snapshot.virtualizationAvailable else {
-            return "Host virtualization unavailable"
+            return String(localized: "This Mac cannot run virtual machines.")
         }
 
         guard let cpuCount = snapshot.cpuCount else {
-            return "Adaptive CPU profile will be applied during VM preparation."
+            return String(localized: "Chosen for this Mac when Veil prepares Windows.")
         }
 
-        return "\(cpuCount) vCPU configured on the local runtime provider."
+        return String(localized: "\(cpuCount) cores")
     }
 
     private var memoryValue: String {
         guard let memoryMB = snapshot.memoryMB else {
-            return "Adaptive memory cap will be applied during VM preparation."
+            return String(localized: "Chosen for this Mac when Veil prepares Windows.")
         }
 
-        return "\(formatGigabytes(memoryMB)) GB adaptive memory cap configured."
+        return "\(formatGigabytes(memoryMB)) GB"
     }
 
     private var storageValue: String {
         guard let diskGB = snapshot.diskGB else {
-            return "128 GB sparse disk profile will be applied during VM preparation."
+            return String(localized: "Chosen for this Mac when Veil prepares Windows.")
         }
 
         if snapshot.virtualDiskPath == nil {
-            return "\(diskGB) GB sparse disk profile configured; create or select a disk before boot."
+            return String(localized: "\(diskGB) GB. Create the disk in Installation before starting Windows.")
         }
 
-        return "\(diskGB) GB sparse virtual disk profile selected."
+        // A sparse file: it takes up on the Mac only what Windows has written.
+        return String(localized: "\(diskGB) GB, using Mac storage only as Windows fills it")
     }
 
     private func formatGigabytes(_ memoryMB: Int) -> String {
@@ -204,7 +199,7 @@ struct SetupAssistantPanel: View {
         ShellPanel(spacing: 12) {
             ShellPanelHeader(
                 title: "Install Assistant",
-                subtitle: "A compact path from profile creation to Windows 11 Arm boot readiness.",
+                subtitle: "The steps that get Windows 11 ready to start.",
                 symbolName: "wand.and.stars"
             )
 
@@ -261,7 +256,7 @@ struct MachineSummaryPanel: View {
             HStack(alignment: .center) {
                 ShellPanelHeader(
                     title: "Machine Summary",
-                    subtitle: "Control Center identity and managed resources.",
+                    subtitle: "This Windows and what it uses on this Mac.",
                     symbolName: "rectangle.stack"
                 )
 
@@ -276,10 +271,10 @@ struct MachineSummaryPanel: View {
 
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
                 ShellMetricRow(label: "Machine", value: "Windows 11 Arm")
-                ShellMetricRow(label: "Profile", value: snapshot.profileName ?? "Not configured")
-                ShellMetricRow(label: "CPU", value: snapshot.cpuCount.map { "\($0) vCPU" } ?? "Adaptive")
-                ShellMetricRow(label: "Memory", value: snapshot.memoryMB.map { "\(formatGigabytes($0)) GB cap" } ?? "Adaptive")
-                ShellMetricRow(label: "Disk Size", value: snapshot.diskGB.map { "\($0) GB" } ?? "Adaptive")
+                ShellMetricRow(label: "Profile", value: snapshot.profileName ?? String(localized: "Not configured"))
+                ShellMetricRow(label: "CPU", value: snapshot.cpuCount.map { String(localized: "\($0) cores") } ?? String(localized: "Automatic"))
+                ShellMetricRow(label: "Memory", value: snapshot.memoryMB.map { "\(formatGigabytes($0)) GB" } ?? String(localized: "Automatic"))
+                ShellMetricRow(label: "Disk Size", value: snapshot.diskGB.map { "\($0) GB" } ?? String(localized: "Automatic"))
                 ShellMetricRow(label: "Installer", value: installerResourceName, monospaced: snapshot.installerMediaPath != nil)
                 ShellMetricRow(label: "Disk", value: resourceName(from: snapshot.virtualDiskPath), monospaced: snapshot.virtualDiskPath != nil)
                 ShellMetricRow(label: "Runtime", value: snapshot.detail)
@@ -324,14 +319,14 @@ struct RuntimeProvidersPanel: View {
         ShellPanel(spacing: 12) {
             ShellPanelHeader(
                 title: "Runtime Providers",
-                subtitle: "Local engines available for the Windows boot path.",
+                subtitle: "The engines on this Mac that can run Windows.",
                 symbolName: "bolt.horizontal"
             )
 
             if snapshot.runtimeProviders.isEmpty {
                 ResourcePlanRow(
                     title: "Providers",
-                    value: "Refresh runtime status to inspect local providers.",
+                    value: String(localized: "No engine information yet."),
                     symbolName: "questionmark.circle",
                     state: .planned
                 )
@@ -388,41 +383,47 @@ struct MacIntegrationPanel: View {
         ShellPanel(spacing: 12) {
             ShellPanelHeader(
                 title: "Mac Integration",
-                subtitle: "The Coherence-style bridge Veil is building toward.",
+                subtitle: "How Windows apps work with this Mac.",
                 symbolName: "macwindow"
             )
 
-            IntegrationStatusRow(
-                title: "Windows Apps on Mac",
-                detail: "Launch flow is wired through the agent protocol.",
-                symbolName: "app",
-                state: .partial
-            )
-            IntegrationStatusRow(
-                title: "Window Tracking",
-                detail: "Agent window events can identify launched app windows.",
-                symbolName: "rectangle.3.group",
-                state: .partial
-            )
-            IntegrationStatusRow(
-                title: "Clipboard",
-                detail: "Protocol support exists; shell controls are still planned.",
-                symbolName: "doc.on.clipboard",
-                state: .planned
-            )
-            IntegrationStatusRow(
-                title: "Shared Folders",
-                detail: snapshot.profileName == nil ? "Create a profile to prepare shared folder paths." : "Profile owns the future shared folder boundary.",
-                symbolName: "folder",
-                state: snapshot.profileName == nil ? .blocked : .planned
-            )
-            IntegrationStatusRow(
-                title: "Seamless App Mode",
-                detail: "Parallels-style app blending will follow VM boot and window capture.",
-                symbolName: "rectangle.on.rectangle",
-                state: snapshot.bootReady ? .planned : .blocked
+            ForEach(MacIntegrationFeature.features(windowsInstalled: snapshot.installEvidence.isInstalled)) { feature in
+                IntegrationStatusRow(
+                    title: feature.title,
+                    detail: feature.detail,
+                    symbolName: feature.symbolName,
+                    state: feature.state
+                )
+            }
+        }
+    }
+}
+
+/// What Veil does between Windows apps and the Mac, as the Integration settings describe it. Only what
+/// works today is listed; all of it needs Windows installed, with the Veil tools setup puts in it.
+struct MacIntegrationFeature: Identifiable, Equatable {
+    var id: String
+    /// Localization keys.
+    var title: String
+    var detail: String
+    var symbolName: String
+    var state: IntegrationState
+
+    static func features(windowsInstalled: Bool) -> [MacIntegrationFeature] {
+        func feature(_ id: String, _ title: String, _ detail: String, _ symbolName: String) -> MacIntegrationFeature {
+            MacIntegrationFeature(
+                id: id,
+                title: title,
+                detail: windowsInstalled ? detail : "Available after Windows is installed.",
+                symbolName: symbolName,
+                state: windowsInstalled ? .ready : .blocked
             )
         }
+        return [
+            feature("apps", "Windows Apps on Mac", "Each Windows app opens in its own Mac window.", "macwindow.on.rectangle"),
+            feature("clipboard", "Clipboard", "Copy on one side and paste on the other.", "doc.on.clipboard"),
+            feature("folders", "Shared Folders", "Windows shows the Mac folder you share as a drive.", "folder")
+        ]
     }
 }
 
@@ -448,9 +449,9 @@ struct SetupItemRow: View {
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
+                Text(localized: item.title)
                     .font(.callout.weight(.semibold))
-                Text(item.detail)
+                Text(localized: item.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -490,8 +491,8 @@ struct PreflightCheckRow: View {
                 .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(check.title)
-                Text(check.detail)
+                Text(localized: check.title)
+                Text(localized: check.detail)
                     .foregroundStyle(.secondary)
                     .font(.caption)
             }
@@ -514,48 +515,6 @@ struct PreflightCheckRow: View {
             .green
         case .failed:
             .red
-        }
-    }
-}
-
-struct InstallationStepRow: View {
-    var step: VMInstallationStep
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: symbolName)
-                .foregroundStyle(symbolColor)
-                .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(step.title)
-                Text(step.detail)
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-            }
-        }
-        .font(.callout)
-    }
-
-    private var symbolName: String {
-        switch step.state {
-        case .complete:
-            "checkmark.circle.fill"
-        case .pending:
-            "clock"
-        case .blocked:
-            "exclamationmark.circle"
-        }
-    }
-
-    private var symbolColor: Color {
-        switch step.state {
-        case .complete:
-            .green
-        case .pending:
-            .secondary
-        case .blocked:
-            .orange
         }
     }
 }

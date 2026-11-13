@@ -138,7 +138,7 @@ extension WindowsSetupDisplayPanel {
             ),
             InstallFlowItem(
                 title: "Mac Integration",
-                detail: "Install Veil integration after Windows setup",
+                detail: "Installed automatically at the end of Windows Setup",
                 symbolName: "macwindow.on.rectangle",
                 state: snapshot.state == .running ? .current : .pending
             )

@@ -255,7 +255,7 @@ struct ControlActionTile: View {
                         Text(localized: title)
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(.primary)
-                        Text(detail)
+                        Text(localized: detail)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
@@ -360,9 +360,9 @@ struct IntegrationStatusRow: View {
                 .background(state.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                Text(localized: title)
                     .font(.callout.weight(.semibold))
-                Text(detail)
+                Text(localized: detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

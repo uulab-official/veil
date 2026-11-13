@@ -480,16 +480,19 @@ struct VMRuntimeView: View {
                     canChangeResources: canChangeResources
                 )
 
-                if !snapshot.installationSteps.isEmpty {
-                    ShellPanel(spacing: 10) {
+                let checklist = InstallationAssistantChecklistItem.items(for: snapshot.installationSteps)
+                if !checklist.isEmpty {
+                    ShellPanel(spacing: 2) {
                         ShellPanelHeader(
                             title: "Windows Setup",
-                            subtitle: "Profile readiness steps for Arm Windows installation.",
+                            subtitle: "What Veil prepares before Windows Setup starts.",
                             symbolName: "checklist"
                         )
 
-                        ForEach(snapshot.installationSteps) { step in
-                            InstallationStepRow(step: step)
+                        // The same wording as the Installation Assistant; the runtime's own description of
+                        // each step is its tooltip.
+                        ForEach(checklist) { item in
+                            AssistantChecklistRow(item: item)
                         }
                     }
                 }
@@ -513,7 +516,7 @@ struct VMRuntimeView: View {
                     ShellPanel(spacing: 10) {
                         ShellPanelHeader(
                             title: "Preflight",
-                            subtitle: "Local checks that must pass before VM start.",
+                            subtitle: "Checks this Mac must pass before Windows starts.",
                             symbolName: "stethoscope"
                         )
 
