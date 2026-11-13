@@ -248,6 +248,12 @@ public sealed class WebSocketAgentServer
             headers[line[..separatorIndex].Trim()] = line[(separatorIndex + 1)..].Trim();
         }
 
+        if (IsFromWebPage(headers))
+        {
+            await WriteHttpResponseAsync(stream, "403 Forbidden", "Web pages may not connect to the Veil agent.", cancellationToken);
+            return null;
+        }
+
         if (!HeaderContainsToken(headers, "Connection", "Upgrade")
             || !HeaderEquals(headers, "Upgrade", "websocket")
             || !headers.TryGetValue("Sec-WebSocket-Key", out var key)
@@ -274,6 +280,20 @@ public sealed class WebSocketAgentServer
         );
         return new AcceptedWebSocket(socket, IsFrameChannelPath(requestPath));
     }
+
+    /// <summary>
+    /// Whether the handshake comes from a page in a web browser. The agent's port is forwarded to
+    /// 127.0.0.1 on the Mac, and any page open in a browser there may open a WebSocket to it. Without this
+    /// such a page could type into Windows, start programs, and read the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// A browser adds <c>Origin</c> to every WebSocket handshake and a page cannot remove it
+    /// (<see href="https://www.rfc-editor.org/rfc/rfc6455#section-10.2">RFC 6455, section 10.2</see>). The
+    /// Veil host does not send one. This does not stop another program on the Mac, which can leave the
+    /// header out; that needs a secret both sides hold.
+    /// </remarks>
+    internal static bool IsFromWebPage(IReadOnlyDictionary<string, string> headers) =>
+        headers.ContainsKey("Origin");
 
     private sealed record AcceptedWebSocket(WebSocket Socket, bool IsFrameChannel);
 

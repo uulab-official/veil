@@ -117,6 +117,56 @@ public class WebSocketAgentServerTests
         }
     }
 
+    [Fact]
+    public async Task RefusesAWebSocketOpenedByAWebPage()
+    {
+        var port = ReserveLoopbackPort();
+        var endpoint = new AgentEndpoint("127.0.0.1", port);
+        var desktop = new BroadcastDesktop();
+        var capture = new NoOpFrameCapture();
+        var session = new AgentSession(desktop, capture);
+        var server = new WebSocketAgentServer(
+            endpoint,
+            session,
+            new WindowFrameStreamer(capture),
+            new ClipboardTextStreamer(desktop, TimeSpan.FromMilliseconds(20)),
+            new WindowDiscoveryStreamer(session, desktop, TimeSpan.FromMilliseconds(20))
+        );
+        using var serverCancellation = new CancellationTokenSource();
+        var serverTask = server.RunAsync(serverCancellation.Token);
+
+        // A browser sends the page's origin with every WebSocket handshake.
+        using var pageSocket = new ClientWebSocket();
+        pageSocket.Options.SetRequestHeader("Origin", "https://example.com");
+        using var hostSocket = new ClientWebSocket();
+        try
+        {
+            await Assert.ThrowsAsync<WebSocketException>(
+                () => pageSocket.ConnectAsync(new Uri(endpoint.WebSocketUrl), CancellationToken.None)
+            );
+
+            await hostSocket.ConnectAsync(new Uri(endpoint.WebSocketUrl), CancellationToken.None);
+            Assert.Equal(WebSocketState.Open, hostSocket.State);
+        }
+        finally
+        {
+            serverCancellation.Cancel();
+            pageSocket.Abort();
+            hostSocket.Abort();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => serverTask);
+        }
+    }
+
+    [Fact]
+    public void TellsAWebPageFromTheHostByItsOriginHeader()
+    {
+        var page = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["origin"] = "null" };
+        var host = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Upgrade"] = "websocket" };
+
+        Assert.True(WebSocketAgentServer.IsFromWebPage(page));
+        Assert.False(WebSocketAgentServer.IsFromWebPage(host));
+    }
+
     private static int ReserveLoopbackPort()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
