@@ -98,3 +98,19 @@ checks are unit tests, a read-only screen dump of the guest, and screens drawn t
   another project's VM and builds were running beside it. Veil's own share while mirroring was not
   measured, since that needs the app running. Builds and tests for this work ran at background priority
   (`taskpolicy -b`) and only the tests for the changed code.
+
+## Found in the running app on 2026-11-13
+
+One relaunch, in the background, with the user's go-ahead. Checks were window captures and a guest screen
+dump; nothing was sent to the guest.
+
+- **Mac windows showed the wrong part of the guest display.** Notepad's Mac window showed the wallpaper and
+  Paint, with Notepad itself 254 by 63 pixels down and right: the crop was taken where the window had been
+  before Veil moved it to match its Mac window. The host never learned the new place. Since 2026-11-12 the
+  host sent `window.list.request` on its event connection, and the agent stops sending events to a
+  connection that has sent a request. Every event after the answer was lost: `window.layout`, windows
+  opening and closing, the clipboard, notifications. The request now goes out on a connection of its own
+  and its answers are passed into the event stream. Unit-tested; not yet seen fixed in the running app.
+- The main window stayed hidden after the relaunch and Veil did not come to the front.
+- Paint and File Explorer, covered in Windows and so shown from captured frames, had clean edges. The edge
+  fix for screen-copied frames could not be seen at work: no window was in that state.

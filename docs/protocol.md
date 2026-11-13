@@ -661,7 +661,7 @@ Rules:
 - The guest first tracks the app windows nothing has reported yet (see "Desktop windows"), so the reply is complete without waiting for the next scan.
 - Each `window.created` carries the window's current title and bounds, not the ones it had when it was first reported.
 - Windows come before the popups they own.
-- The host sends the request on its event connection, so the `window.created` events arrive where async window events do and are handled the same way. A window the host already shows is updated, not duplicated.
+- The host sends the request on a connection of its own, never on its event connection: the guest stops sending events to a connection once that connection has sent a request. The host handles the `window.created` answers the way it handles the events. A window the host already shows is updated, not duplicated.
 - An agent without `capabilities.desktopWindows` answers with an `unknown_message_type` error, which the host ignores.
 
 Fixtures: `harness/protocol-fixtures/window.list.request.json`, `harness/protocol-fixtures/window.list.response.json`.
