@@ -64,7 +64,8 @@ struct WindowsAppFrameSurface: View {
                     FrameLayerView(
                         image: latestFrameImage,
                         pointsPerPixel: WindowFrameViewport.pointsPerPixel(forWindowsScale: frame.scale),
-                        backdrop: Self.edgeColor(of: latestFrameImage)
+                        backdrop: Self.edgeColor(of: latestFrameImage),
+                        dropsWindowBorder: true
                     )
 
                     frameQualityOverlay(assessment)
