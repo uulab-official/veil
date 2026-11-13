@@ -57,36 +57,21 @@ public sealed class WindowLayoutStreamer
 
     public async Task StreamAsync(Func<JsonObject, CancellationToken, Task> onEvent, CancellationToken cancellationToken)
     {
-        IDisposable? timerResolution = null;
-        try
+        using var timerResolution = new TimerResolutionLease();
+        while (!cancellationToken.IsCancellationRequested)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            var layoutEvent = NextEvent();
+            if (layoutEvent is not null)
             {
-                var layoutEvent = NextEvent();
-                if (layoutEvent is not null)
-                {
-                    await onEvent(layoutEvent, cancellationToken);
-                }
-                NoteScan(changed: layoutEvent is not null);
-                EnforceTaskbar();
-
-                var active = lastSent is not null;
-                if (active && timerResolution is null)
-                {
-                    timerResolution = TimerResolution.Hold();
-                }
-                else if (!active && timerResolution is not null)
-                {
-                    timerResolution.Dispose();
-                    timerResolution = null;
-                }
-
-                await delay(CurrentInterval, cancellationToken);
+                await onEvent(layoutEvent, cancellationToken);
             }
-        }
-        finally
-        {
-            timerResolution?.Dispose();
+            NoteScan(changed: layoutEvent is not null);
+            EnforceTaskbar();
+
+            // Only the fast pace needs the fine timer; the others wait longer than Windows' own tick.
+            var interval = CurrentInterval;
+            timerResolution.SetInterval(interval);
+            await delay(interval, cancellationToken);
         }
     }
 

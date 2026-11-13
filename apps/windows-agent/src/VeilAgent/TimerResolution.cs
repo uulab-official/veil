@@ -57,3 +57,39 @@ public static class TimerResolution
     [DllImport("winmm.dll")]
     private static extern uint timeEndPeriod(uint period);
 }
+
+/// <summary>
+/// One stream's share of the 1 ms timer resolution, taken only while the stream ticks fast.
+/// </summary>
+/// <remarks>
+/// Streams used to hold the resolution for as long as they ran. A window that sits still is sampled once
+/// a second, and its stream kept Windows ticking a thousand times a second all the same, for every window
+/// open, which keeps the guest's processors from resting.
+/// </remarks>
+internal sealed class TimerResolutionLease : IDisposable
+{
+    /// <summary>Waits at least this long are fine on Windows' own 15.6 ms tick.</summary>
+    public static readonly TimeSpan CoarseEnough = TimeSpan.FromMilliseconds(30);
+
+    private IDisposable? held;
+
+    public bool IsHeld => held is not null;
+
+    /// <summary>Holds the resolution for a stream waiting this long between ticks, or lets it go.</summary>
+    public void SetInterval(TimeSpan interval) => Set(interval < CoarseEnough);
+
+    public void Set(bool needed)
+    {
+        if (needed && held is null)
+        {
+            held = TimerResolution.Hold();
+        }
+        else if (!needed && held is not null)
+        {
+            held.Dispose();
+            held = null;
+        }
+    }
+
+    public void Dispose() => Set(false);
+}

@@ -52,7 +52,8 @@ public sealed class WindowFrameStreamer
         // A powered-off display stops apps from redrawing, so a mirrored window would freeze at its
         // last composed pixels.
         using var displayHold = keepAwake.Hold();
-        using var timerResolution = TimerResolution.Hold();
+        // Held only while this stream ticks fast; see TimerResolutionLease.
+        using var timerResolution = new TimerResolutionLease();
         var sequence = firstSequence;
         var cadence = cadenceFactory();
         var cadenceGate = new object();
@@ -60,6 +61,7 @@ public sealed class WindowFrameStreamer
         // instead of allocating a new one per tick. Setting it also restarts the wait from now, which is
         // what lets `Wake` cut an idle wait short.
         using var timer = new PeriodicTimer(fixedInterval ?? cadence.CurrentInterval);
+        timerResolution.SetInterval(timer.Period);
         Action wake = () =>
         {
             lock (cadenceGate)
@@ -71,6 +73,7 @@ public sealed class WindowFrameStreamer
                 if (fixedInterval is null && !FramebufferCropRegistry.IsCropped(window.WindowId))
                 {
                     timer.Period = ImmediateCaptureDelay;
+                    timerResolution.SetInterval(timer.Period);
                 }
             }
         };
@@ -89,7 +92,7 @@ public sealed class WindowFrameStreamer
                     await onUnchanged(sequence, cancellationToken);
                 }
 
-                Retune(timer, cadence, cadenceGate, window.WindowId, changed: false);
+                Retune(timer, timerResolution, cadence, cadenceGate, window.WindowId, changed: false);
                 continue;
             }
 
@@ -104,7 +107,7 @@ public sealed class WindowFrameStreamer
                 // Transient capture failure. Treated as "no change" for cadence purposes, but never
                 // reported as a heartbeat: the host must still be able to see a stream that has stopped
                 // producing anything at all.
-                Retune(timer, cadence, cadenceGate, window.WindowId, changed: false);
+                Retune(timer, timerResolution, cadence, cadenceGate, window.WindowId, changed: false);
                 continue;
             }
 
@@ -115,13 +118,13 @@ public sealed class WindowFrameStreamer
                     await onUnchanged(sequence, cancellationToken);
                 }
 
-                Retune(timer, cadence, cadenceGate, window.WindowId, changed: false);
+                Retune(timer, timerResolution, cadence, cadenceGate, window.WindowId, changed: false);
                 continue;
             }
 
             await onFrame(result, cancellationToken);
             sequence += 1;
-            Retune(timer, cadence, cadenceGate, window.WindowId, changed: true);
+            Retune(timer, timerResolution, cadence, cadenceGate, window.WindowId, changed: true);
         }
     }
 
@@ -138,7 +141,12 @@ public sealed class WindowFrameStreamer
     }
 
     private void Retune(
-        PeriodicTimer timer, WindowFrameStreamCadence cadence, object cadenceGate, string windowId, bool changed)
+        PeriodicTimer timer,
+        TimerResolutionLease timerResolution,
+        WindowFrameStreamCadence cadence,
+        object cadenceGate,
+        string windowId,
+        bool changed)
     {
         lock (cadenceGate)
         {
@@ -149,6 +157,7 @@ public sealed class WindowFrameStreamer
                     ? FramebufferCropRegistry.CroppedInterval
                     : next;
             }
+            timerResolution.SetInterval(timer.Period);
         }
     }
 

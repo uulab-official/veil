@@ -92,4 +92,32 @@ public class WindowFrameStreamCadenceTests
         Assert.True(cadence.IsIdle);
         Assert.Equal(TimeSpan.FromMilliseconds(33), cadence.Next(changed: true));
     }
+
+    [Fact]
+    public void TheFineTimerIsHeldOnlyForFastTicks()
+    {
+        // The count of holders is shared by every stream in the process, so only this lease is looked at.
+        using var lease = new TimerResolutionLease();
+
+        lease.SetInterval(WindowFrameStreamCadence.DefaultActiveInterval);
+        Assert.True(lease.IsHeld);
+        lease.SetInterval(TimeSpan.FromMilliseconds(1));
+        Assert.True(lease.IsHeld);
+
+        // A still window, sampled four times a second or once a second, lets it go.
+        lease.SetInterval(WindowFrameStreamCadence.DefaultIdleInterval);
+        Assert.False(lease.IsHeld);
+        lease.SetInterval(FramebufferCropRegistry.CroppedInterval);
+        Assert.False(lease.IsHeld);
+
+        lease.SetInterval(WindowLayoutStreamer.ActiveInterval);
+        Assert.True(lease.IsHeld);
+        // The layout scan's settled pace does not need it either.
+        lease.SetInterval(WindowLayoutStreamer.SettledInterval);
+        Assert.False(lease.IsHeld);
+
+        lease.SetInterval(WindowLayoutStreamer.ActiveInterval);
+        lease.Dispose();
+        Assert.False(lease.IsHeld);
+    }
 }
