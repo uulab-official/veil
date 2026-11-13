@@ -125,3 +125,23 @@ dump; nothing was sent to the guest.
   disc was ejected afterwards. The three Mac windows kept their window numbers through the dropped
   connection and the main window stayed hidden, so the view did not switch to the desktop. Afterwards
   Notepad's Mac window still matched the guest display at its frame.
+
+## Settings and translation pass on 2026-11-13
+
+Done without relaunching Veil: unit tests, screens drawn to image files, and a script that reads the sources.
+
+- **Settings said things that are no longer true.** The Integration tab listed the clipboard as planned and
+  app windows as something that would follow VM boot. The Hardware tab described a planned Retina display
+  and an Apple Virtio scanout, and the panels spoke of a "boot spike". They now state what Windows has and
+  what works: app windows, clipboard, shared folders, cores, memory, disk.
+- **Text passed through `Text(String)` was never translated.** Integration rows, setup rows, preflight
+  checks, and the download's time-left line showed English in a Korean interface. They go through the
+  string table now.
+- **`script/audit_localization.py`** lists UI string literals with no Korean translation. It reported 121
+  before this pass. After adding 56 translations and removing views nothing shows, it reports 44: numbers
+  and names that need no translation, diagnostics meant for developers, review-evidence labels, and a
+  developer view of the agent (`AgentView`) that is still to be looked at.
+- **1,555 lines of views nothing creates were removed**, found by looking for view types never named
+  outside their own declaration.
+- **Not seen in the running app.** The Korean wording was checked by reading it, not on screen: a test
+  process does not load the app's string tables, so the drawn images show the English keys.
