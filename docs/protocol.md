@@ -724,7 +724,7 @@ Fields:
   - `frame`: its visible frame in display pixels (see Window Geometry).
   - `zOrder`: its rank among tracked windows, 0 at the top.
   - `isShown`: false while the window is hidden, minimized, or cloaked.
-  - `fullyVisible`: true when the framebuffer shows the whole window. That means it is shown, it lies inside `display`, and no shown window of another process above it overlaps it. Windows of the same process above it, such as its menus and dialogs, do not count, since their pixels are what belongs there.
+  - `fullyVisible`: true when the framebuffer shows the whole window. That means it is shown, it lies inside `display`, and no shown window of another process above it overlaps it. Windows of the same process above it, such as its menus and dialogs, do not count, since their pixels are what belongs there. Neither do windows that draw nothing over it: one pixel across, as the helper windows some programs keep, or layered with zero opacity.
 
 Rules:
 
