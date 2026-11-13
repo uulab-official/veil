@@ -14,6 +14,9 @@ struct ContentView: View {
     var stopVMAction: () -> Void
     var suspendVMAction: () -> Void
     var restartInstallationAction: () -> Void
+    /// Starts Windows fresh, giving up a saved session that cannot be resumed. Nil starts it through the
+    /// runtime model alone.
+    var startDiscardingSavedSessionAction: (() -> Void)? = nil
     var markWindowsInstalledAction: () -> Void
     var installGuestAgentAction: () -> Void
     var prepareSparsePackageAction: () -> Void
@@ -122,6 +125,29 @@ struct ContentView: View {
                 isRunning: vmModel.canStop,
                 windowsOnDisk: vmModel.snapshot?.installEvidence.kind == .windowsBootManager
             ))
+        }
+        .confirmationDialog(
+            "Start Windows without the saved session?",
+            isPresented: Bindable(navigation).showsDiscardSavedSessionConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Start Windows", role: .destructive) {
+                if let startDiscardingSavedSessionAction {
+                    startDiscardingSavedSessionAction()
+                } else {
+                    Task { @MainActor in await vmModel.start() }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Windows was suspended, but that session cannot be resumed on this version of Veil or with the current settings. Starting Windows discards it, as if the virtual machine had been switched off: work not saved in Windows is lost.")
+        }
+        .onChange(of: vmModel.savedSessionCannotResume) { _, cannotResume in
+            // Start resumes whenever a saved session exists, so a session that can never resume would
+            // otherwise leave no way to start Windows at all.
+            if cannotResume {
+                navigation.showsDiscardSavedSessionConfirmation = true
+            }
         }
         .onChange(of: isLive) { _, isLive in
             if !isLive {

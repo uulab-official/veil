@@ -772,3 +772,6 @@
 "The engines on this Mac that can run Windows." = "이 Mac에서 Windows를 실행할 수 있는 엔진입니다.";
 "No engine information yet." = "아직 엔진 정보가 없습니다.";
 "Windows Needs Your Attention" = "Windows에서 확인이 필요합니다";
+"Start Windows without the saved session?" = "저장된 세션 없이 Windows를 시작할까요?";
+"Windows was suspended, but that session cannot be resumed on this version of Veil or with the current settings. Starting Windows discards it, as if the virtual machine had been switched off: work not saved in Windows is lost." = "Windows가 일시 정지되어 있었지만, 이 버전의 Veil이나 현재 설정으로는 그 세션을 이어서 열 수 없습니다. Windows를 시작하면 가상 머신 전원을 끈 것처럼 세션이 사라지며, Windows에서 저장하지 않은 작업은 잃게 됩니다.";
+"Your saved Windows session cannot be resumed." = "저장된 Windows 세션을 이어서 열 수 없습니다.";

@@ -91,6 +91,9 @@ final class ShellNavigation {
     }
     /// Set by the Actions menu, the assistant, and the stalled-boot bar; the main window asks once.
     var showsRestartInstallationConfirmation = false
+    /// Set when the saved Windows session cannot be resumed; the main window asks whether to start
+    /// Windows fresh, which discards it.
+    var showsDiscardSavedSessionConfirmation = false
     /// The latest live Windows frame for the sidebar thumbnail; cleared when Windows stops.
     var liveThumbnail: NSImage?
 

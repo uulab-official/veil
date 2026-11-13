@@ -690,6 +690,31 @@ struct VMRuntimeModelSessionTests {
         #expect(model.snapshot?.state == .suspended)
         #expect(model.errorMessage?.contains("configuration changed") == true)
         #expect(model.canResume)
+        // Trying again cannot help, so Start has to offer a fresh start.
+        #expect(model.savedSessionCannotResume)
+    }
+
+    @Test("a resume that may work next time does not offer to discard the session")
+    @MainActor
+    func aTransientResumeFailureKeepsTheSession() async {
+        let service = SessionVMRuntimeService(snapshot: .suspendedQEMU, resumeError: VMSuspensionError.qmpUnavailable)
+        let model = VMRuntimeModel(service: service)
+        await model.load()
+
+        await model.resume()
+
+        #expect(model.snapshot?.state == .suspended)
+        #expect(!model.savedSessionCannotResume)
+    }
+
+    @Test("tells sessions that can never resume from failures worth retrying")
+    func classifiesResumeFailures() {
+        #expect(VMSuspensionError.machineConfigurationChanged(expected: "a", actual: "b").savedSessionCannotResume)
+        #expect(VMSuspensionError.machineFingerprintSchemeSuperseded(stored: "fnv1a64:a").savedSessionCannotResume)
+        #expect(VMSuspensionError.suspendedStateFileMissing("/tmp/disk.vmsave").savedSessionCannotResume)
+        #expect(VMSuspensionError.noSuspendedState.savedSessionCannotResume)
+        #expect(!VMSuspensionError.qmpUnavailable.savedSessionCannotResume)
+        #expect(!VMSuspensionError.memoryStateSaveFailed(status: "failed").savedSessionCannotResume)
     }
 
     @Test("reports suspend as unsupported instead of silently stopping the VM")

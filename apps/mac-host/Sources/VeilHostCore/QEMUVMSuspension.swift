@@ -111,6 +111,20 @@ public enum VMSuspensionError: Error, LocalizedError, Equatable, Sendable {
     /// a configuration the user never touched.
     case machineFingerprintSchemeSuperseded(stored: String)
 
+    /// True when the saved session can never be resumed, however often it is tried: the machine it was
+    /// saved from is not the one Veil would start now, or the saved state is gone. Starting Windows then
+    /// means starting it fresh, which discards the saved session.
+    public var savedSessionCannotResume: Bool {
+        switch self {
+        case .noSuspendedState, .suspendedStateFileMissing, .machineConfigurationChanged,
+             .machineFingerprintSchemeSuperseded:
+            true
+        case .runtimeNotRunning, .qmpUnavailable, .memoryStateSaveRejected, .memoryStateSaveFailed,
+             .memoryStateSaveTimedOut:
+            false
+        }
+    }
+
     public var errorDescription: String? {
         switch self {
         case .runtimeNotRunning:
@@ -120,9 +134,9 @@ public enum VMSuspensionError: Error, LocalizedError, Equatable, Sendable {
         case .memoryStateSaveRejected(let message):
             "QEMU rejected the Windows VM memory state save: \(message)"
         case .memoryStateSaveFailed(let status):
-            "The Windows VM memory state save ended in state '\(status)'. The VM is still paused; resume or stop it before retrying."
+            "The Windows VM memory state save ended in state '\(status)'. Windows is running again; make room on the Mac disk before retrying."
         case .memoryStateSaveTimedOut(let seconds, let latestStatus):
-            "The Windows VM memory state save did not finish within \(seconds) seconds (last reported state '\(latestStatus)'). The VM is still paused."
+            "The Windows VM memory state save did not finish within \(seconds) seconds (last reported state '\(latestStatus)'). The save was cancelled and Windows is running again."
         case .noSuspendedState:
             "No suspended Windows VM state was found. Start the VM instead of resuming it."
         case .suspendedStateFileMissing(let path):

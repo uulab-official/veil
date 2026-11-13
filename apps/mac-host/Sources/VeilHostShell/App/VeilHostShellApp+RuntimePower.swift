@@ -43,6 +43,23 @@ extension VeilHostShellApp {
         }
     }
 
+    /// Starts Windows fresh after the user agreed to give up a saved session that cannot be resumed. A
+    /// cold boot removes the saved memory state.
+    func startWindowsDiscardingSavedSession() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            await attachDriverMediaForColdStartIfNeeded()
+            displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
+            await vmModel.start()
+            if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+                displayMessage = "Windows is running in this window."
+                scheduleAutomaticGuestAgentRecoveryIfNeeded()
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = String(localized: "Windows display could not start: \(errorMessage)")
+            }
+        }
+    }
+
     /// Resumes a suspended session when one exists, and cold boots otherwise.
     ///
     /// `vmModel.canStart` is true for a suspended VM, so calling `start()` here would boot Windows fresh
@@ -69,7 +86,12 @@ extension VeilHostShellApp {
 
             // Resume keeps the saved state file on failure, so the VM is reported as still suspended and
             // the user can retry. Cold booting here would silently discard the session instead.
-            if let errorMessage = vmModel.errorMessage {
+            if vmModel.savedSessionCannotResume {
+                // Retrying cannot help, and Start always resumes first, so without this question the
+                // machine could not be started again at all.
+                // The main window asks whether to start fresh; see `ContentView`.
+                displayMessage = "Your saved Windows session cannot be resumed."
+            } else if let errorMessage = vmModel.errorMessage {
                 displayMessage = String(localized: "Your Windows session could not be resumed: \(errorMessage)")
             }
             return

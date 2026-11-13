@@ -87,6 +87,7 @@ struct VeilHostShellApp: App {
             stopVMAction: stopWindowsAndCloseDisplay,
             suspendVMAction: suspendWindows,
             restartInstallationAction: restartWindowsInstallation,
+            startDiscardingSavedSessionAction: startWindowsDiscardingSavedSession,
             markWindowsInstalledAction: markWindowsInstalledFromSetup,
             installGuestAgentAction: installGuestAgentFromDisplay,
             prepareSparsePackageAction: prepareSparsePackageFromDisplay,

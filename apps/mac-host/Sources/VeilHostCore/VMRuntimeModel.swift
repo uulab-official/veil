@@ -13,6 +13,10 @@ public final class VMRuntimeModel {
     public private(set) var phase: VMRuntimePhase = .idle
     public private(set) var snapshot: VMRuntimeSnapshot?
     public private(set) var errorMessage: String?
+    /// Set when the last resume failed in a way no retry can fix (`VMSuspensionError.savedSessionCannotResume`).
+    /// Start then has to offer a fresh start, or the machine can never be started again: Start resumes
+    /// whenever a saved session exists.
+    public private(set) var savedSessionCannotResume = false
     public private(set) var diagnosticsURL: URL?
     /// The running Windows' removable CD drive, as QEMU last reported it.
     public private(set) var removableMedia: VMRemovableMediaStatus?
@@ -429,6 +433,7 @@ public final class VMRuntimeModel {
             return
         }
 
+        savedSessionCannotResume = false
         if canStart, var startingSnapshot = snapshot {
             startingSnapshot.state = .starting
             startingSnapshot.detail = "Starting Windows setup. Veil keeps runtime status and setup evidence in the main window."
@@ -488,6 +493,7 @@ public final class VMRuntimeModel {
             return
         }
 
+        savedSessionCannotResume = false
         if canResume, var resumingSnapshot = snapshot {
             resumingSnapshot.state = .starting
             resumingSnapshot.detail = "Resuming the suspended Windows session."
@@ -499,6 +505,7 @@ public final class VMRuntimeModel {
             phase = .loaded
         } catch {
             let message = userMessage(for: error)
+            savedSessionCannotResume = (error as? VMSuspensionError)?.savedSessionCannotResume == true
             // Resume failures keep the saved state file, so report the VM as still suspended rather
             // than failed -- the user can retry or stop it.
             if var failedSnapshot = snapshot {
