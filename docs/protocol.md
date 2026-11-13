@@ -750,6 +750,7 @@ Fields:
   - `zOrder`: its rank among tracked windows, 0 at the top.
   - `isShown`: false while the window is hidden, minimized, or cloaked.
   - `fullyVisible`: true when the framebuffer shows the whole window. That means it is shown, it lies inside `display`, and no shown window of another process above it overlaps it. Windows of the same process above it, such as its menus and dialogs, do not count, since their pixels are what belongs there; another tracked window of that process with no owner, such as a second File Explorer window, does. Neither do windows that draw nothing over it: one pixel across, as the helper windows some programs keep, or layered with zero opacity.
+  - `elevated`: true when the window's program runs at a higher integrity level than the agent, as an installer does once its User Account Control prompt is approved. Left out otherwise. A program whose token the agent cannot read counts as higher.
   - `visibleRegion`: for a window that is not `fullyVisible`, the parts of it the display does show: rectangles in display pixels that do not overlap, being the frame's part on the display less every window above that covers it and the 64 pixels around each such window, where its shadow darkens the window behind. Left out for a `fullyVisible` window. Empty when nothing shows, or when the shape would take more than 12 rectangles. Optional; a host treats a missing value as nothing to crop.
 
 Rules:
@@ -772,6 +773,11 @@ Rules:
   - Input the agent injects does not reach it. The host shows the guest display itself and sends pointer and key events through the virtual hardware (QEMU's display connection) until `secureDesktop` is false again.
   - The agent captures no window frames meanwhile and keeps sending `window.frame.unchanged`, so a prompt left unanswered does not look like a stalled stream.
   - The agent reads the state by opening the input desktop ([OpenInputDesktop](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-openinputdesktop)): a refusal, or a desktop other than `Default`, counts as secure. Not yet checked on the live Windows 11 Arm guest.
+- **Windows above the agent:**
+  - Windows drops input a lower-integrity program injects into a higher one's windows, and [SendInput](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-sendinput) does not report it. The agent runs without administrator rights, so `input.mouse`, `input.key`, and `input.text` for an `elevated` window would be discarded silently.
+  - The host sends such a window's input through the virtual hardware instead (QEMU's display connection), aimed at the window's `frame` plus the point's offset, with keys by their place on a US keyboard.
+  - A press or wheel turn at a point another tracked window covers in Windows is not sent, since it would land on that window; the host sends `window.focus.request` instead. Text a US keyboard cannot type is not sent.
+  - Not yet checked on the live Windows 11 Arm guest: that the agent can read an elevated program's integrity level, and that input sent this way reaches such a window.
 - **Read-only:** the message moves no window. Positioning and z-order requests stay with `window.resize.request` and `window.focus.request`.
 
 Fixture: `harness/protocol-fixtures/window.layout.json`.
