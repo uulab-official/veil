@@ -45,20 +45,37 @@ extension LocalVMRuntimeService {
         return .running
     }
 
+    /// Whether the QEMU process a launch record names is still running.
+    ///
+    /// The record stays on disk after Windows shuts down, and macOS hands process ids out again. A bare
+    /// "is this pid alive" answered yes for whatever program got the number next: Windows then showed as
+    /// running with nothing behind it, would not start, and Stop sent that program a terminate signal. So
+    /// the process must also be a QEMU system emulator.
     public static func processIsRunning(pid: Int32) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-p", String(pid)]
-        process.standardOutput = FileHandle.nullDevice
+        process.arguments = ["-p", String(pid), "-o", "command="]
+        let output = Pipe()
+        process.standardOutput = output
         process.standardError = FileHandle.nullDevice
 
         do {
             try process.run()
+            // Drained before waiting, as a full pipe would block ps.
+            let command = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
             process.waitUntilExit()
-            return process.terminationStatus == 0
+            return process.terminationStatus == 0 && isQEMUSystemEmulatorCommand(command)
         } catch {
             return false
         }
+    }
+
+    /// Whether a process's command line, as `ps -o command=` prints it, is QEMU's Arm system emulator. The
+    /// names are the ones `QEMUVMRuntimeBooter.runningProcess` looks for. The whole line is searched, not
+    /// only the program's path: a path can hold spaces, and taking a running Windows for stopped is the
+    /// worse mistake, since it lets a second QEMU start on the same disk.
+    static func isQEMUSystemEmulatorCommand(_ command: String) -> Bool {
+        command.contains("qemu-system-aarch64") || command.contains("qemu-aarch64-softmmu")
     }
 
     public static func terminateProcess(pid: Int32) -> Bool {
