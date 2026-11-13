@@ -159,5 +159,5 @@ In the background, with the user's go-ahead; checks were window captures and a g
   aside by how many were already open, so the order the guest listed them in decided where each went:
   Notepad moved 56 points up and left, Paint and File Explorer 28 down and right, and all three Windows
   windows were moved to follow. A Mac window now opens where its Windows window already is, when the guest
-  display stands for the Mac screen (`WindowsAppWindowPlacement.frameMatchingGuest`). Unit-tested; not yet
-  seen in the running app.
+  display stands for the Mac screen (`WindowsAppWindowPlacement.frameMatchingGuest`). After a fourth
+  relaunch all three Mac windows opened at the places they had before it, and no Windows window moved.
