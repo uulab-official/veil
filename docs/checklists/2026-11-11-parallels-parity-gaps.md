@@ -292,3 +292,24 @@ In the background, with the user's go-ahead; nothing was opened or moved in Wind
   belongs to, a tenth, fading out over the next 15 rows: the shadow reaches about 63 pixels. On this dark
   window it cannot be seen; on a light one it would be a grey step. The margin is now 64 pixels, committed
   and not yet in the running agent.
+
+## Optimization pass on 2026-11-13
+
+Done without relaunching Veil or touching the guest; unit-tested only until the next relaunch and agent
+update. Tests: host core 1,015, host shell 301, agent 394, all passing.
+
+- **Windows' visual effects are turned down.** The guest draws on the CPU, and the translucent materials
+  and window animations of Windows 11 are the costly part of that. The agent switches off transparency,
+  the minimize and maximize animation, and animations inside windows (`visual.effects.set.request`),
+  saving what the user had so the switch puts it back. The Veil menu has Reduce Windows Visual Effects, on
+  by default. How much frame time this saves is not measured yet; that is the first thing to read after
+  the update.
+- **The window scan costs less.** It asked the Desktop Window Manager about every top-level window, hidden
+  helpers included, 125 times a second for as long as any window was tracked. Hidden windows now take one
+  cheap call each, and the scan drops to 30 a second once nothing has moved for a second.
+- **The agent reports processor totals** for itself and for Windows in its health answer, so the cost of
+  mirroring inside the guest can be read from the Mac. Until now it could only be guessed from QEMU's
+  share of a host core.
+- **The shadow margin is 64 pixels** (see the seventh relaunch).
+- The host was looked at and left alone: with three windows and nothing changing Veil takes about 6% of a
+  core, and a sample shows it mostly waiting.
