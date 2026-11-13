@@ -50,6 +50,8 @@ public static class MessageTypes
     public const string SharedFolderRequest = "shared.folder.request";
     public const string SharedFolderResponse = "shared.folder.response";
     public const string TimeSyncRequest = "time.sync.request";
+    public const string TimeSyncRepairRequest = "time.sync.repair.request";
+    public const string TimeSyncRepairResponse = "time.sync.repair.response";
     public const string TimeSyncResponse = "time.sync.response";
     public const string AppearanceSetRequest = "appearance.set.request";
     public const string AppearanceSetResponse = "appearance.set.response";

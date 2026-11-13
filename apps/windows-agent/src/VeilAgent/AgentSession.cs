@@ -76,6 +76,7 @@ public sealed class AgentSession
     private readonly IGuestShutdown guestShutdown;
     private readonly DisplayScaleManager displayScale;
     private readonly GuestTimeSync timeSync;
+    private readonly GuestTimeSyncRepair timeSyncRepair;
     private readonly GuestAppearanceSync appearanceSync;
     private readonly GuestVisualEffects visualEffects;
     private readonly Action<string> imeModeSink;
@@ -100,6 +101,7 @@ public sealed class AgentSession
         IGuestShutdown? guestShutdown = null,
         DisplayScaleManager? displayScale = null,
         GuestTimeSync? timeSync = null,
+        GuestTimeSyncRepair? timeSyncRepair = null,
         GuestAppearanceSync? appearanceSync = null,
         GuestVisualEffects? visualEffects = null,
         Action<string>? imeModeSink = null,
@@ -118,6 +120,7 @@ public sealed class AgentSession
         this.displayScale = displayScale
             ?? new DisplayScaleManager(new WindowsDisplayScaleBackend(), new UserDisplayScaleFile());
         this.timeSync = timeSync ?? new GuestTimeSync();
+        this.timeSyncRepair = timeSyncRepair ?? new GuestTimeSyncRepair();
         this.appearanceSync = appearanceSync ?? new GuestAppearanceSync();
         this.visualEffects = visualEffects ?? new GuestVisualEffects();
         this.imeModeSink = imeModeSink ?? GuestImeMode.Set;
@@ -186,6 +189,13 @@ public sealed class AgentSession
                 MessageTypes.NotificationListenerRequest => await HandleNotificationListenerRequestAsync(requestId, cancellationToken),
                 MessageTypes.SharedFolderRequest => await HandleSharedFolderRequestAsync(request, requestId, cancellationToken),
                 MessageTypes.TimeSyncRequest => HandleTimeSyncRequest(request, requestId),
+                MessageTypes.TimeSyncRepairRequest => AgentReplies.Direct(new JsonObject
+                {
+                    ["type"] = MessageTypes.TimeSyncRepairResponse,
+                    ["requestId"] = requestId,
+                    ["protocolVersion"] = 1,
+                    ["repair"] = timeSyncRepair.Start()
+                }),
                 MessageTypes.AppearanceSetRequest => HandleAppearanceSetRequest(request, requestId),
                 MessageTypes.VisualEffectsSetRequest => HandleVisualEffectsSetRequest(request, requestId),
                 MessageTypes.ToolsUpdateRequest => HandleToolsUpdate(requestId),
@@ -1205,6 +1215,7 @@ public sealed class AgentSession
                 // Advertise the host-to-guest state sync messages so an older agent is never sent
                 // time.sync.request or appearance.set.request.
                 ["timeSync"] = true,
+                ["timeSyncRepair"] = OperatingSystem.IsWindows(),
                 ["appearanceSync"] = true,
                 ["visualEffects"] = OperatingSystem.IsWindows(),
                 // input.text accepts replaceLength, so the host can show an open IME composition inline

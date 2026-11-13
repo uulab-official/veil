@@ -85,9 +85,16 @@ function Register-VeilTimeSyncTask {
         return
     }
 
+    # The task runs as SYSTEM, so it must not run anything a program running as the user can replace. It
+    # used to run Sync-VeilGuestTime.ps1 from the install folder under %LOCALAPPDATA%, which the user can
+    # write to: any program of theirs could put its own code there and start the task. It now starts the
+    # Windows Time service and asks for a resync with two programs from the Windows directory, by full
+    # path. GuestTimeSyncRepair.RegistrationScript in the agent registers the same task.
+    $System32 = Join-Path $env:SystemRoot "System32"
+    $Command = '/c ""' + (Join-Path $System32 "sc.exe") + '" start w32time & "' + (Join-Path $System32 "w32tm.exe") + '" /resync /rediscover"'
     $Action = New-ScheduledTaskAction `
-        -Execute "powershell.exe" `
-        -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$SyncScript`""
+        -Execute (Join-Path $System32 "cmd.exe") `
+        -Argument $Command
     $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     $Settings = New-ScheduledTaskSettingsSet `
         -AllowStartIfOnBatteries `

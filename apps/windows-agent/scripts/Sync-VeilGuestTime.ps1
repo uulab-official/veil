@@ -1,5 +1,6 @@
-# Runs as SYSTEM from the VeilTimeSync scheduled task, which Install-VeilAgent.ps1 registers when it
-# runs elevated. The limited-token agent starts the task after the Mac reports a stale guest clock.
+# No longer run by the VeilTimeSync task: a task that runs as SYSTEM must not run a file from this folder,
+# which the user can write to. The task now runs sc.exe and w32tm.exe from the Windows directory itself
+# (Install-VeilAgent.ps1). This script is kept for resyncing by hand from an administrator prompt.
 #
 # Deliberately takes no input. Accepting the host's time here would let any program running as the
 # user set the system clock to anything, so this only asks W32Time to resync from network time.

@@ -390,6 +390,87 @@ public class GuestStateSyncTests
         Assert.Equal("visual_effects_set_failed", failed["code"]!.GetValue<string>());
     }
 
+    private sealed class FakeElevatedLauncher : IElevatedLauncher
+    {
+        public bool IsWindows { get; init; } = true;
+        public string? CurrentUserSid { get; init; } = "S-1-5-21-1004336348-1177238915-682003330-1001";
+        public bool Approves { get; init; } = true;
+        public TaskCompletionSource<string> Script { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool RunElevatedPowerShell(string script)
+        {
+            Script.TrySetResult(script);
+            Release.Task.Wait(TimeSpan.FromSeconds(5));
+            return Approves;
+        }
+    }
+
+    [Fact]
+    public async Task TimeSyncRepairAsksForApprovalOnceAndAnswersAtOnce()
+    {
+        var launcher = new FakeElevatedLauncher();
+        var repair = new GuestTimeSyncRepair(launcher);
+
+        var first = repair.Start();
+        Assert.Equal("approval-requested", first["outcome"]!.GetValue<string>());
+        var script = await launcher.Script.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The prompt is still up: a second request does not put up another.
+        Assert.Equal("already-running", repair.Start()["outcome"]!.GetValue<string>());
+
+        Assert.Contains("Register-ScheduledTask -TaskName 'VeilTimeSync'", script);
+        Assert.Contains("(A;;GRGX;;;S-1-5-21-1004336348-1177238915-682003330-1001)", script);
+        Assert.Contains("Start-ScheduledTask -TaskName 'VeilTimeSync'", script);
+        // SYSTEM runs programs from the Windows directory only, and no script file.
+        Assert.Contains("(Join-Path $system 'cmd.exe')", script);
+        Assert.DoesNotContain(".ps1", script);
+        Assert.DoesNotContain("LOCALAPPDATA", script, StringComparison.OrdinalIgnoreCase);
+
+        launcher.Release.SetResult();
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        JsonObject again;
+        do
+        {
+            await Task.Delay(10);
+            again = repair.Start();
+        } while (again["outcome"]!.GetValue<string>() == "already-running" && DateTime.UtcNow < deadline);
+        Assert.Equal("approval-requested", again["outcome"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void TimeSyncRepairRefusesWhatItCannotDoSafely()
+    {
+        Assert.Equal("unsupported", new GuestTimeSyncRepair(new FakeElevatedLauncher { IsWindows = false }).Start()["outcome"]!.GetValue<string>());
+        Assert.Equal("failed", new GuestTimeSyncRepair(new FakeElevatedLauncher { CurrentUserSid = null }).Start()["outcome"]!.GetValue<string>());
+        // Anything that is not a plain SID would end up inside the elevated script.
+        Assert.Equal(
+            "failed",
+            new GuestTimeSyncRepair(new FakeElevatedLauncher { CurrentUserSid = "S-1-5');Remove-Item C:\\ -Recurse;('" }).Start()["outcome"]!.GetValue<string>());
+        Assert.True(GuestTimeSyncRepair.IsSid("S-1-5-21-1-2-3-1001"));
+        Assert.False(GuestTimeSyncRepair.IsSid("S-1-5-21-1 2"));
+        Assert.False(GuestTimeSyncRepair.IsSid("Administrator"));
+    }
+
+    [Fact]
+    public async Task SessionRoutesTimeSyncRepair()
+    {
+        var launcher = new FakeElevatedLauncher();
+        launcher.Release.SetResult();
+        var session = new AgentSession(
+            new NoOpWindowsDesktop(), new NoOpFrameCapture(), timeSyncRepair: new GuestTimeSyncRepair(launcher));
+
+        var response = Assert.Single((await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.TimeSyncRepairRequest,
+            ["requestId"] = "req_time_sync_repair",
+            ["protocolVersion"] = 1
+        })).DirectReplies);
+
+        Assert.Equal(MessageTypes.TimeSyncRepairResponse, response["type"]!.GetValue<string>());
+        Assert.Equal("approval-requested", response["repair"]!["outcome"]!.GetValue<string>());
+    }
+
     private static JsonObject AppearanceRequest(string theme) => new()
     {
         ["type"] = MessageTypes.AppearanceSetRequest,
