@@ -161,10 +161,11 @@ public static class WindowLayoutComposer
     /// <summary>
     /// How far around a covering window its shadow darkens the window behind. Those pixels are the window
     /// behind with a shadow drawn over it, and cropped into a Mac window they put a dark band next to the
-    /// Mac window in front, which casts a shadow of its own there. Measured on Windows 11 at 100%: the
-    /// shadow under a window in front fades out about 45 pixels below it.
+    /// Mac window in front, which casts a shadow of its own there. Measured on Windows 11 at 100% under the
+    /// window in front: most of the shadow lies within 45 pixels, and at 48 it still darkens by a tenth,
+    /// which shows as a grey step on a light window. It is gone at 63.
     /// </summary>
-    public const int ShadowMargin = 48;
+    public const int ShadowMargin = 64;
 
     internal static WindowRect Inflate(WindowRect rect, int margin) =>
         new(rect.X - margin, rect.Y - margin, rect.Width + 2 * margin, rect.Height + 2 * margin);
