@@ -161,3 +161,53 @@ In the background, with the user's go-ahead; checks were window captures and a g
   windows were moved to follow. A Mac window now opens where its Windows window already is, when the guest
   display stands for the Mac screen (`WindowsAppWindowPlacement.frameMatchingGuest`). After a fourth
   relaunch all three Mac windows opened at the places they had before it, and no Windows window moved.
+
+## Production pass on 2026-11-13
+
+Done without relaunching Veil, updating the agent, or touching the guest. Two read-only audits looked for
+what would block a release: one at the host/guest trust boundary, one at the virtual machine's lifecycle
+and the safety of its data. Each fix below was confirmed by reading the code path first and is covered by
+unit tests. None of it has run in the app or on the live guest yet.
+
+Fixed:
+
+- **User Account Control prompts and the lock screen were invisible.** With apps shown as Mac windows,
+  nothing showed Windows' secure desktop, and input sent through the agent does not reach it: an installer
+  asking for administrator rights looked frozen, and the prompt's pixels were cropped into whichever app
+  windows sat under it. The agent now reports the secure desktop in `window.layout` (`secureDesktop`),
+  captures nothing during it, and keeps the heartbeat going. The host crops nothing, and shows the guest
+  display in a window of its own, driven through QEMU's display connection, until the prompt is answered.
+  When Veil is not the app in use it asks for attention in the Dock instead of opening over other work.
+- **A web page could drive Windows.** The agent's port is forwarded to `127.0.0.1` with no check on who
+  connects, so a page open in any browser on the Mac could open a WebSocket to it, type, start programs,
+  and read the clipboard. The agent now refuses a handshake that carries `Origin`, which a browser always
+  sends. `URLSessionWebSocketTask` and Node's `WebSocket` were checked not to send it.
+- **A reused process id passed for the virtual machine.** The launch record outlives QEMU. Any process
+  that later got its id made Windows show as running, blocked Start, and received SIGTERM from Stop. The
+  process must now be a QEMU system emulator.
+- **A failed suspend froze Windows.** The guest is paused before its memory is saved; a save that failed or
+  timed out, as on a full Mac disk, left it paused with nothing to resume it. The save is now cancelled
+  and the guest continued.
+- **A saved session that cannot resume blocked Start for good.** After an update of Veil or a settings
+  change the session no longer matches the machine. Start always tried to resume, failed, and nothing
+  discarded the session. The main window now asks whether to start Windows without it.
+- **App icons from the guest were decoded unchecked.** They must now be PNGs of at most 1024 pixels a side
+  and 1 MiB.
+- **The WebDAV server recursed on blank lines**, before checking the token.
+
+Open, from the same audits:
+
+- The agent's socket still has no secret, and QEMU's loopback display has no password: another program on
+  the Mac, or another user account, can connect to both.
+- The guest reaches every service on the Mac's loopback interface through QEMU's user networking.
+- Windows that run with administrator rights, such as an installer after its prompt is approved, take no
+  input from the agent, which runs without them. They are shown but cannot be clicked. Not yet looked at.
+- The WebDAV server checks a path and then opens it by path again, which a symbolic link swapped in between
+  can redirect. The event queue from the guest is bounded by message count, not bytes.
+- Reported by the lifecycle audit and not yet confirmed by reading: resume deletes the saved state before
+  the load is known to have worked; Stop sends SIGTERM when a graceful shutdown times out, without asking;
+  quitting without "suspend on quit" leaves QEMU running without asking; a full Mac disk is not handled
+  (`werror`/`rerror`); the system disk is opened with `file.locking=off`, so only a process listing keeps
+  two QEMUs off one disk; QEMU exiting right after launch is reported nowhere in the app.
+- This guest's clock is still 65 minutes off: its tools were installed without administrator rights, so
+  the `VeilTimeSync` task is missing. A fresh installation registers it.
