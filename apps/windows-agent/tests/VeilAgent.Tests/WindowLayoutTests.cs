@@ -291,13 +291,14 @@ public class WindowLayoutTests
     public void AWindowUnderTooManyPiecesReportsNoneOfThem()
     {
         var scan = new List<WindowLayoutEntry>();
-        // A grid of small windows of other programs over one large window.
+        // A grid of small windows of other programs over one large window, far enough apart that the
+        // margins left out around them do not join up.
         for (var index = 0; index < 9; index++)
         {
             scan.Add(new WindowLayoutEntry(
-                $"hwnd:000001{index:X2}", 100 + index, new WindowRect(150 + index % 3 * 250, 150 + index / 3 * 180, 60, 60), true));
+                $"hwnd:000001{index:X2}", 100 + index, new WindowRect(250 + index % 3 * 400, 250 + index / 3 * 250, 60, 60), true));
         }
-        scan.Add(new WindowLayoutEntry("hwnd:00000001", 1, new WindowRect(100, 100, 900, 700), true));
+        scan.Add(new WindowLayoutEntry("hwnd:00000001", 1, new WindowRect(50, 50, 1500, 950), true));
         var tracked = new Dictionary<string, string?> { ["hwnd:00000001"] = null };
 
         var window = WindowLayoutComposer.Compose(scan, tracked, Display, null).Windows[0];
