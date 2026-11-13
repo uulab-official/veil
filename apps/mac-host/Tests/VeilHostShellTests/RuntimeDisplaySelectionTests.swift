@@ -143,6 +143,68 @@ struct RuntimeWorkspacePresentationPolicyTests {
         )
     }
 
+    @Test("a desktop Veil chose gives way to apps only while the app connection is up")
+    func returnsToAppsWhenTheConnectionIsBack() {
+        // Windows that kept their frames through a dropped connection: no first frame will arrive, so the
+        // connection coming back is what returns to apps.
+        #expect(
+            RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: true,
+                hasFirstAppFrame: true,
+                hasLiveAppConnection: true
+            )
+        )
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: true,
+                hasFirstAppFrame: true,
+                hasLiveAppConnection: false
+            )
+        )
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: true,
+                hasFirstAppFrame: false,
+                hasLiveAppConnection: true
+            )
+        )
+    }
+
+    @Test("a dropped app connection leaves open app windows on screen instead of showing the desktop")
+    func droppedConnectionKeepsAppWindows() {
+        #expect(
+            RuntimeWorkspacePresentationPolicy.keepsAppWindows(
+                showsApps: true,
+                windowsInstalled: true,
+                hasAppWindows: true
+            )
+        )
+        // Nothing is open, so the desktop is the only thing there is to show.
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.keepsAppWindows(
+                showsApps: true,
+                windowsInstalled: true,
+                hasAppWindows: false
+            )
+        )
+        // The desktop is already showing.
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.keepsAppWindows(
+                showsApps: false,
+                windowsInstalled: true,
+                hasAppWindows: true
+            )
+        )
+        // Windows Setup has no apps to keep.
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.keepsAppWindows(
+                showsApps: true,
+                windowsInstalled: false,
+                hasAppWindows: true
+            )
+        )
+    }
+
     @Test("shows the app dock in the installed app launcher")
     func showsInstalledAppDock() {
         #expect(

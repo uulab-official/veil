@@ -87,20 +87,35 @@ struct DetailView: View {
         }
         .onChange(of: model.hasLiveAgentConnection) { _, isConnected in
             // Losing the app connection leaves the launcher with nothing it can open, so fall back
-            // to the desktop. Regaining it waits for the first app frame (below) instead of
-            // pulling the user out of the desktop they are using.
-            if !isConnected {
+            // to the desktop, unless app windows are showing; see `synchronizeWorkspacePresentation`.
+            // Regaining it returns to apps once an app has a frame to show, instead of pulling the user
+            // out of the desktop they are using.
+            if isConnected {
+                returnToAppsIfReady()
+            } else {
                 synchronizeWorkspacePresentation()
             }
         }
-        .onChange(of: model.mirrorSessions.contains { $0.latestFrame != nil }) { _, hasFirstAppFrame in
-            if navigation.isShowingDesktopAutomatically,
-               RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
-                windowsInstalled: hasInstalledWindows,
-                hasFirstAppFrame: hasFirstAppFrame
-               ) {
-                navigation.showsWindowsDesktop = false
-            }
+        .onChange(of: hasFirstAppFrame) { _, _ in
+            returnToAppsIfReady()
+        }
+    }
+
+    private var hasFirstAppFrame: Bool {
+        model.mirrorSessions.contains { $0.latestFrame != nil }
+    }
+
+    /// Leaves the desktop Veil chose by itself once apps can show. Checked on every change rather than only
+    /// on the first frame: after the app connection drops and comes back, the windows still hold the frames
+    /// they had, so no first frame arrives and the desktop stayed up over them.
+    private func returnToAppsIfReady() {
+        if navigation.isShowingDesktopAutomatically,
+           RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+            windowsInstalled: hasInstalledWindows,
+            hasFirstAppFrame: hasFirstAppFrame,
+            hasLiveAppConnection: model.hasLiveAgentConnection
+           ) {
+            navigation.showsWindowsDesktop = false
         }
     }
 
@@ -131,12 +146,21 @@ struct DetailView: View {
 
     private func synchronizeWorkspacePresentation() {
         let hasDesktopDisplay = vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting
-        navigation.showDesktopAutomatically(RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
+        let showsDesktop = RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
             windowsInstalled: hasInstalledWindows,
             runtimeState: vmModel.snapshot?.state,
             hasDesktopDisplay: hasDesktopDisplay,
             hasLiveAppConnection: model.hasLiveAgentConnection
-        ))
+        )
+        if showsDesktop,
+           RuntimeWorkspacePresentationPolicy.keepsAppWindows(
+            showsApps: !navigation.showsWindowsDesktop,
+            windowsInstalled: hasInstalledWindows,
+            hasAppWindows: hasFirstAppFrame
+           ) {
+            return
+        }
+        navigation.showDesktopAutomatically(showsDesktop)
     }
 
     /// The connected agent is older than the tools this Veil ships.
@@ -180,11 +204,22 @@ enum RuntimeWorkspacePresentationPolicy {
         return !windowsInstalled || !hasLiveAppConnection
     }
 
+    /// Whether the desktop Veil chose by itself gives way to apps: an app has a picture to show and the
+    /// app connection is up to drive it.
     static func shouldReturnToApps(
         windowsInstalled: Bool,
-        hasFirstAppFrame: Bool
+        hasFirstAppFrame: Bool,
+        hasLiveAppConnection: Bool = true
     ) -> Bool {
-        windowsInstalled && hasFirstAppFrame
+        windowsInstalled && hasFirstAppFrame && hasLiveAppConnection
+    }
+
+    /// Whether app windows stay where they are when the desktop would otherwise take over by itself. The
+    /// app connection drops for a moment whenever the agent restarts or updates; switching to the desktop
+    /// then took every app window off screen and put all of Windows in the main window behind the user's
+    /// work. The windows keep their last picture until the connection returns, as in Parallels Coherence.
+    static func keepsAppWindows(showsApps: Bool, windowsInstalled: Bool, hasAppWindows: Bool) -> Bool {
+        showsApps && windowsInstalled && hasAppWindows
     }
 
     static func showsAppDock(
