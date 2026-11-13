@@ -211,3 +211,21 @@ Open, from the same audits:
   two QEMUs off one disk; QEMU exiting right after launch is reported nowhere in the app.
 - This guest's clock is still 65 minutes off: its tools were installed without administrator rights, so
   the `VeilTimeSync` task is missing. A fresh installation registers it.
+
+## Fifth relaunch and agent update on 2026-11-13
+
+In the background, with the user's go-ahead; checks were window lists, a window capture, a guest screen
+dump, and requests to the agent that change nothing.
+
+- Veil did not come to the front, the main window stayed hidden, and the three Mac windows opened where
+  they were before.
+- The agent-driven tools update took the agent from `512faea4e697` to `b5342bd09e85` in about six seconds
+  with the three app windows open. They kept their window numbers through it.
+- **A handshake carrying `Origin` is refused on the live agent** with `403 Forbidden`; the host's own
+  connections, which carry none, work as before.
+- **The agent does not mistake the user's desktop for the secure one.** `window.layout` reports
+  `secureDesktop: false`, the window in use is still cropped from the framebuffer, and Notepad's Mac window
+  matches the guest display at its frame (26,112 sampled pixels, none far off). A wrong `true` here would
+  have frozen every window.
+- Not seen yet: a real User Account Control prompt or the lock screen. Nothing was run in Windows to raise
+  one, so the window for the secure desktop, its input, and its closing are still unit-tested only.
