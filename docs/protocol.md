@@ -733,7 +733,7 @@ Fields:
   - `zOrder`: its rank among tracked windows, 0 at the top.
   - `isShown`: false while the window is hidden, minimized, or cloaked.
   - `fullyVisible`: true when the framebuffer shows the whole window. That means it is shown, it lies inside `display`, and no shown window of another process above it overlaps it. Windows of the same process above it, such as its menus and dialogs, do not count, since their pixels are what belongs there; another tracked window of that process with no owner, such as a second File Explorer window, does. Neither do windows that draw nothing over it: one pixel across, as the helper windows some programs keep, or layered with zero opacity.
-  - `visibleRegion`: for a window that is not `fullyVisible`, the parts of it the display does show: rectangles in display pixels that do not overlap, being the frame's part on the display less every window above that covers it. Left out for a `fullyVisible` window. Empty when nothing shows, or when the shape would take more than 12 rectangles. Optional; a host treats a missing value as nothing to crop.
+  - `visibleRegion`: for a window that is not `fullyVisible`, the parts of it the display does show: rectangles in display pixels that do not overlap, being the frame's part on the display less every window above that covers it and the 48 pixels around each such window, where its shadow darkens the window behind. Left out for a `fullyVisible` window. Empty when nothing shows, or when the shape would take more than 12 rectangles. Optional; a host treats a missing value as nothing to crop.
 
 Rules:
 

@@ -117,7 +117,7 @@ public static class WindowLayoutComposer
 
             var fullyVisible = !secureDesktop && entry.IsShown && Contains(display, entry.Frame);
             // What the display shows of the window: its frame on the display, less every window above it
-            // that covers pixels.
+            // that covers pixels, and less the shadow around each of those.
             var visible = !secureDesktop && entry.IsShown && Intersection(entry.Frame, display) is { } onDisplay
                 ? new List<WindowRect> { onDisplay }
                 : new List<WindowRect>();
@@ -130,7 +130,7 @@ public static class WindowLayoutComposer
                     && Intersects(other.Frame, entry.Frame))
                 {
                     fullyVisible = false;
-                    visible = Subtract(visible, other.Frame);
+                    visible = Subtract(visible, Inflate(other.Frame, ShadowMargin));
                     if (visible.Count > MaximumVisibleRects)
                     {
                         visible.Clear();
@@ -157,6 +157,17 @@ public static class WindowLayoutComposer
     /// and by then little of it shows.
     /// </summary>
     public const int MaximumVisibleRects = 12;
+
+    /// <summary>
+    /// How far around a covering window its shadow darkens the window behind. Those pixels are the window
+    /// behind with a shadow drawn over it, and cropped into a Mac window they put a dark band next to the
+    /// Mac window in front, which casts a shadow of its own there. Measured on Windows 11 at 100%: the
+    /// shadow under a window in front fades out about 45 pixels below it.
+    /// </summary>
+    public const int ShadowMargin = 48;
+
+    internal static WindowRect Inflate(WindowRect rect, int margin) =>
+        new(rect.X - margin, rect.Y - margin, rect.Width + 2 * margin, rect.Height + 2 * margin);
 
     /// <summary>
     /// Whether a window above another hides that window's pixels, as opposed to being part of it. A window

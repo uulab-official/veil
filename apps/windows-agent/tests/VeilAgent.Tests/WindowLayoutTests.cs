@@ -221,16 +221,16 @@ public class WindowLayoutTests
         Assert.Null(layout.Windows[0].VisibleRegion);
         var behind = layout.Windows[1];
         Assert.False(behind.FullyVisible);
+        // The window in front and the 48 pixels around it its shadow reaches are left out.
         Assert.Equal(
-            new[] { new WindowRect(100, 100, 800, 300), new WindowRect(100, 400, 400, 300) },
+            new[] { new WindowRect(100, 100, 800, 252), new WindowRect(100, 352, 352, 348) },
             behind.VisibleRegion);
-        // The pieces and the covered part make up the whole frame.
-        Assert.Equal(800 * 600 - 400 * 300, behind.VisibleRegion!.Sum(rect => rect.Width * rect.Height));
+        Assert.Equal(800 * 600 - 448 * 348, behind.VisibleRegion!.Sum(rect => rect.Width * rect.Height));
 
         var json = layout.ToEvent(1)["windows"]!.AsArray();
         Assert.False(json[0]!.AsObject().ContainsKey("visibleRegion"));
         Assert.Equal(2, json[1]!["visibleRegion"]!.AsArray().Count);
-        Assert.Equal(300, (int?)json[1]!["visibleRegion"]![0]!["height"]);
+        Assert.Equal(252, (int?)json[1]!["visibleRegion"]![0]!["height"]);
     }
 
     [Fact]
@@ -284,7 +284,7 @@ public class WindowLayoutTests
 
         Assert.False(first.FullyVisible);
         // Only the second window is cut out; the menu's pixels belong in the first.
-        Assert.Equal(800 * 600 - 300 * 400, first.VisibleRegion!.Sum(rect => rect.Width * rect.Height));
+        Assert.Equal(800 * 600 - 348 * 448, first.VisibleRegion!.Sum(rect => rect.Width * rect.Height));
     }
 
     [Fact]
