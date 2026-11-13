@@ -72,19 +72,23 @@ struct InstallationAssistantView: View {
     @State private var accountName = ""
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 28) {
-                assistantHeader
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: 28) {
+                    assistantHeader
 
-                VStack(alignment: .leading, spacing: 20) {
-                    page
+                    VStack(alignment: .leading, spacing: 20) {
+                        page
+                    }
+                    .frame(maxWidth: 640, alignment: .leading)
                 }
-                .frame(maxWidth: 640, alignment: .leading)
+                .padding(.horizontal, 40)
+                .padding(.top, 28)
+                // The steps and the page sit together a little above the middle of the window, like a macOS
+                // setup assistant, instead of at the top of a mostly empty one.
+                .padding(.bottom, 20 + proxy.size.height * 0.08)
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
-            .padding(.horizontal, 40)
-            .padding(.top, 28)
-            .padding(.bottom, 20)
-            .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
         .safeAreaInset(edge: .bottom) {
@@ -186,6 +190,7 @@ struct InstallationAssistantView: View {
     private var getWindowsPage: some View {
         VStack(alignment: .leading, spacing: 18) {
             pageHeader(
+                step: .getWindows,
                 title: installerNeedsPickerAccess ? "Get Windows 11 again" : "Get Windows 11",
                 detail: installerNeedsPickerAccess
                     ? "macOS no longer lets Veil read the installer chosen earlier. Veil can download it again from Microsoft."
@@ -268,19 +273,21 @@ struct InstallationAssistantView: View {
     private var preparePage: some View {
         VStack(alignment: .leading, spacing: 18) {
             pageHeader(
+                step: .prepare,
                 title: "Prepare this Mac",
                 detail: "Veil creates the Windows profile, a sparse virtual disk sized for this Mac, and a shared folder."
             )
 
-            if !snapshot.installationSteps.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(snapshot.installationSteps) { step in
-                        InstallationStepRow(step: step)
+            let checklist = InstallationAssistantChecklistItem.items(for: snapshot.installationSteps)
+            if !checklist.isEmpty {
+                assistantCard {
+                    ForEach(checklist) { item in
+                        AssistantChecklistRow(item: item)
+                        if item.id != checklist.last?.id {
+                            Divider().overlay(.white.opacity(0.06))
+                        }
                     }
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
             engineNotice
@@ -304,16 +311,29 @@ struct InstallationAssistantView: View {
     private var installPage: some View {
         VStack(alignment: .leading, spacing: 18) {
             pageHeader(
+                step: .install,
                 title: "Ready to install Windows",
                 detail: "Windows Setup opens in this window. Follow it like on a PC; Veil detaches the installer when setup is done."
             )
 
-            if let installer = snapshot.installerMediaPath {
-                Label(URL(fileURLWithPath: installer).lastPathComponent, systemImage: "opticaldisc")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            assistantCard {
+                if let installer = snapshot.installerMediaPath {
+                    AssistantSummaryRow(
+                        symbolName: "opticaldisc",
+                        title: "Installer",
+                        value: URL(fileURLWithPath: installer).lastPathComponent
+                    )
+                    Divider().overlay(.white.opacity(0.06))
+                }
+                if let hardware = hardwareSummary {
+                    AssistantSummaryRow(symbolName: "cpu", title: "Hardware", value: hardware)
+                    Divider().overlay(.white.opacity(0.06))
+                }
+                AssistantSummaryRow(
+                    symbolName: "person.crop.circle",
+                    title: "Windows account",
+                    value: WindowsAccountName.resolve(preferred: snapshot.windowsAccountName)
+                )
             }
 
             engineNotice
@@ -355,6 +375,35 @@ struct InstallationAssistantView: View {
         }
     }
 
+    /// Processors, memory, and disk as one line, leaving out what the profile does not say.
+    private var hardwareSummary: String? {
+        var parts: [String] = []
+        if let cpuCount = snapshot.cpuCount {
+            parts.append(String(localized: "\(cpuCount) cores"))
+        }
+        if let memoryMB = snapshot.memoryMB {
+            parts.append(String(localized: "\(memoryMB / 1_024) GB memory"))
+        }
+        if let diskGB = snapshot.diskGB {
+            parts.append(String(localized: "\(diskGB) GB disk"))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private func assistantCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        }
+    }
+
     private var engineStatus: AppWindowEngineStatus {
         AppWindowEngineStatus.resolve(
             bootProvider: appRuntimeProvider,
@@ -370,15 +419,156 @@ struct InstallationAssistantView: View {
         )
     }
 
-    private func pageHeader(title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(localized: title)
-                .font(.system(size: 26, weight: .semibold))
-            Text(localized: detail)
+    private func pageHeader(step: InstallationAssistantStep, title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.white.opacity(0.08))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                    }
+                if step == .prepare {
+                    Image(systemName: step.symbolName)
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                } else {
+                    WindowsLogoMark(size: 28)
+                }
+            }
+            .frame(width: 56, height: 56)
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(localized: title)
+                    .font(.system(size: 26, weight: .semibold))
+                Text(localized: detail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+/// One line of the assistant's checklist: what Veil sets up, in the user's words. The runtime's own steps
+/// describe files and commands in English; the assistant shows what each one is for.
+struct InstallationAssistantChecklistItem: Identifiable, Equatable {
+    var id: String
+    /// Localization keys.
+    var title: String
+    var detail: String
+    var state: VMInstallationStepState
+    /// The runtime's own description, for the tooltip.
+    var technicalDetail: String
+
+    static func items(for steps: [VMInstallationStep]) -> [InstallationAssistantChecklistItem] {
+        steps.map { step in
+            let isComplete = step.state == .complete
+            // What continuing creates is waiting, though the runtime reports it as blocked.
+            let waiting: VMInstallationStepState = isComplete ? .complete : .pending
+            func item(_ title: String, _ detail: String, _ state: VMInstallationStepState) -> InstallationAssistantChecklistItem {
+                InstallationAssistantChecklistItem(
+                    id: step.id, title: title, detail: detail, state: state, technicalDetail: step.detail
+                )
+            }
+
+            switch step.id {
+            case "windows-installer":
+                // The one line that is a problem to fix on this page.
+                return item(
+                    "Windows 11 installer",
+                    isComplete ? "Ready" : "Veil can't read this file. Choose the installer again.",
+                    isComplete ? .complete : .blocked
+                )
+            case "virtual-disk":
+                return item("Virtual disk", isComplete ? "Ready" : "Created when you continue", waiting)
+            case "shared-folder":
+                return item("Shared folder", isComplete ? "Ready" : "Created when you continue", waiting)
+            case "auto-install-answer-file":
+                return item("Automatic Windows Setup", isComplete ? "Ready" : "Created when you continue", waiting)
+            case "guest-agent":
+                return item(
+                    "Veil tools for Windows",
+                    isComplete ? "Installed" : "Installed automatically at the end of Windows Setup",
+                    waiting
+                )
+            default:
+                return item(step.title, step.detail, step.state)
+            }
+        }
+    }
+}
+
+private struct AssistantChecklistRow: View {
+    var item: InstallationAssistantChecklistItem
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbolName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(symbolColor)
+                .frame(width: 20)
+
+            Text(localized: item.title)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 12)
+
+            Text(localized: item.detail)
+                .font(.callout)
+                .foregroundStyle(item.state == .blocked ? Color.orange : Color.secondary)
+                .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.vertical, 9)
+        .help(item.technicalDetail)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var symbolName: String {
+        switch item.state {
+        case .complete: "checkmark.circle.fill"
+        case .pending: "circle.dashed"
+        case .blocked: "exclamationmark.circle.fill"
+        }
+    }
+
+    private var symbolColor: Color {
+        switch item.state {
+        case .complete: .green
+        case .pending: .secondary
+        case .blocked: .orange
+        }
+    }
+}
+
+/// A titled value in the install page's summary.
+private struct AssistantSummaryRow: View {
+    var symbolName: String
+    var title: String
+    var value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbolName)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+
+            Text(localized: title)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 12)
+
+            Text(value)
+                .font(.callout)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.vertical, 9)
+        .accessibilityElement(children: .combine)
     }
 }
 
