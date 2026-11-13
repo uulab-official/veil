@@ -8,6 +8,7 @@ public sealed class WindowFrameStreamer
     private readonly TimeSpan? fixedInterval;
     private readonly Func<WindowFrameStreamCadence> cadenceFactory;
     private readonly DisplayKeepAwake keepAwake;
+    private readonly Func<bool> inputDesktopIsSecure;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Action> wakers = new();
 
     /// <param name="interval">
@@ -18,13 +19,15 @@ public sealed class WindowFrameStreamer
         IWindowFrameCapture capture,
         TimeSpan? interval = null,
         Func<WindowFrameStreamCadence>? cadenceFactory = null,
-        DisplayKeepAwake? keepAwake = null
+        DisplayKeepAwake? keepAwake = null,
+        Func<bool>? inputDesktopIsSecure = null
     )
     {
         this.capture = capture;
         this.fixedInterval = interval;
         this.cadenceFactory = cadenceFactory ?? (() => new WindowFrameStreamCadence());
         this.keepAwake = keepAwake ?? DisplayKeepAwake.None;
+        this.inputDesktopIsSecure = inputDesktopIsSecure ?? InputDesktop.IsSecure;
     }
 
     /// <param name="onUnchanged">
@@ -75,6 +78,21 @@ public sealed class WindowFrameStreamer
 
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
+            if (inputDesktopIsSecure())
+            {
+                // A User Account Control prompt or the lock screen has the display. A screen copy fails
+                // there and the window cannot change under the user's hands, so nothing is captured. The
+                // heartbeat still goes out: a prompt left unanswered for a minute must not look like a
+                // broken stream, which the host answers by restarting capture.
+                if (onUnchanged is not null)
+                {
+                    await onUnchanged(sequence, cancellationToken);
+                }
+
+                Retune(timer, cadence, cadenceGate, window.WindowId, changed: false);
+                continue;
+            }
+
             var result = await TryCaptureFrameAsync(
                 window,
                 sequence,

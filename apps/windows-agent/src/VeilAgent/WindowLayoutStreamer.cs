@@ -5,7 +5,7 @@ namespace Veil.Agent;
 /// <summary>
 /// Sends <c>window.layout</c> whenever a tracked window moves, resizes, changes z-order, or gains or loses
 /// full visibility, so the host can crop each window out of the guest framebuffer instead of receiving
-/// captured frames. See docs/superpowers/specs/2026-11-10-coherence-framebuffer-design.md.
+/// captured frames. It also says when the secure desktop takes the display (<see cref="InputDesktop"/>). See docs/superpowers/specs/2026-11-10-coherence-framebuffer-design.md.
 /// </summary>
 /// <remarks>
 /// It polls rather than hooking WinEvents: a scan of the top-level windows takes well under a
@@ -21,6 +21,7 @@ public sealed class WindowLayoutStreamer
     private readonly Func<IReadOnlyDictionary<string, string?>> trackedOwners;
     private readonly Func<WindowLayoutScan?> scan;
     private readonly Func<TimeSpan, CancellationToken, Task> delay;
+    private readonly Func<bool> inputDesktopIsSecure;
     private int sequence;
     private string? lastSent;
     private JsonObject? lastEvent;
@@ -36,11 +37,13 @@ public sealed class WindowLayoutStreamer
     internal WindowLayoutStreamer(
         Func<IReadOnlyDictionary<string, string?>> trackedOwners,
         Func<WindowLayoutScan?>? scan = null,
-        Func<TimeSpan, CancellationToken, Task>? delay = null)
+        Func<TimeSpan, CancellationToken, Task>? delay = null,
+        Func<bool>? inputDesktopIsSecure = null)
     {
         this.trackedOwners = trackedOwners;
         this.scan = scan ?? WindowLayoutScanner.Scan;
         this.delay = delay ?? Task.Delay;
+        this.inputDesktopIsSecure = inputDesktopIsSecure ?? InputDesktop.IsSecure;
     }
 
     public async Task StreamAsync(Func<JsonObject, CancellationToken, Task> onEvent, CancellationToken cancellationToken)
@@ -103,10 +106,14 @@ public sealed class WindowLayoutStreamer
     {
         IReadOnlyDictionary<string, string?> owners;
         WindowLayoutScan? current;
+        bool secureDesktop;
         try
         {
             owners = trackedOwners();
-            current = owners.Count == 0 ? null : scan();
+            secureDesktop = inputDesktopIsSecure();
+            // A prompt can come up with no window tracked, as when the app being opened asks for
+            // administrator rights before it shows anything, so the secure desktop is reported either way.
+            current = owners.Count == 0 && !secureDesktop ? null : scan();
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -129,7 +136,8 @@ public sealed class WindowLayoutStreamer
             return empty;
         }
 
-        var layout = WindowLayoutComposer.Compose(current.ZOrdered, owners, current.Display, current.ForegroundWindowId);
+        var layout = WindowLayoutComposer.Compose(
+            current.ZOrdered, owners, current.Display, current.ForegroundWindowId, secureDesktop);
         var key = layout.ToEvent(0).ToJsonString();
         if (key == lastSent)
         {

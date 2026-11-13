@@ -120,4 +120,87 @@ public class WindowLayoutTests
         Assert.Null(streamer.NextEvent());
         Assert.Null(streamer.CurrentEvent());
     }
+
+    [Fact]
+    public void NoWindowIsFullyVisibleWhileTheSecureDesktopIsUp()
+    {
+        var scan = new[] { new WindowLayoutEntry("hwnd:00000001", 1, new WindowRect(0, 0, 800, 600), true) };
+        var tracked = new Dictionary<string, string?> { ["hwnd:00000001"] = null };
+
+        var layout = WindowLayoutComposer.Compose(scan, tracked, Display, "hwnd:00000001", secureDesktop: true);
+
+        Assert.True(layout.SecureDesktop);
+        Assert.True(layout.Windows[0].IsShown);
+        Assert.False(layout.Windows[0].FullyVisible);
+        Assert.True((bool?)layout.ToEvent(1)["secureDesktop"]);
+        Assert.False((bool?)WindowLayoutComposer.Compose(scan, tracked, Display, null).ToEvent(1)["secureDesktop"]);
+    }
+
+    [Fact]
+    public void StreamerReportsTheSecureDesktopComingAndGoing()
+    {
+        var tracked = new Dictionary<string, string?> { ["hwnd:00000001"] = null };
+        var secure = false;
+        var streamer = new WindowLayoutStreamer(
+            () => tracked,
+            () => new WindowLayoutScan(
+                new[] { new WindowLayoutEntry("hwnd:00000001", 1, new WindowRect(0, 0, 800, 600), true) }, Display, null),
+            inputDesktopIsSecure: () => secure);
+
+        Assert.False((bool?)streamer.NextEvent()!["secureDesktop"]);
+
+        secure = true;
+        var raised = streamer.NextEvent();
+        Assert.True((bool?)raised!["secureDesktop"]);
+        Assert.False((bool?)raised["windows"]![0]!["fullyVisible"]);
+        Assert.Null(streamer.NextEvent());
+        // A host that connects during the prompt starts from it.
+        Assert.True((bool?)streamer.CurrentEvent()!["secureDesktop"]);
+
+        secure = false;
+        var lowered = streamer.NextEvent();
+        Assert.False((bool?)lowered!["secureDesktop"]);
+        Assert.True((bool?)lowered["windows"]![0]!["fullyVisible"]);
+    }
+
+    [Fact]
+    public void StreamerReportsTheSecureDesktopWithNoWindowTracked()
+    {
+        var tracked = new Dictionary<string, string?>();
+        var secure = false;
+        var streamer = new WindowLayoutStreamer(
+            () => tracked,
+            () => new WindowLayoutScan(Array.Empty<WindowLayoutEntry>(), Display, null),
+            inputDesktopIsSecure: () => secure);
+
+        Assert.Null(streamer.NextEvent());
+
+        secure = true;
+        var raised = streamer.NextEvent();
+        Assert.True((bool?)raised!["secureDesktop"]);
+        Assert.Empty(raised["windows"]!.AsArray());
+        Assert.Equal(Display.Width, (int?)raised["display"]!["width"]);
+        Assert.Null(streamer.NextEvent());
+
+        secure = false;
+        var lowered = streamer.NextEvent();
+        Assert.False((bool?)lowered!["secureDesktop"]);
+        Assert.Null(streamer.NextEvent());
+    }
+
+    [Theory]
+    // Refused: the Winlogon desktop of a prompt or the lock screen.
+    [InlineData(false, 5, null, true)]
+    // Any other failure says nothing.
+    [InlineData(false, 6, null, false)]
+    [InlineData(false, 0, null, false)]
+    [InlineData(true, 0, "Default", false)]
+    [InlineData(true, 0, "default", false)]
+    [InlineData(true, 0, "Screen-saver", true)]
+    // Opened but unnamed: not enough to freeze every window.
+    [InlineData(true, 0, null, false)]
+    public void ReadsTheSecureDesktopFromOpeningTheInputDesktop(bool opened, int error, string? name, bool expected)
+    {
+        Assert.Equal(expected, InputDesktop.IsSecure(opened, error, name));
+    }
 }

@@ -27,7 +27,11 @@ public sealed record WindowLayoutWindow(
 );
 
 /// <summary>Where every tracked window sits on the guest display; see <c>window.layout</c> in docs/protocol.md.</summary>
-public sealed record WindowLayout(WindowRect Display, IReadOnlyList<WindowLayoutWindow> Windows)
+public sealed record WindowLayout(
+    WindowRect Display,
+    IReadOnlyList<WindowLayoutWindow> Windows,
+    // The display shows the Winlogon desktop instead of these windows; see <see cref="InputDesktop"/>.
+    bool SecureDesktop = false)
 {
     public JsonObject ToEvent(int sequence)
     {
@@ -51,6 +55,7 @@ public sealed record WindowLayout(WindowRect Display, IReadOnlyList<WindowLayout
             ["type"] = MessageTypes.WindowLayout,
             ["sequence"] = sequence,
             ["display"] = Rect(Display),
+            ["secureDesktop"] = SecureDesktop,
             ["windows"] = windows
         };
     }
@@ -74,6 +79,9 @@ public sealed record WindowLayout(WindowRect Display, IReadOnlyList<WindowLayout
 /// their pixels are what the user should see there anyway. Neither do windows that draw nothing over it
 /// (<see cref="WindowLayoutEntry.CoversPixels"/>): one of those above the window in use sent it back to
 /// captured frames, which are slower and include the Windows border.
+///
+/// No window is <c>fullyVisible</c> while the secure desktop is up: the framebuffer then shows a User
+/// Account Control prompt or the lock screen where the window was.
 /// </remarks>
 public static class WindowLayoutComposer
 {
@@ -81,7 +89,8 @@ public static class WindowLayoutComposer
         IReadOnlyList<WindowLayoutEntry> zOrdered,
         IReadOnlyDictionary<string, string?> trackedOwners,
         WindowRect display,
-        string? foregroundWindowId)
+        string? foregroundWindowId,
+        bool secureDesktop = false)
     {
         var windows = new List<WindowLayoutWindow>();
         for (var index = 0; index < zOrdered.Count; index++)
@@ -92,7 +101,7 @@ public static class WindowLayoutComposer
                 continue;
             }
 
-            var fullyVisible = entry.IsShown && Contains(display, entry.Frame);
+            var fullyVisible = !secureDesktop && entry.IsShown && Contains(display, entry.Frame);
             for (var above = 0; fullyVisible && above < index; above++)
             {
                 var other = zOrdered[above];
@@ -115,7 +124,7 @@ public static class WindowLayoutComposer
                 fullyVisible));
         }
 
-        return new WindowLayout(display, windows);
+        return new WindowLayout(display, windows, secureDesktop);
     }
 
     internal static bool Contains(WindowRect outer, WindowRect inner) =>
