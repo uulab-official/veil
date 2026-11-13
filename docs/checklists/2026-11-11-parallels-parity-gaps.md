@@ -145,3 +145,19 @@ Done without relaunching Veil: unit tests, screens drawn to image files, and a s
   outside their own declaration.
 - **Not seen in the running app.** The Korean wording was checked by reading it, not on screen: a test
   process does not load the app's string tables, so the drawn images show the English keys.
+
+## Third relaunch on 2026-11-13
+
+In the background, with the user's go-ahead; checks were window captures and a guest screen dump.
+
+- **A window moved after connecting is cropped from its new place.** This start opened the Mac windows at
+  other places than the last one and moved the Windows windows to follow, which is what used to leave the
+  crop behind. Notepad's Mac window matched the guest display at its new frame (26,112 sampled pixels, none
+  far off) and did not match at the old one (4% far off). The window list on its own connection is now
+  seen working in the running app.
+- **Windows land somewhere new each start.** Every Mac window opened in the middle of the screen, stepped
+  aside by how many were already open, so the order the guest listed them in decided where each went:
+  Notepad moved 56 points up and left, Paint and File Explorer 28 down and right, and all three Windows
+  windows were moved to follow. A Mac window now opens where its Windows window already is, when the guest
+  display stands for the Mac screen (`WindowsAppWindowPlacement.frameMatchingGuest`). Unit-tested; not yet
+  seen in the running app.
