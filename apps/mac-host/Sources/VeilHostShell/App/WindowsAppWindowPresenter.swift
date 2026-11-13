@@ -142,7 +142,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
 
         let window = NSWindow(
-            contentRect: frame(for: session.window.bounds, existingWindowCount: windowsById.count),
+            contentRect: frame(for: session.window.bounds, existingWindowCount: windowsById.count, windowId: session.id),
             // A window Windows keeps at one size, such as Character Map, has no resize edges on the Mac
             // either. Dragging them would only uncover an empty frame around the app.
             styleMask: session.window.isResizable
@@ -1037,18 +1037,42 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         window.contentResizeIncrements = NSSize(width: 1, height: 1)
     }
 
-    private func frame(for bounds: WindowBounds, existingWindowCount: Int) -> NSRect {
+    /// Where a new Mac window goes: where its Windows window already is when the guest display stands for
+    /// this screen, and otherwise the middle of the screen, stepped aside for each window already open.
+    private func frame(for bounds: WindowBounds, existingWindowCount: Int, windowId: String? = nil) -> NSRect {
         let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let frame = WindowsAppWindowPlacement.initialFrame(
+        let visibleGeometry = HostVisibleFrameGeometry(
+            x: Double(visibleFrame.origin.x),
+            y: Double(visibleFrame.origin.y),
+            width: Double(visibleFrame.width),
+            height: Double(visibleFrame.height)
+        )
+        var frame = WindowsAppWindowPlacement.initialFrame(
             for: bounds,
-            visibleFrame: HostVisibleFrameGeometry(
-                x: Double(visibleFrame.origin.x),
-                y: Double(visibleFrame.origin.y),
-                width: Double(visibleFrame.width),
-                height: Double(visibleFrame.height)
-            ),
+            visibleFrame: visibleGeometry,
             existingWindowCount: existingWindowCount
         )
+        if let windowId,
+           let screen = NSScreen.main,
+           let layout = GuestWindowLayoutStore.shared.latest {
+            // The layout has the window's place now; the bounds are from when it was first reported.
+            let guestFrame = layout.windows.first { $0.windowId == windowId }?.frame
+                ?? GuestPixelRect(x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height)
+            if let matching = WindowsAppWindowPlacement.frameMatchingGuest(
+                guestFrame: guestFrame,
+                size: (frame.width, frame.height),
+                screenFrame: HostVisibleFrameGeometry(
+                    x: Double(screen.frame.origin.x),
+                    y: Double(screen.frame.origin.y),
+                    width: Double(screen.frame.width),
+                    height: Double(screen.frame.height)
+                ),
+                visibleFrame: visibleGeometry,
+                display: layout.display
+            ) {
+                frame = matching
+            }
+        }
 
         return NSRect(
             x: frame.x,

@@ -51,6 +51,49 @@ public enum WindowsAppWindowPlacement {
         )
     }
 
+    /// The frame that puts a Mac window where its Windows window already is, or nil when the guest display
+    /// does not stand for the Mac screen.
+    ///
+    /// In the apps view the guest display is the Mac screen, point for point or two pixels a point
+    /// (`CoherencePlacement.displayMatching`), so a place on one is a place on the other. Opening every Mac
+    /// window in the middle of the screen instead meant that each time Veil started, the windows landed
+    /// somewhere new and every Windows window was then moved to follow. A window that would sit under the
+    /// menu bar or the Dock is brought inside `visibleFrame`; Veil then moves the Windows window to match,
+    /// as it does when the Mac window is dragged.
+    ///
+    /// - Parameters:
+    ///   - guestFrame: The Windows window on the guest display, in guest pixels from its top-left.
+    ///   - size: The Mac window's content size, as `initialFrame` gives it.
+    ///   - screenFrame: The Mac screen, AppKit coordinates (bottom-left origin, points).
+    ///   - display: The guest display from `window.layout`.
+    public static func frameMatchingGuest(
+        guestFrame: GuestPixelRect,
+        size: (width: Double, height: Double),
+        screenFrame: HostVisibleFrameGeometry,
+        visibleFrame: HostVisibleFrameGeometry,
+        display: GuestPixelRect
+    ) -> HostVisibleFrameGeometry? {
+        guard screenFrame.width > 0, screenFrame.height > 0, display.width > 0, display.height > 0 else {
+            return nil
+        }
+        let scaleX = Double(display.width) / screenFrame.width
+        let scaleY = Double(display.height) / screenFrame.height
+        // The same whole number of pixels a point both ways: the display was sized to this screen.
+        guard abs(scaleX - scaleY) < 0.01,
+              [1.0, 2.0].contains(where: { abs(scaleX - $0) < 0.01 }) else {
+            return nil
+        }
+
+        let left = screenFrame.x + Double(guestFrame.x - display.x) / scaleX
+        let top = screenFrame.y + screenFrame.height - Double(guestFrame.y - display.y) / scaleY
+        return HostVisibleFrameGeometry(
+            x: clamp(left, lower: visibleFrame.x, upper: visibleFrame.x + visibleFrame.width - size.width),
+            y: clamp(top - size.height, lower: visibleFrame.y, upper: visibleFrame.y + visibleFrame.height - size.height),
+            width: size.width,
+            height: size.height
+        )
+    }
+
     /// The aspect ratio a mirrored window should be locked to while the user resizes it.
     ///
     /// The host keeps the mirror aspect-correct while a user resize is in progress, then sends the final
