@@ -278,3 +278,17 @@ In the background, with the user's go-ahead; nothing was opened or moved in Wind
   covering window out of the visible region. That fix is committed and not yet in the running agent.
 - Not seen: a window opening, since none was opened, so the wait before a new window is cropped is still
   unit-tested only.
+
+## Seventh relaunch and agent update on 2026-11-13
+
+In the background, with the user's go-ahead; nothing was opened or moved in Windows.
+
+- Veil did not come to the front, the three Mac windows opened where they were, and the agent went from
+  `43d15c91498f` to `3eb6f3c5562b` with them open.
+- **The dark band is gone.** With 48 pixels around the covering window left out, Notepad's visible strip
+  is 16 pixels high, the rows that were darkened are back to the window's own colour, and the strip
+  matches the guest display (780 sampled pixels, mean difference 0.00). Prints stayed at 2.0 a second.
+- **A faint tail is left.** The strip's first row is still six levels of 255 darker than the status bar it
+  belongs to, a tenth, fading out over the next 15 rows: the shadow reaches about 63 pixels. On this dark
+  window it cannot be seen; on a light one it would be a grey step. The margin is now 64 pixels, committed
+  and not yet in the running agent.
