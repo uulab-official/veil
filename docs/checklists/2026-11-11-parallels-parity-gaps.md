@@ -362,3 +362,24 @@ Windows, which only the user raises.
 - To check, in this order, once the next relaunch and agent update are in: Set Windows Clock from the Veil
   menu, which raises the approval prompt, which should open in its own Mac window; approving it there;
   then any installer, whose window should take clicks after its own prompt.
+
+## Ninth relaunch and agent update on 2026-11-13
+
+In the background, with the user's go-ahead; nothing was opened or moved in Windows.
+
+- Veil did not come to the front, the three Mac windows opened where they were, and the agent went from
+  `724862e1027c` to `e9d8f78b0ac0` with them open. It reports `timeSyncRepair` and `visualEffects`.
+- **No ordinary window is taken for an administrator's.** Notepad, Paint, and File Explorer carry no
+  `elevated` mark, so their input still goes through the agent. A wrong mark would have sent every click
+  through the hardware path.
+- **The host sends the visual effects setting on connecting**: `reduced=true: changed=false`, twice, once
+  for each agent. This is the path a `defaults write` did not reach last time.
+- **The guest clock is right again without the repair**: 669 and 740 ms from the Mac's, where it was 15
+  hours off four hours earlier. Windows corrected it by itself in between; what triggered that is not
+  known. Set Windows Clock therefore does not show now, and the repair stays unit-tested only.
+- Paint's Mac window matches the guest display at its frame (30,820 sampled pixels, 41 far off).
+- **Holding the fine timer only while ticking fast made no difference that could be measured**: Windows
+  used 13% of one core at rest and the agent 6%, as before, and this guest's QEMU 12 to 24% of a Mac core
+  in the minute after the update against 9 to 11% before it, with the Mac's load average at 18 to 26.
+- Still not seen: an approval prompt in its own Mac window, and input reaching a window run as
+  administrator. Both wait for the user to run something in Windows that asks for administrator rights.
