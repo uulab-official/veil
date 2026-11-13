@@ -209,21 +209,61 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
 
     static let windowListRequestText = #"{"type":"window.list.request","requestId":"events"}"#
 
+    /// How long the guest has to answer the window list before its connection is given up.
+    static let windowListTimeout: Duration = .seconds(15)
+
     public func eventMessages() -> AsyncThrowingStream<Data, any Error> {
         AsyncThrowingStream(
             Data.self,
             bufferingPolicy: .bufferingNewest(Self.eventBufferMessageCount)
         ) { continuation in
+            // This connection only listens. The agent stops sending events to a connection once that
+            // connection has sent a request, so nothing may be sent on it.
             let task = session.webSocketTask(with: url)
             task.maximumMessageSize = Self.maximumMessageByteCount
             task.resume()
-            // Asks for the windows already open in Windows. The answers arrive on this connection as
-            // `window.created` events, so they are handled like any window that opens later. An agent that
-            // does not know the request answers with an error the event handler ignores.
-            task.send(.string(Self.windowListRequestText)) { _ in }
+            // Asks for the windows already open in Windows, on a connection of its own. The answers are
+            // passed into this stream as the `window.created` events they are, so they are handled like any
+            // window that opens later. When the request went out on the listening connection, every event
+            // after the answer was lost: layouts, new and closed windows, the clipboard, notifications.
+            let listTask = session.webSocketTask(with: url)
+            listTask.maximumMessageSize = Self.maximumMessageByteCount
+            listTask.resume()
 
             continuation.onTermination = { @Sendable _ in
                 task.cancel(with: .normalClosure, reason: nil)
+                listTask.cancel(with: .normalClosure, reason: nil)
+            }
+
+            let listTimeout = Task {
+                try? await Task.sleep(for: Self.windowListTimeout)
+                listTask.cancel(with: .normalClosure, reason: nil)
+            }
+            Task {
+                defer {
+                    listTimeout.cancel()
+                    listTask.cancel(with: .normalClosure, reason: nil)
+                }
+                // Best effort: without the list, windows still arrive as the guest reports them.
+                guard (try? await listTask.send(.string(Self.windowListRequestText))) != nil else {
+                    return
+                }
+                var reader = WindowListReplyReader()
+                while !Task.isCancelled, let message = try? await listTask.receive() {
+                    let data: Data
+                    switch message {
+                    case .data(let received): data = received
+                    case .string(let text): data = Data(text.utf8)
+                    @unknown default: return
+                    }
+                    let step = reader.accept(data)
+                    if step.forward, !Self.yieldEventMessage(data, to: continuation) {
+                        return
+                    }
+                    if step.done {
+                        return
+                    }
+                }
             }
 
             Task {
@@ -244,5 +284,41 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
                 }
             }
         }
+    }
+}
+
+/// Picks the answer to `window.list.request` out of what arrives on the connection that asked: the
+/// `window.list.response` and the one `window.created` per window that follows it. Anything else there is
+/// an event the listening connection also receives, and is left to it.
+struct WindowListReplyReader {
+    /// `window.created` messages still to come, or nil before the response.
+    private var remaining: Int?
+
+    /// Whether to pass the message on as an event, and whether the answer is complete.
+    mutating func accept(_ message: Data) -> (forward: Bool, done: Bool) {
+        guard let object = try? JSONSerialization.jsonObject(with: message) as? [String: Any],
+              let type = object["type"] as? String else {
+            return (false, false)
+        }
+
+        guard let remaining else {
+            switch type {
+            case MessageType.windowListResponse.rawValue:
+                let count = (object["windowIds"] as? [Any])?.count ?? 0
+                self.remaining = count
+                return (true, count == 0)
+            case MessageType.error.rawValue:
+                // An agent without `capabilities.desktopWindows` does not know the request.
+                return (false, true)
+            default:
+                return (false, false)
+            }
+        }
+
+        guard type == MessageType.windowCreated.rawValue else {
+            return (false, false)
+        }
+        self.remaining = remaining - 1
+        return (true, remaining <= 1)
     }
 }
