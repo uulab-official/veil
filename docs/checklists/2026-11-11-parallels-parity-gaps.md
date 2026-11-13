@@ -120,3 +120,8 @@ dump; nothing was sent to the guest.
   fix for screen-copied frames could not be seen at work: no window was in that state.
 - **Load with three windows mirrored and nothing changing:** Veil about 10% of one core, this guest's QEMU
   about a third of one. Not measured while typing or dragging.
+- **Agent updated with the app windows open.** The agent-driven tools update took the agent from
+  `daf5a8c492ec` to `512faea4e697`; it was down for about 5 seconds. Nothing was typed into Windows and the
+  disc was ejected afterwards. The three Mac windows kept their window numbers through the dropped
+  connection and the main window stayed hidden, so the view did not switch to the desktop. Afterwards
+  Notepad's Mac window still matched the guest display at its frame.
