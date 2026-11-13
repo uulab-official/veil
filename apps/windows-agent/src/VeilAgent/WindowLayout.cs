@@ -23,7 +23,11 @@ public sealed record WindowLayoutWindow(
     int ZOrder,
     bool IsForeground,
     bool IsShown,
-    bool FullyVisible
+    bool FullyVisible,
+    // For a window that is not fully visible: the parts of it the display does show, in display pixels.
+    // Null for a fully visible window, whose whole frame shows. Empty when none of it shows or the shape
+    // has too many pieces to be worth sending.
+    IReadOnlyList<WindowRect>? VisibleRegion = null
 );
 
 /// <summary>Where every tracked window sits on the guest display; see <c>window.layout</c> in docs/protocol.md.</summary>
@@ -38,7 +42,7 @@ public sealed record WindowLayout(
         var windows = new JsonArray();
         foreach (var window in Windows)
         {
-            windows.Add(new JsonObject
+            var entry = new JsonObject
             {
                 ["windowId"] = window.WindowId,
                 ["ownerWindowId"] = window.OwnerWindowId,
@@ -47,7 +51,17 @@ public sealed record WindowLayout(
                 ["isForeground"] = window.IsForeground,
                 ["isShown"] = window.IsShown,
                 ["fullyVisible"] = window.FullyVisible
-            });
+            };
+            if (window.VisibleRegion is { } region)
+            {
+                var rects = new JsonArray();
+                foreach (var rect in region)
+                {
+                    rects.Add(Rect(rect));
+                }
+                entry["visibleRegion"] = rects;
+            }
+            windows.Add(entry);
         }
 
         return new JsonObject
@@ -102,15 +116,25 @@ public static class WindowLayoutComposer
             }
 
             var fullyVisible = !secureDesktop && entry.IsShown && Contains(display, entry.Frame);
-            for (var above = 0; fullyVisible && above < index; above++)
+            // What the display shows of the window: its frame on the display, less every window above it
+            // that covers pixels.
+            var visible = !secureDesktop && entry.IsShown && Intersection(entry.Frame, display) is { } onDisplay
+                ? new List<WindowRect> { onDisplay }
+                : new List<WindowRect>();
+            for (var above = 0; above < index && (fullyVisible || visible.Count > 0); above++)
             {
                 var other = zOrdered[above];
                 if (other.IsShown
                     && other.CoversPixels
-                    && other.ProcessId != entry.ProcessId
+                    && Covers(other, entry, trackedOwners)
                     && Intersects(other.Frame, entry.Frame))
                 {
                     fullyVisible = false;
+                    visible = Subtract(visible, other.Frame);
+                    if (visible.Count > MaximumVisibleRects)
+                    {
+                        visible.Clear();
+                    }
                 }
             }
 
@@ -121,10 +145,78 @@ public static class WindowLayoutComposer
                 windows.Count,
                 entry.WindowId == foregroundWindowId,
                 entry.IsShown,
-                fullyVisible));
+                fullyVisible,
+                fullyVisible ? null : visible));
         }
 
         return new WindowLayout(display, windows, secureDesktop);
+    }
+
+    /// <summary>
+    /// The most pieces a window's visible part is sent in. A window under many others breaks into more,
+    /// and by then little of it shows.
+    /// </summary>
+    public const int MaximumVisibleRects = 12;
+
+    /// <summary>
+    /// Whether a window above another hides that window's pixels, as opposed to being part of it. A window
+    /// of another process does. So does a window of the same process that is an app window in its own
+    /// right, tracked with no owner: two File Explorer windows are one process, and the lower one used to
+    /// count as fully visible and show the upper one's pixels inside it. The process's other windows above
+    /// it, its menus, tooltips, and dialogs, belong to what the user should see there.
+    /// </summary>
+    private static bool Covers(
+        WindowLayoutEntry above,
+        WindowLayoutEntry below,
+        IReadOnlyDictionary<string, string?> trackedOwners) =>
+        above.ProcessId != below.ProcessId
+        || (trackedOwners.TryGetValue(above.WindowId, out var ownerOfAbove) && ownerOfAbove is null);
+
+    internal static WindowRect? Intersection(WindowRect a, WindowRect b)
+    {
+        var left = Math.Max(a.X, b.X);
+        var top = Math.Max(a.Y, b.Y);
+        var right = Math.Min(a.X + a.Width, b.X + b.Width);
+        var bottom = Math.Min(a.Y + a.Height, b.Y + b.Height);
+        return right > left && bottom > top ? new WindowRect(left, top, right - left, bottom - top) : null;
+    }
+
+    /// <summary>Takes a rectangle out of a set of rectangles that do not overlap; neither do the results.</summary>
+    internal static List<WindowRect> Subtract(IReadOnlyList<WindowRect> from, WindowRect hole)
+    {
+        var result = new List<WindowRect>();
+        foreach (var rect in from)
+        {
+            if (Intersection(rect, hole) is not { } cut)
+            {
+                result.Add(rect);
+                continue;
+            }
+
+            // A band above the hole, one below it, and what is left on either side between them.
+            if (cut.Y > rect.Y)
+            {
+                result.Add(new WindowRect(rect.X, rect.Y, rect.Width, cut.Y - rect.Y));
+            }
+            var rectBottom = rect.Y + rect.Height;
+            var cutBottom = cut.Y + cut.Height;
+            if (cutBottom < rectBottom)
+            {
+                result.Add(new WindowRect(rect.X, cutBottom, rect.Width, rectBottom - cutBottom));
+            }
+            if (cut.X > rect.X)
+            {
+                result.Add(new WindowRect(rect.X, cut.Y, cut.X - rect.X, cut.Height));
+            }
+            var rectRight = rect.X + rect.Width;
+            var cutRight = cut.X + cut.Width;
+            if (cutRight < rectRight)
+            {
+                result.Add(new WindowRect(cutRight, cut.Y, rectRight - cutRight, cut.Height));
+            }
+        }
+
+        return result;
     }
 
     internal static bool Contains(WindowRect outer, WindowRect inner) =>
