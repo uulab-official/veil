@@ -4,6 +4,7 @@ import VeilHostCore
 
 struct VeilMenuBarMenu: View {
     @AppStorage(GuestStateSyncSettings.matchMacAppearanceKey) private var matchMacAppearanceInWindows = true
+    @AppStorage(GuestStateSyncSettings.reduceVisualEffectsKey) private var reduceWindowsVisualEffects = true
     var model: HostDashboardModel
     var vmModel: VMRuntimeModel
     var activateMainWindowAction: () -> Void
@@ -216,6 +217,8 @@ struct VeilMenuBarMenu: View {
         Divider()
 
         Toggle("Match Mac Appearance in Windows", isOn: $matchMacAppearanceInWindows)
+        Toggle("Reduce Windows Visual Effects", isOn: $reduceWindowsVisualEffects)
+            .help("Turns off transparency and animations in Windows, which draws on the CPU in Veil. Turn this off to get them back.")
 
         Divider()
 

@@ -5,14 +5,16 @@ extension HostDashboardModel {
     public func flushGuestStateSync(
         _ coordinator: GuestStateSyncCoordinator,
         macTheme: GuestAppearanceTheme,
-        matchMacAppearance: Bool
+        matchMacAppearance: Bool,
+        reduceVisualEffects: Bool? = nil
     ) async {
         await coordinator.flush(
             service: service,
             isLive: hasLiveAgentConnection,
             capabilities: health?.capabilities,
             macTheme: macTheme,
-            matchMacAppearance: matchMacAppearance
+            matchMacAppearance: matchMacAppearance,
+            reduceVisualEffects: reduceVisualEffects
         )
     }
 }

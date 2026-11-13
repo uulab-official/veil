@@ -133,6 +133,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.setGuestAppearance(theme: theme)
     }
 
+    public func setGuestVisualEffects(reduced: Bool) async throws -> VisualEffectsSetResponse {
+        try await primary.setGuestVisualEffects(reduced: reduced)
+    }
+
     public func setGuestImeMode(_ mode: GuestImeMode) async throws {
         try await primary.setGuestImeMode(mode)
     }

@@ -1095,6 +1095,14 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    /// Asks the guest to turn Windows' transparency and animations down, or to put back what the user had.
+    public func setGuestVisualEffects(reduced: Bool) async throws -> VisualEffectsSetResponse {
+        try await requestRejectingErrors(
+            VisualEffectsSetRequest(requestId: "req_visual_effects_set", reduced: reduced),
+            context: "visual effects set requires one response"
+        )
+    }
+
     public func diagnoseAgentConnection(
         endpoint: String,
         timeoutNanoseconds: UInt64 = 5_000_000_000

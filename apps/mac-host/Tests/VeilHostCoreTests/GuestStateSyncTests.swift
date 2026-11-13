@@ -23,6 +23,17 @@ struct GuestStateSyncProtocolTests {
         #expect(response.appearance.broadcast)
     }
 
+    @Test func visualEffectsFixturesDecode() throws {
+        let request: VisualEffectsSetRequest = try decodeStateSyncFixture("visual.effects.set.request")
+        let response: VisualEffectsSetResponse = try decodeStateSyncFixture("visual.effects.set.response")
+
+        #expect(request.type == .visualEffectsSetRequest)
+        #expect(request.reduced)
+        #expect(response.visualEffects.transparency == false)
+        #expect(response.visualEffects.changed)
+        #expect(try JSONEncoder.veilProtocol.encode(request).count > 0)
+    }
+
     @Test func encodedTimeSyncRequestMatchesTheShapeTheGuestAccepts() throws {
         let date = Date(timeIntervalSince1970: 1_794_389_400) // 2026-11-11T09:30:00Z
         let data = try JSONEncoder.veilProtocol.encode(
@@ -75,6 +86,84 @@ struct GuestStateSyncProtocolTests {
 
 @MainActor
 struct GuestStateSyncCoordinatorTests {
+    private static var effectsCapabilities: AgentCapabilities {
+        var capabilities = syncCapabilities
+        capabilities.visualEffects = true
+        return capabilities
+    }
+
+    @Test func visualEffectsAreSentOncePerConnectionAndWhenTheSettingChanges() async {
+        let service = StateSyncRecordingService()
+        let coordinator = GuestStateSyncCoordinator()
+        func flush(live: Bool = true, reduced: Bool?) async {
+            await coordinator.flush(
+                service: service,
+                isLive: live,
+                capabilities: Self.effectsCapabilities,
+                macTheme: .dark,
+                matchMacAppearance: true,
+                reduceVisualEffects: reduced
+            )
+        }
+
+        await flush(reduced: true)
+        await flush(reduced: true)
+        #expect(service.visualEffects == [true])
+        #expect(coordinator.confirmedReducedEffects == true)
+
+        // Turned off: sent as well, which is what puts back what the user had in Windows.
+        await flush(reduced: false)
+        #expect(service.visualEffects == [true, false])
+
+        // A new connection may be a new agent, or Windows after a restart.
+        await flush(live: false, reduced: false)
+        await flush(reduced: false)
+        #expect(service.visualEffects == [true, false, false])
+    }
+
+    @Test func visualEffectsAreNotAskedOfAnAgentThatCannotSetThem() async {
+        let service = StateSyncRecordingService()
+        let coordinator = GuestStateSyncCoordinator()
+
+        await coordinator.flush(
+            service: service,
+            isLive: true,
+            capabilities: Self.syncCapabilities,
+            macTheme: .dark,
+            matchMacAppearance: true,
+            reduceVisualEffects: true
+        )
+        // A caller that leaves the setting out sends nothing either.
+        await coordinator.flush(
+            service: service,
+            isLive: true,
+            capabilities: Self.effectsCapabilities,
+            macTheme: .dark,
+            matchMacAppearance: true
+        )
+
+        #expect(service.visualEffects.isEmpty)
+    }
+
+    @Test func aFailingVisualEffectsRequestIsRetriedOnlyAFewTimes() async {
+        let service = StateSyncRecordingService(failing: true)
+        let coordinator = GuestStateSyncCoordinator()
+
+        for _ in 0..<6 {
+            await coordinator.flush(
+                service: service,
+                isLive: true,
+                capabilities: Self.effectsCapabilities,
+                macTheme: .dark,
+                matchMacAppearance: false,
+                reduceVisualEffects: true
+            )
+        }
+
+        #expect(service.visualEffects.count == GuestStateSyncCoordinator.maximumAttemptsPerTrigger)
+        #expect(coordinator.confirmedReducedEffects == nil)
+    }
+
     private static let syncCapabilities = AgentCapabilities(
         appList: true,
         appLaunch: true,
@@ -249,6 +338,26 @@ private final class StateSyncRecordingService: HostDashboardService, @unchecked 
                 skewMilliseconds: 0,
                 outcome: .inSync,
                 method: "none"
+            )
+        )
+    }
+
+    private(set) var visualEffects: [Bool] = []
+
+    func setGuestVisualEffects(reduced: Bool) async throws -> VisualEffectsSetResponse {
+        visualEffects.append(reduced)
+        if failing {
+            throw StateSyncTestError()
+        }
+        return VisualEffectsSetResponse(
+            requestId: "req_visual_effects_set",
+            visualEffects: GuestVisualEffectsStatus(
+                isSupported: true,
+                reduced: reduced,
+                transparency: !reduced,
+                windowAnimation: !reduced,
+                clientAnimation: !reduced,
+                changed: true
             )
         )
     }

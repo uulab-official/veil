@@ -46,6 +46,8 @@ public enum MessageType: String, Codable, Sendable {
     case timeSyncResponse = "time.sync.response"
     case appearanceSetRequest = "appearance.set.request"
     case appearanceSetResponse = "appearance.set.response"
+    case visualEffectsSetRequest = "visual.effects.set.request"
+    case visualEffectsSetResponse = "visual.effects.set.response"
     case toolsUpdateRequest = "tools.update.request"
     case toolsUpdateResponse = "tools.update.response"
     case hostFolderMountRequest = "host.folder.mount.request"
@@ -153,6 +155,8 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     public var timeSync: Bool? = nil
     /// True when the agent understands `appearance.set.request`. Optional for the same reason.
     public var appearanceSync: Bool? = nil
+    /// The agent can turn Windows' transparency and animations down (`visual.effects.set.request`).
+    public var visualEffects: Bool? = nil
     /// True when `input.text` accepts `replaceLength`, so an open IME composition can be shown in the guest.
     public var textComposition: Bool? = nil
     /// True when the agent understands `input.ime.set`, so the Windows IME can follow the macOS input source.
@@ -556,6 +560,64 @@ public struct AppearanceSetResponse: Codable, Equatable, Sendable {
         self.requestId = requestId
         self.protocolVersion = protocolVersion
         self.appearance = appearance
+    }
+}
+
+/// Turns Windows' transparency and animations down, or puts back what the user had.
+public struct VisualEffectsSetRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var reduced: Bool
+
+    public init(requestId: String, reduced: Bool, protocolVersion: Int = 1) {
+        self.type = .visualEffectsSetRequest
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.reduced = reduced
+    }
+}
+
+/// What the guest's visual effects are after a `visual.effects.set.request`.
+public struct GuestVisualEffectsStatus: Codable, Equatable, Sendable {
+    public var isSupported: Bool
+    public var reduced: Bool
+    public var transparency: Bool?
+    public var windowAnimation: Bool?
+    public var clientAnimation: Bool?
+    public var changed: Bool
+    public var message: String?
+
+    public init(
+        isSupported: Bool,
+        reduced: Bool,
+        transparency: Bool? = nil,
+        windowAnimation: Bool? = nil,
+        clientAnimation: Bool? = nil,
+        changed: Bool,
+        message: String? = nil
+    ) {
+        self.isSupported = isSupported
+        self.reduced = reduced
+        self.transparency = transparency
+        self.windowAnimation = windowAnimation
+        self.clientAnimation = clientAnimation
+        self.changed = changed
+        self.message = message
+    }
+}
+
+public struct VisualEffectsSetResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var visualEffects: GuestVisualEffectsStatus
+
+    public init(requestId: String, protocolVersion: Int = 1, visualEffects: GuestVisualEffectsStatus) {
+        self.type = .visualEffectsSetResponse
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.visualEffects = visualEffects
     }
 }
 

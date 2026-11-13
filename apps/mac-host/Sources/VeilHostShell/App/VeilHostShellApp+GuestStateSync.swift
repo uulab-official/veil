@@ -39,7 +39,8 @@ extension VeilHostShellApp {
         await model.flushGuestStateSync(
             guestStateSync,
             macTheme: MacHostStateObserver.currentTheme(),
-            matchMacAppearance: matchMacAppearanceInWindows
+            matchMacAppearance: matchMacAppearanceInWindows,
+            reduceVisualEffects: reduceWindowsVisualEffects
         )
         // Also called on every agent poll, so a reconnected agent gets the IME mode back.
         await syncGuestImeMode()

@@ -54,6 +54,7 @@ struct VeilHostShellApp: App {
     @State var guestStateSync = GuestStateSyncCoordinator()
     @State var macHostStateObserver = MacHostStateObserver()
     @AppStorage(GuestStateSyncSettings.matchMacAppearanceKey) var matchMacAppearanceInWindows = true
+    @AppStorage(GuestStateSyncSettings.reduceVisualEffectsKey) var reduceWindowsVisualEffects = true
 
     init() {
         let runtimeBooter = AppRuntimeBooterFactory.make()
@@ -180,6 +181,10 @@ struct VeilHostShellApp: App {
             }
             .onChange(of: matchMacAppearanceInWindows) { _, isOn in
                 matchMacAppearanceSettingChanged(isOn: isOn)
+            }
+            .onChange(of: reduceWindowsVisualEffects) { _, _ in
+                // The coordinator sees the new value differs from what Windows confirmed and sends it.
+                Task { @MainActor in await flushGuestStateSync() }
             }
             .onChange(of: vmModel.phase) {
                 scheduleAutomaticQuietRuntimeIfNeeded()
