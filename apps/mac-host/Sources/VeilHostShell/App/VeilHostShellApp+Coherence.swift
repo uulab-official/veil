@@ -38,6 +38,47 @@ extension VeilHostShellApp {
                 await model.setCroppedWindows(windowIds: windowIds, hidesDesktop: hidesDesktop)
             }
         }
+        syncSecureDesktopWindow()
+    }
+
+    /// Shows the guest display in a window of its own while Windows' secure desktop has it, and closes that
+    /// window when it is gone; see `SecureDesktopPresentation`. Run on every layout and runtime change, and
+    /// when Veil becomes the app in use.
+    func syncSecureDesktopWindow() {
+        let presenter = secureDesktopWindowPresenter
+        if presenter.onAppBecameActive == nil {
+            presenter.onAppBecameActive = { syncSecureDesktopWindow() }
+        }
+        let snapshot = vmModel.snapshot
+        let layout = GuestWindowLayoutStore.shared.latest
+        let surface = snapshot?.latestConsoleLaunch?.displaySurface
+        let action = SecureDesktopPresentation.action(
+            isSecure: layout?.showsSecureDesktop == true,
+            canShowDisplay: snapshot?.state == .running && surface?.kind == .vncLoopback,
+            showsApps: shellNavigation.viewMode == .apps,
+            isWindowShown: presenter.isShown,
+            wasDismissed: presenter.wasDismissed,
+            appIsActive: NSApp.isActive,
+            attentionRequested: presenter.attentionRequested
+        )
+        switch action {
+        case .none:
+            if layout?.showsSecureDesktop != true {
+                presenter.resetForNewAttempt()
+            }
+        case .show:
+            if let surface, let layout {
+                presenter.show(
+                    surface: surface,
+                    display: layout.display,
+                    commandKeyMapping: snapshot?.commandKeyMapping ?? .default
+                )
+            }
+        case .requestAttention:
+            presenter.requestAttention()
+        case .close:
+            presenter.close()
+        }
     }
 
     /// Makes the guest display the Mac screen's size while app windows are shown, so the guest layout can be

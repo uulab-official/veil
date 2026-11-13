@@ -14,6 +14,9 @@ struct WindowsEmbeddedDisplayPreview: View {
     var pointerTapAction: (Double, Double) -> Void
     var keyAction: (String) -> Void
     var commandKeyMapping: VMCommandKeyMapping = .default
+    /// False for a window that shows the display at whatever size Windows has, scaled to fit. The window
+    /// for the secure desktop is one: resizing the display under a prompt would move every app window.
+    var resizesGuestDisplay = true
     @State private var rfbDisplayModel = RFBEmbeddedDisplayModel()
     @State private var lastThumbnailAt = Date.distantPast
     @State private var followResizeTask: Task<Void, Never>?
@@ -44,7 +47,7 @@ struct WindowsEmbeddedDisplayPreview: View {
     /// becomes the guest's desktop size, the way a Parallels VM window resizes Windows with it.
     private func followContainerSize(_ size: CGSize) {
         containerSize = size
-        guard resizeBus == nil, surface.kind == .vncLoopback else {
+        guard resizesGuestDisplay, resizeBus == nil, surface.kind == .vncLoopback else {
             return
         }
         followResizeTask?.cancel()

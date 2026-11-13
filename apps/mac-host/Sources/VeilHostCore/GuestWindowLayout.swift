@@ -54,12 +54,21 @@ public struct WindowLayoutEvent: Codable, Equatable, Sendable {
     public var sequence: Int
     public var display: GuestPixelRect
     public var windows: [Window]
+    /// True while a User Account Control prompt, the lock screen, or the Ctrl+Alt+Del screen has the guest
+    /// display. Absent from agents that do not report it.
+    public var secureDesktop: Bool?
 
-    public init(sequence: Int, display: GuestPixelRect, windows: [Window]) {
+    public init(sequence: Int, display: GuestPixelRect, windows: [Window], secureDesktop: Bool? = nil) {
         self.type = .windowLayout
         self.sequence = sequence
         self.display = display
         self.windows = windows
+        self.secureDesktop = secureDesktop
+    }
+
+    /// Whether the guest display shows Windows' secure desktop instead of the windows listed here.
+    public var showsSecureDesktop: Bool {
+        secureDesktop == true
     }
 }
 
@@ -161,7 +170,9 @@ public final class GuestWindowLayoutStore {
     ) -> CGRect? {
         // VNC carries the primary display only; a layout whose display is a different size describes a
         // display change the framebuffer has not caught up with.
-        guard layout.display.width == framebufferWidth,
+        // During a prompt or on the lock screen the framebuffer holds that screen, not the window.
+        guard !layout.showsSecureDesktop,
+              layout.display.width == framebufferWidth,
               layout.display.height == framebufferHeight,
               let window = layout.windows.first(where: { $0.windowId == windowId }),
               window.isShown,

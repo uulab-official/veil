@@ -14,6 +14,7 @@ struct VeilHostShellApp: App {
     let vmRuntimeBooter: AppRuntimeBooter
     let qemuConsoleWindowPresenter = QEMUConsoleWindowPresenter()
     let windowsAppWindowPresenter = WindowsAppWindowPresenter()
+    let secureDesktopWindowPresenter = SecureDesktopWindowPresenter()
     let agentTransport: URLSessionWebSocketTransport?
     let agentConnectionPlan: AppGuestAgentConnectionPlan
     let windowsNotificationPresenter = WindowsNotificationPresenter(center: MacUserNotificationCenter())
@@ -184,6 +185,7 @@ struct VeilHostShellApp: App {
             }
             .onChange(of: shellNavigation.viewMode) { _, mode in
                 applyViewMode(mode)
+                syncSecureDesktopWindow()
                 Task { @MainActor in await syncGuestImeMode() }
             }
             .environment(\.appRuntimeProvider, vmRuntimeBooter.provider)

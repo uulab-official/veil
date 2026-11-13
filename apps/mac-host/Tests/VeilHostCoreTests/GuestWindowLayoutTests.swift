@@ -38,6 +38,19 @@ struct GuestWindowLayoutTests {
         #expect(GuestWindowLayoutStore.framebufferCrop(windowId: "hwnd:1", layout: layout(fullyVisible: false), framebufferWidth: 1920, framebufferHeight: 1080) == nil)
     }
 
+    @Test func nothingIsCroppedWhileTheSecureDesktopHasTheDisplay() throws {
+        var secure = layout()
+        secure.secureDesktop = true
+        #expect(secure.showsSecureDesktop)
+        #expect(GuestWindowLayoutStore.framebufferCrop(windowId: "hwnd:1", layout: secure, framebufferWidth: 1920, framebufferHeight: 1080) == nil)
+
+        let json = Data(#"{"type":"window.layout","sequence":7,"display":{"x":0,"y":0,"width":1920,"height":1080},"secureDesktop":true,"windows":[]}"#.utf8)
+        #expect(try JSONDecoder.veilProtocol.decode(WindowLayoutEvent.self, from: json).showsSecureDesktop)
+        // An agent that does not report it.
+        let older = Data(#"{"type":"window.layout","sequence":7,"display":{"x":0,"y":0,"width":1920,"height":1080},"windows":[]}"#.utf8)
+        #expect(!(try JSONDecoder.veilProtocol.decode(WindowLayoutEvent.self, from: older).showsSecureDesktop))
+    }
+
     @Test func ignoresOlderLayoutsButAcceptsARestartedAgent() {
         let store = GuestWindowLayoutStore()
         var notified = 0
