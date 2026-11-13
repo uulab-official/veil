@@ -61,6 +61,8 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `time.sync.response.json`
 - `appearance.set.request.json`
 - `appearance.set.response.json`
+- `visual.effects.set.request.json`
+- `visual.effects.set.response.json`
 - `error.app_not_found.json`
 
 ## Validation Rule

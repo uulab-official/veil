@@ -207,6 +207,23 @@ Reading `sharedFolder` from health is deliberately side-effect free. Health is
 polled, so it must never create a folder or publish a share; `shared.folder.request`
 is the message that prepares anything. See [Shared Folder](#shared-folder).
 
+`processor` is optional and diagnostic. It carries running totals of processor time, so two health
+answers a few seconds apart give the agent's share of the guest's processors and how busy Windows was,
+with nothing run inside Windows:
+
+```json
+"processor": {
+  "processorCount": 4,
+  "uptimeSeconds": 86400.125,
+  "agentSeconds": 512.406,
+  "idleSeconds": 300112.75,
+  "busySeconds": 45487.75
+}
+```
+
+`agentSeconds` is the agent process's own time. `idleSeconds` and `busySeconds` are for all of Windows,
+summed over its processors, from [GetSystemTimes](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-getsystemtimes).
+
 `frameCapture` is optional and diagnostic. It reports how long each step of a mirrored frame capture
 took in the guest, so the host can see where frame time goes without reading guest logs:
 
@@ -740,7 +757,7 @@ Rules:
 - **Purpose:** this lets the host take a window's pixels from the guest display it already receives and crop each window into its Mac window, instead of having the agent capture, encode, and send frames. The design is in `docs/superpowers/specs/2026-11-10-coherence-framebuffer-design.md`.
 - **When it is sent:**
   - The agent sends a layout only when it differs from the previous one.
-  - It checks every 8 ms while windows are tracked and every 250 ms otherwise.
+  - It checks every 8 ms while windows are tracked and something changed within the last second, every 33 ms while windows are tracked and nothing has, and every 250 ms otherwise.
   - When the last tracked window goes away it sends one layout with no windows.
   - While `secureDesktop` is true it sends layouts with no window tracked as well, and one more when it ends: a prompt can come up before the app asking for it has a window.
   - A host that connects while windows are tracked receives the current layout first, before any other event.
@@ -1996,6 +2013,7 @@ to a user nor pre-empt them:
 | `clipboard_image_too_large` | A `clipboard.image.set` exceeded the byte or pixel bounds in Clipboard Image. |
 | `clipboard_files_failed` | The guest could not place the shared-folder files on the Windows clipboard. |
 | `appearance_set_failed` | `appearance.set.request` could not write the per-user theme values. See "Guest Appearance". |
+| `visual_effects_set_failed` | `visual.effects.set.request` could not write the per-user settings. See "Guest Visual Effects". |
 | `clipboard_text_failed` | The guest could not take the Windows clipboard. Routine rather than exotic: the guest retries `OpenClipboard` for 250 ms and any clipboard manager or Office instance can hold it longer. |
 
 The fire-and-forget observation and silent `false`-return gaps recorded in
@@ -2362,6 +2380,57 @@ Host behaviour: "Match Mac appearance in Windows" is a host setting, on by defau
 (`UserDefaults` key `veil.guestSync.matchMacAppearance`). While it is on, the host sends the current Mac
 appearance when the agent connection becomes live and whenever the Mac appearance changes. Turning it off
 stops sending; it does not revert the Windows theme.
+
+## Guest Visual Effects
+
+Request (host → agent), sent when the agent advertises `capabilities.visualEffects`:
+
+```json
+{
+  "type": "visual.effects.set.request",
+  "requestId": "req_visual_effects_set",
+  "protocolVersion": 1,
+  "reduced": true
+}
+```
+
+Response:
+
+```json
+{
+  "type": "visual.effects.set.response",
+  "requestId": "req_visual_effects_set",
+  "protocolVersion": 1,
+  "visualEffects": {
+    "isSupported": true,
+    "reduced": true,
+    "transparency": false,
+    "windowAnimation": false,
+    "clientAnimation": false,
+    "changed": true,
+    "message": null
+  }
+}
+```
+
+Why: a Veil guest has no graphics acceleration, so Windows draws every frame on the CPU, and Microsoft lists turning visual effects down among the ways to speed up a slow PC ([Tips to improve PC performance in Windows](https://support.microsoft.com/windows/tips-to-improve-pc-performance-in-windows-b3b3ef5b-5953-fb6a-2528-4bbed82fba96)). A window fading in also shows the desktop behind it, which a Mac window cropped from the guest display would show as well.
+
+Rules:
+
+- `reduced: true` turns off three per-user settings:
+  - transparency, the `EnableTransparency` value the Settings app's "Transparency effects" switch writes. Microsoft documents the switch, not the value.
+  - the minimize and maximize animation (`SPI_SETANIMATION`).
+  - animations inside windows (`SPI_SETCLIENTAREAANIMATION`). Both are [SystemParametersInfo](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-systemparametersinfow) actions.
+- The first `reduced: true` saves what the user had under `HKCU\Software\UULab\Veil\VisualEffectsBackup`. Later ones leave that copy alone and write nothing when the settings are already off.
+- `reduced: false` puts the saved values back and removes the copy. With no copy it changes nothing, so a user who turned the effects off in Windows keeps them off.
+- `transparency`, `windowAnimation`, and `clientAnimation` are the values read back after the request; null where Windows did not report one.
+- `reduced` must be a boolean; anything else is answered with `invalid_message`. A failed write is answered with an `error` whose code is `visual_effects_set_failed`.
+- Nothing here needs administrator rights.
+- Not yet checked on the live Windows 11 Arm guest: that the registry write changes transparency at once, and how much frame time it saves.
+
+Host behaviour: "Reduce Windows Visual Effects" is a host setting, on by default (`UserDefaults` key `veil.guestSync.reduceVisualEffects`). The host sends its value when the agent connection becomes live and when it changes, on or off.
+
+Fixtures: `harness/protocol-fixtures/visual.effects.set.request.json`, `visual.effects.set.response.json`.
 
 ## Battery
 

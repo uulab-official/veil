@@ -1,0 +1,14 @@
+{
+  "type": "visual.effects.set.response",
+  "requestId": "req_visual_effects_set",
+  "protocolVersion": 1,
+  "visualEffects": {
+    "isSupported": true,
+    "reduced": true,
+    "transparency": false,
+    "windowAnimation": false,
+    "clientAnimation": false,
+    "changed": true,
+    "message": null
+  }
+}
