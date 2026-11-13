@@ -354,4 +354,41 @@ public class WindowLayoutTests
         Scan();
         Assert.Equal(WindowLayoutStreamer.ActiveInterval, streamer.CurrentInterval);
     }
+
+    [Fact]
+    public void MarksWindowsOfProcessesAboveTheAgent()
+    {
+        var scan = new[]
+        {
+            new WindowLayoutEntry("hwnd:00000002", 77, new WindowRect(900, 100, 600, 400), true),
+            new WindowLayoutEntry("hwnd:00000001", 1, new WindowRect(100, 100, 700, 500), true)
+        };
+        var tracked = new Dictionary<string, string?> { ["hwnd:00000001"] = null, ["hwnd:00000002"] = null };
+
+        var layout = WindowLayoutComposer.Compose(scan, tracked, Display, null, isElevated: processId => processId == 77);
+
+        Assert.True(layout.Windows[0].Elevated);
+        Assert.False(layout.Windows[1].Elevated);
+        var json = layout.ToEvent(1)["windows"]!.AsArray();
+        Assert.True((bool?)json[0]!["elevated"]);
+        // Left out for an ordinary window.
+        Assert.False(json[1]!.AsObject().ContainsKey("elevated"));
+    }
+
+    [Theory]
+    // An installer run as administrator, seen from a normal program.
+    [InlineData(true, 0x2000, 0x3000, true)]
+    [InlineData(true, 0x2000, 0x2000, false)]
+    // A sandboxed process is below, which is no obstacle.
+    [InlineData(true, 0x2000, 0x1000, false)]
+    // A token that cannot be read: counted as above.
+    [InlineData(true, 0x2000, null, true)]
+    // The agent's own level unknown: only an unreadable token counts.
+    [InlineData(true, null, 0x3000, false)]
+    // A process that is gone.
+    [InlineData(false, 0x2000, null, false)]
+    public void TellsAProcessAboveTheAgent(bool exists, int? own, int? target, bool expected)
+    {
+        Assert.Equal(expected, ProcessElevation.IsAbove(exists, own, target));
+    }
 }

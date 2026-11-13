@@ -30,6 +30,7 @@ public sealed class WindowLayoutStreamer
     private readonly Func<WindowLayoutScan?> scan;
     private readonly Func<TimeSpan, CancellationToken, Task> delay;
     private readonly Func<bool> inputDesktopIsSecure;
+    private readonly Func<int, bool> isElevated;
     private int sequence;
     private int unchangedScans;
     private string? lastSent;
@@ -47,8 +48,10 @@ public sealed class WindowLayoutStreamer
         Func<IReadOnlyDictionary<string, string?>> trackedOwners,
         Func<WindowLayoutScan?>? scan = null,
         Func<TimeSpan, CancellationToken, Task>? delay = null,
-        Func<bool>? inputDesktopIsSecure = null)
+        Func<bool>? inputDesktopIsSecure = null,
+        Func<int, bool>? isElevated = null)
     {
+        this.isElevated = isElevated ?? ProcessElevation.IsAboveAgent;
         this.trackedOwners = trackedOwners;
         this.scan = scan ?? WindowLayoutScanner.Scan;
         this.delay = delay ?? Task.Delay;
@@ -151,7 +154,7 @@ public sealed class WindowLayoutStreamer
         }
 
         var layout = WindowLayoutComposer.Compose(
-            current.ZOrdered, owners, current.Display, current.ForegroundWindowId, secureDesktop);
+            current.ZOrdered, owners, current.Display, current.ForegroundWindowId, secureDesktop, isElevated);
         var key = layout.ToEvent(0).ToJsonString();
         if (key == lastSent)
         {

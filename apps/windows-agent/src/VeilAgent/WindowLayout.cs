@@ -27,7 +27,10 @@ public sealed record WindowLayoutWindow(
     // For a window that is not fully visible: the parts of it the display does show, in display pixels.
     // Null for a fully visible window, whose whole frame shows. Empty when none of it shows or the shape
     // has too many pieces to be worth sending.
-    IReadOnlyList<WindowRect>? VisibleRegion = null
+    IReadOnlyList<WindowRect>? VisibleRegion = null,
+    // The window's process runs above the agent, so input the agent injects does not reach it; see
+    // <see cref="ProcessElevation"/>.
+    bool Elevated = false
 );
 
 /// <summary>Where every tracked window sits on the guest display; see <c>window.layout</c> in docs/protocol.md.</summary>
@@ -52,6 +55,10 @@ public sealed record WindowLayout(
                 ["isShown"] = window.IsShown,
                 ["fullyVisible"] = window.FullyVisible
             };
+            if (window.Elevated)
+            {
+                entry["elevated"] = true;
+            }
             if (window.VisibleRegion is { } region)
             {
                 var rects = new JsonArray();
@@ -104,7 +111,8 @@ public static class WindowLayoutComposer
         IReadOnlyDictionary<string, string?> trackedOwners,
         WindowRect display,
         string? foregroundWindowId,
-        bool secureDesktop = false)
+        bool secureDesktop = false,
+        Func<int, bool>? isElevated = null)
     {
         var windows = new List<WindowLayoutWindow>();
         for (var index = 0; index < zOrdered.Count; index++)
@@ -146,7 +154,8 @@ public static class WindowLayoutComposer
                 entry.WindowId == foregroundWindowId,
                 entry.IsShown,
                 fullyVisible,
-                fullyVisible ? null : visible));
+                fullyVisible ? null : visible,
+                isElevated?.Invoke(entry.ProcessId) ?? false));
         }
 
         return new WindowLayout(display, windows, secureDesktop);
