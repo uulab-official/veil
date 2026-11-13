@@ -30,6 +30,9 @@ public struct WindowLayoutEvent: Codable, Equatable, Sendable {
         public var isForeground: Bool
         public var isShown: Bool
         public var fullyVisible: Bool
+        /// For a window that is not fully visible: the parts of it the guest display does show, in display
+        /// pixels. Absent for a fully visible window and from agents that do not report it.
+        public var visibleRegion: [GuestPixelRect]?
 
         public init(
             windowId: String,
@@ -38,7 +41,8 @@ public struct WindowLayoutEvent: Codable, Equatable, Sendable {
             zOrder: Int,
             isForeground: Bool,
             isShown: Bool,
-            fullyVisible: Bool
+            fullyVisible: Bool,
+            visibleRegion: [GuestPixelRect]? = nil
         ) {
             self.windowId = windowId
             self.ownerWindowId = ownerWindowId
@@ -47,6 +51,7 @@ public struct WindowLayoutEvent: Codable, Equatable, Sendable {
             self.isForeground = isForeground
             self.isShown = isShown
             self.fullyVisible = fullyVisible
+            self.visibleRegion = visibleRegion
         }
     }
 
@@ -109,7 +114,9 @@ public final class GuestWindowLayoutStore {
             (latest?.windows ?? []).map { ($0.windowId, $0.frame) },
             uniquingKeysWith: { first, _ in first }
         )
-        for window in event.windows where previousFrames[window.windowId].map({ $0 != window.frame }) ?? false {
+        // A window seen for the first time settles too: Windows fades and grows a window in as it opens,
+        // and until that ends the framebuffer shows the desktop and the windows behind in its place.
+        for window in event.windows where previousFrames[window.windowId].map({ $0 != window.frame }) ?? true {
             frameChangedAt[window.windowId] = changedAt
         }
         latest = event
@@ -162,6 +169,92 @@ public final class GuestWindowLayoutStore {
         )
     }
 
+    /// Whether other windows hide all of a window in Windows, as an agent that reports visible parts says.
+    /// Its Mac window is then behind the same windows, so its captured frames may come slowly: printing a
+    /// hidden window several times a second took guest CPU from the apps in front.
+    public func isWhollyCovered(windowId: String) -> Bool {
+        latest.map { Self.isWhollyCovered(windowId: windowId, layout: $0) } ?? false
+    }
+
+    public nonisolated static func isWhollyCovered(windowId: String, layout: WindowLayoutEvent) -> Bool {
+        guard !layout.showsSecureDesktop,
+              let window = layout.windows.first(where: { $0.windowId == windowId }),
+              window.isShown,
+              !window.fullyVisible,
+              let region = window.visibleRegion else {
+            return false
+        }
+        return region.isEmpty
+    }
+
+    /// Like `framebufferCrop`, and also for a window other windows partly cover: then the crop comes with
+    /// the parts of it the framebuffer shows, and the rest keeps the captured frame.
+    public func framebufferCropRegion(
+        windowId: String,
+        framebufferWidth: Int,
+        framebufferHeight: Int
+    ) -> FramebufferCropRegion? {
+        guard let latest, !isSettling(windowId: windowId) else {
+            return nil
+        }
+        return Self.framebufferCropRegion(
+            windowId: windowId,
+            layout: latest,
+            framebufferWidth: framebufferWidth,
+            framebufferHeight: framebufferHeight
+        )
+    }
+
+    public nonisolated static func framebufferCropRegion(
+        windowId: String,
+        layout: WindowLayoutEvent,
+        framebufferWidth: Int,
+        framebufferHeight: Int
+    ) -> FramebufferCropRegion? {
+        if let crop = framebufferCrop(
+            windowId: windowId,
+            layout: layout,
+            framebufferWidth: framebufferWidth,
+            framebufferHeight: framebufferHeight
+        ) {
+            return FramebufferCropRegion(crop: crop, visible: nil)
+        }
+
+        guard !layout.showsSecureDesktop,
+              layout.display.width == framebufferWidth,
+              layout.display.height == framebufferHeight,
+              let window = layout.windows.first(where: { $0.windowId == windowId }),
+              window.isShown,
+              !window.fullyVisible,
+              window.frame.width > 0,
+              window.frame.height > 0,
+              let region = window.visibleRegion else {
+            return nil
+        }
+
+        let crop = CGRect(
+            x: window.frame.x - layout.display.x,
+            y: window.frame.y - layout.display.y,
+            width: window.frame.width,
+            height: window.frame.height
+        )
+        // A window reaching past the display keeps its captured frames; it is moved back onto the display.
+        guard CGRect(x: 0, y: 0, width: framebufferWidth, height: framebufferHeight).contains(crop) else {
+            return nil
+        }
+        let whole = CGRect(x: 0, y: 0, width: crop.width, height: crop.height)
+        let visible = region.prefix(FramebufferCropRegion.maximumVisibleRects).compactMap { rect -> CGRect? in
+            let local = CGRect(
+                x: rect.x - window.frame.x,
+                y: rect.y - window.frame.y,
+                width: rect.width,
+                height: rect.height
+            ).intersection(whole)
+            return local.isNull || local.isEmpty ? nil : local
+        }
+        return visible.isEmpty ? nil : FramebufferCropRegion(crop: crop, visible: visible)
+    }
+
     public nonisolated static func framebufferCrop(
         windowId: String,
         layout: WindowLayoutEvent,
@@ -190,6 +283,23 @@ public final class GuestWindowLayoutStore {
         )
         let bounds = CGRect(x: 0, y: 0, width: framebufferWidth, height: framebufferHeight)
         return bounds.contains(crop) ? crop : nil
+    }
+}
+
+/// Where a window's pixels are in the guest framebuffer, and how much of the window they cover.
+public struct FramebufferCropRegion: Equatable, Sendable {
+    /// More than the agent sends; a guest is not trusted to keep to its own limit.
+    public static let maximumVisibleRects = 32
+
+    /// The window's frame in framebuffer pixels.
+    public var crop: CGRect
+    /// The parts of the window the framebuffer shows, relative to the frame's top-left corner, when other
+    /// windows cover the rest. Nil when the framebuffer shows all of it.
+    public var visible: [CGRect]?
+
+    public init(crop: CGRect, visible: [CGRect]?) {
+        self.crop = crop
+        self.visible = visible
     }
 }
 

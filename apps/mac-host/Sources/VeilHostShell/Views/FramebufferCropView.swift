@@ -3,7 +3,12 @@ import SwiftUI
 import VeilHostCore
 
 /// Shows a mirrored window by cropping the shared guest framebuffer, when `window.layout` says the guest
-/// display shows all of it. Otherwise it is empty and the captured frame underneath shows through.
+/// display shows it. A window other windows partly cover is cropped where it shows, and the captured frame
+/// underneath fills the covered parts; that frame also shows through when nothing can be cropped.
+///
+/// Covered windows used to be shown from captured frames alone. With three overlapping windows the agent
+/// then printed the two behind about seven times a second while nothing changed, each print making the app
+/// draw itself again, in a guest that renders on the CPU.
 ///
 /// The view follows frames and layouts itself, outside SwiftUI: each framebuffer frame only swaps one
 /// layer's contents, and the crop is a `contentsRect`, so the GPU does the cropping.
@@ -33,6 +38,9 @@ final class FramebufferCropHostView: NSView {
     var windowId: String
     var pointsPerPixel: CGFloat = 1
     var onAvailabilityChange: ((Bool) -> Void)?
+    /// One layer per visible part of a window other windows partly cover, each cropping its own part of
+    /// the framebuffer. Laid out like `imageLayer`, so they need no mask.
+    private var pieceLayers: [CALayer] = []
     private let imageLayer = CALayer()
     /// The window's inner region stretched to the full size under `imageLayer`; only its outer ring shows,
     /// where the Windows border was dropped. See `CoherenceBorderlessCrop`.
@@ -41,6 +49,9 @@ final class FramebufferCropHostView: NSView {
     private var layoutToken: UUID?
     private var latestFrame: CGImage?
     private(set) var isShowingCrop = false
+    /// What was last reported through `onAvailabilityChange`: the window's captured frames may come slowly,
+    /// because the framebuffer shows it or because other windows hide all of it.
+    private var reportedSlowCapture = false
 
     init(windowId: String) {
         self.windowId = windowId
@@ -83,8 +94,9 @@ final class FramebufferCropHostView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     func detach() {
-        if isShowingCrop {
-            isShowingCrop = false
+        isShowingCrop = false
+        if reportedSlowCapture {
+            reportedSlowCapture = false
             onAvailabilityChange?(false)
         }
         MainActor.assumeIsolated {
@@ -106,15 +118,16 @@ final class FramebufferCropHostView: NSView {
         if isShowingCrop, MainActor.assumeIsolated({ GuestWindowLayoutStore.shared.isSettling(windowId: windowId) }) {
             return
         }
-        let crop = latestFrame.flatMap { frame in
+        let region = latestFrame.flatMap { frame in
             MainActor.assumeIsolated {
-                GuestWindowLayoutStore.shared.framebufferCrop(
+                GuestWindowLayoutStore.shared.framebufferCropRegion(
                     windowId: windowId,
                     framebufferWidth: frame.width,
                     framebufferHeight: frame.height
                 )
             }
         }
+        let crop = region?.crop
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -125,30 +138,50 @@ final class FramebufferCropHostView: NSView {
                 CGRect(x: rect.minX / width, y: rect.minY / height, width: rect.width / width, height: rect.height / height)
             }
             let fullFrame = CGRect(x: 0, y: 0, width: crop.width * pointsPerPixel, height: crop.height * pointsPerPixel)
-            imageLayer.contents = latestFrame
-            if let borderless = CoherenceBorderlessCrop(
+            let borderless = CoherenceBorderlessCrop(
                 crop: crop,
                 borderPixels: CoherenceBorderlessCrop.borderPixels(pointsPerPixel: pointsPerPixel)
-            ) {
-                imageLayer.contentsRect = normalized(borderless.inner)
-                imageLayer.frame = CGRect(
-                    x: borderless.innerOffset.x * pointsPerPixel,
-                    y: borderless.innerOffset.y * pointsPerPixel,
-                    width: borderless.inner.width * pointsPerPixel,
-                    height: borderless.inner.height * pointsPerPixel
-                )
-                edgeLayer.contents = latestFrame
-                edgeLayer.contentsRect = normalized(borderless.inner)
-                edgeLayer.frame = fullFrame
-                edgeLayer.isHidden = false
-            } else {
-                imageLayer.contentsRect = normalized(crop)
-                imageLayer.frame = fullFrame
+            )
+            if let visible = region?.visible {
+                // Partly covered: only the parts the framebuffer shows, and none of the Windows border
+                // around the window, which shows what is behind it. The captured frame fills the rest.
+                let inner = borderless.map {
+                    CGRect(x: $0.innerOffset.x, y: $0.innerOffset.y, width: $0.inner.width, height: $0.inner.height)
+                } ?? CGRect(x: 0, y: 0, width: crop.width, height: crop.height)
+                let pieces = FramebufferCropPieces.pieces(visible: visible, within: inner)
+                showPieces(pieces, crop: crop, frame: latestFrame, normalized: normalized)
+                imageLayer.isHidden = true
+                imageLayer.contents = nil
                 edgeLayer.isHidden = true
                 edgeLayer.contents = nil
+            } else {
+                showPieces([], crop: crop, frame: latestFrame, normalized: normalized)
+                imageLayer.contents = latestFrame
+                if let borderless {
+                    imageLayer.contentsRect = normalized(borderless.inner)
+                    imageLayer.frame = CGRect(
+                        x: borderless.innerOffset.x * pointsPerPixel,
+                        y: borderless.innerOffset.y * pointsPerPixel,
+                        width: borderless.inner.width * pointsPerPixel,
+                        height: borderless.inner.height * pointsPerPixel
+                    )
+                    edgeLayer.contents = latestFrame
+                    edgeLayer.contentsRect = normalized(borderless.inner)
+                    edgeLayer.frame = fullFrame
+                    edgeLayer.isHidden = false
+                } else {
+                    imageLayer.contentsRect = normalized(crop)
+                    imageLayer.frame = fullFrame
+                    edgeLayer.isHidden = true
+                    edgeLayer.contents = nil
+                }
+                imageLayer.isHidden = false
             }
-            imageLayer.isHidden = false
         } else {
+            for piece in pieceLayers {
+                piece.isHidden = true
+                piece.contents = nil
+            }
             imageLayer.isHidden = true
             imageLayer.contents = nil
             edgeLayer.isHidden = true
@@ -157,9 +190,68 @@ final class FramebufferCropHostView: NSView {
         CATransaction.commit()
 
         let showing = crop != nil
-        if showing != isShowingCrop {
-            isShowingCrop = showing
-            onAvailabilityChange?(showing)
+        isShowingCrop = showing
+        let slowCapture = showing
+            || MainActor.assumeIsolated { GuestWindowLayoutStore.shared.isWhollyCovered(windowId: windowId) }
+        if slowCapture != reportedSlowCapture {
+            reportedSlowCapture = slowCapture
+            onAvailabilityChange?(slowCapture)
+        }
+    }
+
+    /// Lays out one layer per piece, reusing layers and hiding the ones left over.
+    private func showPieces(
+        _ pieces: [CGRect],
+        crop: CGRect,
+        frame: CGImage,
+        normalized: (CGRect) -> CGRect
+    ) {
+        while pieceLayers.count < pieces.count {
+            let piece = CALayer()
+            piece.anchorPoint = .zero
+            piece.magnificationFilter = .linear
+            piece.minificationFilter = .linear
+            piece.actions = imageLayer.actions
+            layer?.addSublayer(piece)
+            pieceLayers.append(piece)
+        }
+        for (index, piece) in pieceLayers.enumerated() {
+            guard index < pieces.count else {
+                piece.isHidden = true
+                piece.contents = nil
+                continue
+            }
+            let rect = pieces[index]
+            piece.contents = frame
+            piece.contentsRect = normalized(rect.offsetBy(dx: crop.minX, dy: crop.minY))
+            piece.frame = CGRect(
+                x: rect.minX * pointsPerPixel,
+                y: rect.minY * pointsPerPixel,
+                width: rect.width * pointsPerPixel,
+                height: rect.height * pointsPerPixel
+            )
+            piece.isHidden = false
+        }
+    }
+
+    /// Where each piece is laid out, in points, for tests.
+    var pieceFrames: [CGRect] {
+        pieceLayers.filter { !$0.isHidden }.map(\.frame)
+    }
+
+    var pieceContentsRects: [CGRect] {
+        pieceLayers.filter { !$0.isHidden }.map(\.contentsRect)
+    }
+}
+
+/// The parts of a partly covered window to crop from the framebuffer.
+enum FramebufferCropPieces {
+    /// The visible parts, in pixels from the window's top-left corner, kept inside `inner`: the window
+    /// without its one-pixel Windows border.
+    static func pieces(visible: [CGRect], within inner: CGRect) -> [CGRect] {
+        visible.compactMap { rect in
+            let piece = rect.intersection(inner)
+            return piece.isNull || piece.isEmpty ? nil : piece
         }
     }
 }
