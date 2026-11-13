@@ -732,7 +732,8 @@ Fields:
   - `frame`: its visible frame in display pixels (see Window Geometry).
   - `zOrder`: its rank among tracked windows, 0 at the top.
   - `isShown`: false while the window is hidden, minimized, or cloaked.
-  - `fullyVisible`: true when the framebuffer shows the whole window. That means it is shown, it lies inside `display`, and no shown window of another process above it overlaps it. Windows of the same process above it, such as its menus and dialogs, do not count, since their pixels are what belongs there. Neither do windows that draw nothing over it: one pixel across, as the helper windows some programs keep, or layered with zero opacity.
+  - `fullyVisible`: true when the framebuffer shows the whole window. That means it is shown, it lies inside `display`, and no shown window of another process above it overlaps it. Windows of the same process above it, such as its menus and dialogs, do not count, since their pixels are what belongs there; another tracked window of that process with no owner, such as a second File Explorer window, does. Neither do windows that draw nothing over it: one pixel across, as the helper windows some programs keep, or layered with zero opacity.
+  - `visibleRegion`: for a window that is not `fullyVisible`, the parts of it the display does show: rectangles in display pixels that do not overlap, being the frame's part on the display less every window above that covers it. Left out for a `fullyVisible` window. Empty when nothing shows, or when the shape would take more than 12 rectangles. Optional; a host treats a missing value as nothing to crop.
 
 Rules:
 
@@ -745,8 +746,10 @@ Rules:
   - A host that connects while windows are tracked receives the current layout first, before any other event.
 - **`sequence`:** counts up per agent process. The host ignores a layout older than one it has applied.
 - **Choosing a source per window:**
-  - A window that is not `fullyVisible` keeps its `window.frame` stream.
-  - The host may crop a `fullyVisible` window from the framebuffer and pause its frame stream.
+  - The host may crop a `fullyVisible` window from the framebuffer and slow its frame stream (`window.crop.set`).
+  - A window with a `visibleRegion` may be cropped in those rectangles, with its `window.frame` picture filling the rest. Its stream may be slowed the same way: the covered parts sit behind the same windows on the Mac.
+  - A window whose `visibleRegion` is empty is hidden behind others; the host shows its `window.frame` picture and may slow its stream too.
+  - Any other window that is not `fullyVisible` keeps its `window.frame` stream at full pace.
 - **Secure desktop:**
   - The secure desktop belongs to no tracked window and takes the whole display, so while `secureDesktop` is true no window is `fullyVisible` and the host crops nothing from the framebuffer.
   - Input the agent injects does not reach it. The host shows the guest display itself and sends pointer and key events through the virtual hardware (QEMU's display connection) until `secureDesktop` is false again.
