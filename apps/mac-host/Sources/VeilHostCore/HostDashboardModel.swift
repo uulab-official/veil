@@ -57,6 +57,10 @@ public final class HostDashboardModel {
     /// Called with where each applied mirrored-window mouse event put the guest cursor, so the app can move
     /// QEMU's tablet there; see `QEMUTabletPositionSync`.
     @ObservationIgnored public var onGuestPointerMoved: (@MainActor (GuestPointerPosition) -> Void)?
+    /// Carries input to windows the agent cannot reach, such as an installer run as administrator; see
+    /// `HardwareInputTranslator`. Nil where there is no virtual hardware to send through.
+    @ObservationIgnored public var hardwareInput: (any GuestHardwareInputSending)?
+    @ObservationIgnored var hardwareInputTranslator = HardwareInputTranslator()
     @ObservationIgnored var pendingMirrorResizes: [String: PendingMirrorResize] = [:]
     @ObservationIgnored var mirrorResizesInFlight: Set<String> = []
     /// The most recent refused drag-and-drop, so a surface can react to the kind of refusal without

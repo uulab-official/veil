@@ -39,6 +39,21 @@ extension VeilHostShellApp {
             }
         }
         syncSecureDesktopWindow()
+        syncHardwareInput()
+    }
+
+    /// Keeps the hardware input connection open while a window run as administrator is shown: the agent
+    /// cannot send such a window input, so its clicks and keys go through QEMU instead.
+    private func syncHardwareInput() {
+        if model.hardwareInput == nil {
+            model.hardwareInput = GuestHardwareInput.shared
+        }
+        let layout = GuestWindowLayoutStore.shared.latest
+        let hasElevatedWindow = layout?.windows.contains { $0.elevated == true && $0.isShown } == true
+        GuestHardwareInput.shared.update(
+            surface: vmModel.snapshot?.latestConsoleLaunch?.displaySurface,
+            isNeeded: vmModel.snapshot?.state == .running && hasElevatedWindow
+        )
     }
 
     /// Shows the guest display in a window of its own while Windows' secure desktop has it, and closes that

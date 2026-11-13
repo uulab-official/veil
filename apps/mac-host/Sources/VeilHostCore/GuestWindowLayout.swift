@@ -33,6 +33,9 @@ public struct WindowLayoutEvent: Codable, Equatable, Sendable {
         /// For a window that is not fully visible: the parts of it the guest display does show, in display
         /// pixels. Absent for a fully visible window and from agents that do not report it.
         public var visibleRegion: [GuestPixelRect]?
+        /// True when the window's program runs with more rights than the agent, as an installer does once
+        /// its prompt is approved. Input the agent injects does not reach it. Absent otherwise.
+        public var elevated: Bool?
 
         public init(
             windowId: String,
@@ -42,7 +45,8 @@ public struct WindowLayoutEvent: Codable, Equatable, Sendable {
             isForeground: Bool,
             isShown: Bool,
             fullyVisible: Bool,
-            visibleRegion: [GuestPixelRect]? = nil
+            visibleRegion: [GuestPixelRect]? = nil,
+            elevated: Bool? = nil
         ) {
             self.windowId = windowId
             self.ownerWindowId = ownerWindowId
@@ -52,6 +56,7 @@ public struct WindowLayoutEvent: Codable, Equatable, Sendable {
             self.isShown = isShown
             self.fullyVisible = fullyVisible
             self.visibleRegion = visibleRegion
+            self.elevated = elevated
         }
     }
 

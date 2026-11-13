@@ -1297,6 +1297,66 @@ struct HostDashboardModelTests {
         #expect(model.phase == .connected)
     }
 
+    @Test("sends input for a window run as administrator through the hardware, not the agent")
+    @MainActor
+    func routesElevatedWindowInputThroughHardware() async throws {
+        final class Recorder: GuestHardwareInputSending {
+            var isReady = true
+            var events: [HardwareInputEvent] = []
+            func send(_ events: [HardwareInputEvent]) { self.events += events }
+        }
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+        let recorder = Recorder()
+        model.hardwareInput = recorder
+        await model.launchNotepad()
+        func layout(elevated: Bool) -> WindowLayoutEvent {
+            WindowLayoutEvent(
+                sequence: 1,
+                display: GuestPixelRect(x: 0, y: 0, width: 1920, height: 1080),
+                windows: [
+                    .init(
+                        windowId: "hwnd:0003029A",
+                        frame: GuestPixelRect(x: 400, y: 300, width: 800, height: 600),
+                        zOrder: 0,
+                        isForeground: true,
+                        isShown: true,
+                        fullyVisible: true,
+                        elevated: elevated
+                    )
+                ]
+            )
+        }
+        defer { GuestWindowLayoutStore.shared.reset() }
+
+        GuestWindowLayoutStore.shared.reset()
+        GuestWindowLayoutStore.shared.apply(layout(elevated: true))
+        await model.sendMouseInput(windowId: "hwnd:0003029A", event: "leftDown", x: 240, y: 130)
+        #expect(service.mouseInputs.isEmpty)
+        #expect(recorder.events.last == .pointer(x: 640, y: 430, buttons: 1))
+
+        GuestWindowLayoutStore.shared.reset()
+        GuestWindowLayoutStore.shared.apply(layout(elevated: true))
+        await model.sendKeyInput(windowId: "hwnd:0003029A", event: "keyDown", key: "enter", windowsVirtualKey: 13)
+        #expect(recorder.events.last == .key(keysym: 0xFF0D, isDown: true))
+
+        // Without a hardware connection the input is dropped; the agent's would be discarded silently.
+        recorder.isReady = false
+        let before = recorder.events.count
+        GuestWindowLayoutStore.shared.reset()
+        GuestWindowLayoutStore.shared.apply(layout(elevated: true))
+        await model.sendMouseInput(windowId: "hwnd:0003029A", event: "leftUp", x: 240, y: 130)
+        #expect(recorder.events.count == before)
+        #expect(service.mouseInputs.isEmpty)
+        #expect(model.phase == .connected)
+
+        // An ordinary window still goes to the agent.
+        GuestWindowLayoutStore.shared.reset()
+        GuestWindowLayoutStore.shared.apply(layout(elevated: false))
+        await model.sendMouseInput(windowId: "hwnd:0003029A", event: "move", x: 1, y: 1)
+        #expect(service.mouseInputs.count == 1)
+    }
+
     @Test("hands the agent-reported cursor position to the tablet sync")
     @MainActor
     func handsReportedCursorPositionToTabletSync() async throws {

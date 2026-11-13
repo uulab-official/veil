@@ -218,6 +218,11 @@ final class RFBEmbeddedDisplayModel {
         worker?.sendPointer(x: x, y: y, buttonMask: buttonMask)
     }
 
+    /// One key by keysym, pressed or released, for callers that keep track of what is held.
+    func sendKeyEvent(keysym: UInt32, isDown: Bool) {
+        worker?.sendKeyEvent(keysym: keysym, isDown: isDown)
+    }
+
     func sendWheel(x: Int, y: Int, buttonMask: UInt8, notches: [UInt8]) {
         worker?.sendWheel(x: x, y: y, buttonMask: buttonMask, notches: notches)
     }
@@ -592,6 +597,20 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
         } catch {
             // The read loop owns reconnects.
         }
+    }
+
+    func sendKeyEvent(keysym: UInt32, isDown: Bool) {
+        lock.lock()
+        let activeClient = client
+        lock.unlock()
+        guard let activeClient else {
+            return
+        }
+
+        writeLock.lock()
+        defer { writeLock.unlock() }
+        // The receive loop handles reconnects; see sendPointerTap.
+        try? activeClient.sendKeyEvent(keysym: keysym, isDown: isDown)
     }
 
     func sendKey(_ key: String) {

@@ -31,6 +31,23 @@ extension HostDashboardModel {
         guard canSendInput(to: windowId) else {
             return
         }
+        // A press or a turn of the wheel sent through the hardware lands on whatever is on top in Windows,
+        // so it is not sent at a point another window covers there. The agent is asked to bring the window
+        // forward instead, which it may or may not be allowed to do for a window above it; the next press
+        // goes through once the point is clear. Moves and releases always go, or a button would stick.
+        if event == "leftDown" || event == "rightDown" || event == "scroll",
+           let layout = GuestWindowLayoutStore.shared.latest,
+           HardwareInputRouting.origin(windowId: windowId, layout: layout) != nil,
+           HardwareInputRouting.isCovered(windowId: windowId, x: x, y: y, layout: layout) {
+            _ = await focusMirrorSession(windowId: windowId)
+            return
+        }
+        if sendThroughHardware(windowId: windowId, { translator, origin, _ in
+            translator.mouse(
+                event: event, x: x, y: y, origin: origin, modifiers: modifiers, deltaX: deltaX, deltaY: deltaY)
+        }) != nil {
+            return
+        }
 
         do {
             if let pointer = try await service.sendMouseInputReportingPointer(
@@ -227,6 +244,12 @@ extension HostDashboardModel {
               replaceLength == 0 || supportsTextComposition else {
             return false
         }
+        if let sent = sendThroughHardware(windowId: windowId, { translator, _, _ in
+            // Hardware keys cannot take back what was typed, nor type what a US keyboard has no key for.
+            replaceLength == 0 ? translator.text(text) : nil
+        }) {
+            return sent
+        }
 
         do {
             try await service.sendTextInput(
@@ -253,6 +276,11 @@ extension HostDashboardModel {
         guard canSendInput(to: windowId) else {
             return
         }
+        if sendThroughHardware(windowId: windowId, { translator, _, _ in
+            translator.key(event: event, windowsVirtualKey: windowsVirtualKey, modifiers: modifiers)
+        }) != nil {
+            return
+        }
 
         do {
             try await service.sendKeyInput(
@@ -271,6 +299,29 @@ extension HostDashboardModel {
             errorMessage = userMessage(for: error)
             phase = .failed
         }
+    }
+
+    /// Sends a window's input through the virtual hardware when the layout marks the window as one the
+    /// agent cannot reach.
+    ///
+    /// - Returns: nil when the window is an ordinary one and the input should go to the agent. Otherwise
+    ///   whether events were sent: false when there is no hardware connection yet or nothing to send. Such
+    ///   input is dropped, not handed to the agent, whose injection Windows would discard without a word.
+    private func sendThroughHardware(
+        windowId: String,
+        _ makeEvents: (inout HardwareInputTranslator, (x: Int, y: Int), WindowLayoutEvent) -> [HardwareInputEvent]?
+    ) -> Bool? {
+        guard let layout = GuestWindowLayoutStore.shared.latest,
+              let origin = HardwareInputRouting.origin(windowId: windowId, layout: layout) else {
+            return nil
+        }
+        guard let hardwareInput, hardwareInput.isReady,
+              let events = makeEvents(&hardwareInputTranslator, origin, layout),
+              !events.isEmpty else {
+            return false
+        }
+        hardwareInput.send(events)
+        return true
     }
 
     /// Drops a mirror session the guest has already reported as gone.
