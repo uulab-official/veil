@@ -35,6 +35,8 @@ public enum QEMUQMPCommand: Equatable, Sendable {
     /// device state move to the file, the raw system disk is untouched.
     case saveMemoryState(filePath: String)
     case queryMigrate
+    /// Abandons a memory-state save that failed or ran out of time, so the guest can run again.
+    case cancelMemoryStateSave
     /// Escape hatch for monitor-only features that have no stable QMP equivalent, notably the
     /// `savevm`/`loadvm`/`delvm`/`info snapshots` internal-snapshot family.
     case humanMonitor(String)
@@ -85,6 +87,8 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "migrate"
         case .queryMigrate:
             "query-migrate"
+        case .cancelMemoryStateSave:
+            "migrate_cancel"
         case .humanMonitor:
             "human-monitor-command"
         case .snapshotSave:
@@ -135,6 +139,8 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "VM memory state save to \(filePath)"
         case .queryMigrate:
             "VM memory state save progress query"
+        case .cancelMemoryStateSave:
+            "VM memory state save cancel"
         case .humanMonitor(let command):
             "QEMU monitor command '\(command)'"
         case .snapshotSave(_, let tag, _):

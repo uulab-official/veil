@@ -313,21 +313,27 @@ public struct QEMUVMSuspensionController: Sendable {
         // like a usable stream.
         try? FileManager.default.removeItem(atPath: stateFilePath)
 
+        let migrationStatus: String
         do {
-            try await qmp.run(
-                .saveMemoryState(filePath: stateFilePath),
-                socketPath: qmpSocketPath,
-                idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+            do {
+                try await qmp.run(
+                    .saveMemoryState(filePath: stateFilePath),
+                    socketPath: qmpSocketPath,
+                    idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+                )
+            } catch {
+                throw VMSuspensionError.memoryStateSaveRejected(error.localizedDescription)
+            }
+
+            migrationStatus = try await waitForMemoryStateSave(
+                qmpSocketPath: qmpSocketPath,
+                pollAttempts: pollAttempts,
+                pollIntervalNanoseconds: pollIntervalNanoseconds
             )
         } catch {
-            throw VMSuspensionError.memoryStateSaveRejected(error.localizedDescription)
+            await resumeGuestAfterFailedSave(qmpSocketPath: qmpSocketPath, stateFilePath: stateFilePath)
+            throw error
         }
-
-        let migrationStatus = try await waitForMemoryStateSave(
-            qmpSocketPath: qmpSocketPath,
-            pollAttempts: pollAttempts,
-            pollIntervalNanoseconds: pollIntervalNanoseconds
-        )
 
         // QEMU exits as it acknowledges `quit`, so a missing reply here is the expected outcome
         // rather than a failure. The suspension is already durable at this point.
@@ -343,6 +349,29 @@ public struct QEMUVMSuspensionController: Sendable {
             migrationStatus: migrationStatus,
             suspendedAt: now()
         )
+    }
+
+    /// Puts a guest that was paused for a save back to running when the save did not finish.
+    ///
+    /// Without this a failed suspend, such as a Mac disk too full for the memory state, left Windows
+    /// frozen: the error was reported, nothing sent `cont`, and when the suspend was part of quitting,
+    /// Veil quit and left the frozen QEMU behind. Everything here is best effort; the save's own error is
+    /// the one the caller sees.
+    private func resumeGuestAfterFailedSave(qmpSocketPath: String, stateFilePath: String) async {
+        // A save still under way holds the guest paused and keeps writing; one that already failed
+        // ignores the cancel.
+        _ = try? await qmp.run(
+            .cancelMemoryStateSave,
+            socketPath: qmpSocketPath,
+            idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+        )
+        _ = try? await qmp.run(
+            .cont,
+            socketPath: qmpSocketPath,
+            idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+        )
+        // A partial stream must not be taken for a session to resume.
+        try? FileManager.default.removeItem(atPath: stateFilePath)
     }
 
     /// Loads a saved memory-state stream into an already-launched, `-incoming` QEMU and unpauses it.
