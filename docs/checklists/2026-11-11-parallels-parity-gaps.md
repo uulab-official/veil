@@ -259,3 +259,22 @@ capture counters, read twice ten seconds apart, and from process listings.
   Mac shadow that is drawn there anyway. One agent test failed once in a 23-second run on the loaded Mac
   and passed in three runs after; which one was not captured.
 - Not seen in the app: all of the above is unit-tested only until Veil is relaunched and the agent updated.
+
+## Sixth relaunch and agent update on 2026-11-13
+
+In the background, with the user's go-ahead; nothing was opened or moved in Windows.
+
+- Veil did not come to the front, the three Mac windows opened where they were, and the agent went from
+  `b5342bd09e85` to `43d15c91498f` in about six seconds with them open.
+- **Prints of covered windows fell from 6.8 to 2.0 a second**, one per covered window, 25 ms on average,
+  with the same three windows and nothing changing. All three windows are on the slow capture list.
+- **The layout reports visible parts as designed:** Paint in front is fully visible, Notepad behind it
+  shows a strip 64 pixels high along its bottom, and File Explorer, wholly behind Notepad, shows nothing.
+- **Notepad's Mac window is right in both parts.** The strip matches the guest display (3,315 sampled
+  pixels, mean difference 0.00); above it the window shows Notepad from its captured frame where the guest
+  display shows Paint.
+- **Found: the front window's Windows shadow in the strip.** Paint's shadow darkens Notepad for about 45
+  pixels below Paint's edge, and the strip was cropped with it. The agent now leaves 48 pixels around each
+  covering window out of the visible region. That fix is committed and not yet in the running agent.
+- Not seen: a window opening, since none was opened, so the wait before a new window is cropped is still
+  unit-tested only.
