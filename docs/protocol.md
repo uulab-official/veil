@@ -2329,6 +2329,40 @@ Host triggers: the macOS host sends `time.sync.request` when the agent connectio
 flag that is flushed as soon as the agent is reachable, because the agent socket is usually still
 reconnecting at that moment.
 
+### Repairing the clock task
+
+Request (host → agent), sent when the agent advertises `capabilities.timeSyncRepair` and the user asks for it:
+
+```json
+{
+  "type": "time.sync.repair.request",
+  "requestId": "req_time_sync_repair",
+  "protocolVersion": 1
+}
+```
+
+Response:
+
+```json
+{
+  "type": "time.sync.repair.response",
+  "requestId": "req_time_sync_repair",
+  "protocolVersion": 1,
+  "repair": { "isSupported": true, "outcome": "approval-requested", "message": null }
+}
+```
+
+Rules:
+
+- **When:** a `time.sync.response` whose `recommendedAction` is `install-time-sync-task-elevated` means the `VeilTimeSync` task is missing, as on a Windows whose tools were installed without administrator rights. The clock then stays wrong however often it is checked. The host offers Set Windows Clock in the Veil menu and sends this request when the user chooses it.
+- **What it does:** the agent starts PowerShell as administrator, so Windows shows its approval prompt, which the host shows on the Mac (`secureDesktop` in `window.layout`). Once approved, the task is registered and started.
+- **`outcome`:** `approval-requested` when the prompt was asked for, `already-running` while an earlier prompt is still up, `failed`, or `unsupported`. The agent answers at once and does not wait for the user; the host sends `time.sync.request` again afterwards to see whether the clock is right.
+- **Trust:** the elevated command is built by the agent and passed encoded. It takes one value from outside, the user's SID, checked to be digits and hyphens. It runs no file from a folder the user can write to.
+- **The task:** runs as SYSTEM, takes no input, and runs only `sc.exe` and `w32tm.exe` from the Windows directory by full path. Installations before 2026-11-13 registered it to run a script in the tools' own folder, which the user can write to; `Install-VeilAgent.ps1` now registers the same command as this request. A guest that already has the older task keeps it until its tools are installed again as administrator.
+- Not yet checked on the live Windows 11 Arm guest.
+
+Fixtures: `harness/protocol-fixtures/time.sync.repair.request.json`, `time.sync.repair.response.json`.
+
 ## Guest Appearance
 
 Makes Windows follow the Mac's light or dark appearance.

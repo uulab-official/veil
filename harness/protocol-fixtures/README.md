@@ -59,6 +59,8 @@ These JSON files mirror the stable examples in `docs/protocol.md`.
 - `shared.folder.response.json`
 - `time.sync.request.json`
 - `time.sync.response.json`
+- `time.sync.repair.request.json`
+- `time.sync.repair.response.json`
 - `appearance.set.request.json`
 - `appearance.set.response.json`
 - `visual.effects.set.request.json`
