@@ -23,6 +23,26 @@ struct GuestStateSyncProtocolTests {
         #expect(response.appearance.broadcast)
     }
 
+    @Test func timeSyncRepairFixturesDecode() throws {
+        let request: TimeSyncRepairRequest = try decodeStateSyncFixture("time.sync.repair.request")
+        let response: TimeSyncRepairResponse = try decodeStateSyncFixture("time.sync.repair.response")
+
+        #expect(request.type == .timeSyncRepairRequest)
+        #expect(response.repair.outcome == "approval-requested")
+        #expect(response.repair.isSupported)
+    }
+
+    @Test func clientAsksForTheClockRepairAndReadsTheAnswer() async throws {
+        let transport = StateSyncTransport(replies: [
+            #"{"type":"time.sync.repair.response","requestId":"req_time_sync_repair","protocolVersion":1,"repair":{"isSupported":true,"outcome":"already-running","message":"Windows is already asking for approval."}}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let response = try await client.repairGuestTimeSync()
+
+        #expect(response.repair.outcome == "already-running")
+    }
+
     @Test func visualEffectsFixturesDecode() throws {
         let request: VisualEffectsSetRequest = try decodeStateSyncFixture("visual.effects.set.request")
         let response: VisualEffectsSetResponse = try decodeStateSyncFixture("visual.effects.set.response")
@@ -343,6 +363,19 @@ private final class StateSyncRecordingService: HostDashboardService, @unchecked 
     }
 
     private(set) var visualEffects: [Bool] = []
+    private(set) var repairs = 0
+    var timeSyncAction = "none"
+
+    func repairGuestTimeSync() async throws -> TimeSyncRepairResponse {
+        repairs += 1
+        if failing {
+            throw StateSyncTestError()
+        }
+        return TimeSyncRepairResponse(
+            requestId: "req_time_sync_repair",
+            repair: GuestTimeSyncRepairStatus(isSupported: true, outcome: "approval-requested")
+        )
+    }
 
     func setGuestVisualEffects(reduced: Bool) async throws -> VisualEffectsSetResponse {
         visualEffects.append(reduced)

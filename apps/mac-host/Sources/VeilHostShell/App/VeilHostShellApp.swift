@@ -427,7 +427,8 @@ struct VeilHostShellApp: App {
                 quietWindowsWhenIdleAction: quietWindowsWhenIdle,
                 refreshAppsAction: refreshApps,
                 refreshRuntimeAction: refreshRuntime,
-                supportsNativeDisplayWindow: canShowWindowsDisplay
+                supportsNativeDisplayWindow: canShowWindowsDisplay,
+                repairWindowsClockAction: repairWindowsClock
             )
         }
         .defaultLaunchBehavior(.suppressed)

@@ -137,6 +137,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.setGuestVisualEffects(reduced: reduced)
     }
 
+    public func repairGuestTimeSync() async throws -> TimeSyncRepairResponse {
+        try await primary.repairGuestTimeSync()
+    }
+
     public func setGuestImeMode(_ mode: GuestImeMode) async throws {
         try await primary.setGuestImeMode(mode)
     }

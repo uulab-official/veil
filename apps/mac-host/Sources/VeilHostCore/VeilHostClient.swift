@@ -1095,6 +1095,14 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         )
     }
 
+    /// Asks the guest to register the task that corrects its clock; Windows asks the user to approve.
+    public func repairGuestTimeSync() async throws -> TimeSyncRepairResponse {
+        try await requestRejectingErrors(
+            TimeSyncRepairRequest(requestId: "req_time_sync_repair"),
+            context: "time sync repair requires one response"
+        )
+    }
+
     /// Asks the guest to turn Windows' transparency and animations down, or to put back what the user had.
     public func setGuestVisualEffects(reduced: Bool) async throws -> VisualEffectsSetResponse {
         try await requestRejectingErrors(

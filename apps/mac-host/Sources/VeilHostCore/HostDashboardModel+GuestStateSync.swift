@@ -16,5 +16,25 @@ extension HostDashboardModel {
             matchMacAppearance: matchMacAppearance,
             reduceVisualEffects: reduceVisualEffects
         )
+        let needsRepair = hasLiveAgentConnection
+            && health?.capabilities.timeSyncRepair == true
+            && coordinator.lastTimeSync?.recommendedAction == GuestTimeSyncRepairStatus.neededAction
+        if guestClockNeedsRepair != needsRepair {
+            guestClockNeedsRepair = needsRepair
+        }
+    }
+
+    /// Asks Windows to register the task that corrects its clock. Windows shows its approval prompt, which
+    /// Veil shows on the Mac. Returns the agent's answer, or nil when it could not be asked.
+    public func repairGuestClock() async -> GuestTimeSyncRepairStatus? {
+        guard hasLiveAgentConnection, health?.capabilities.timeSyncRepair == true else {
+            return nil
+        }
+        do {
+            return try await service.repairGuestTimeSync().repair
+        } catch {
+            VeilLog.agent.error("Guest clock repair failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 }

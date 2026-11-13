@@ -1,0 +1,5 @@
+{
+  "type": "time.sync.repair.request",
+  "requestId": "req_time_sync_repair",
+  "protocolVersion": 1
+}

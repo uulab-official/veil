@@ -777,3 +777,8 @@
 "Your saved Windows session cannot be resumed." = "저장된 Windows 세션을 이어서 열 수 없습니다.";
 "Reduce Windows Visual Effects" = "Windows 시각 효과 줄이기";
 "Turns off transparency and animations in Windows, which draws on the CPU in Veil. Turn this off to get them back." = "Windows의 투명 효과와 애니메이션을 끕니다. Veil에서는 Windows가 CPU로 화면을 그리기 때문에 더 빨라집니다. 다시 켜려면 이 항목을 끄세요.";
+"Set Windows Clock…" = "Windows 시계 맞추기…";
+"The clock in Windows is wrong and Windows needs your approval once to keep it right." = "Windows의 시계가 틀립니다. 계속 맞게 유지하려면 Windows에서 한 번 승인이 필요합니다.";
+"Approve the request in Windows to set its clock." = "시계를 맞추려면 Windows에 뜬 요청을 승인하세요.";
+"Windows could not be asked to set its clock." = "Windows에 시계 맞추기를 요청하지 못했습니다.";
+"Windows could not set its clock: %@" = "Windows가 시계를 맞추지 못했습니다: %@";

@@ -35,6 +35,7 @@ struct VeilMenuBarMenu: View {
     var refreshAppsAction: () -> Void
     var refreshRuntimeAction: () -> Void
     var supportsNativeDisplayWindow: Bool
+    var repairWindowsClockAction: () -> Void = {}
 
     var body: some View {
         // Built once per render; every computed read used to rebuild the whole runtime report.
@@ -217,6 +218,12 @@ struct VeilMenuBarMenu: View {
         Divider()
 
         Toggle("Match Mac Appearance in Windows", isOn: $matchMacAppearanceInWindows)
+        if model.guestClockNeedsRepair {
+            Button("Set Windows Clock…", systemImage: "clock.badge.exclamationmark") {
+                repairWindowsClockAction()
+            }
+            .help("The clock in Windows is wrong and Windows needs your approval once to keep it right.")
+        }
         Toggle("Reduce Windows Visual Effects", isOn: $reduceWindowsVisualEffects)
             .help("Turns off transparency and animations in Windows, which draws on the CPU in Veil. Turn this off to get them back.")
 

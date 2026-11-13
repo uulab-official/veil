@@ -56,6 +56,9 @@ public final class HostDashboardModel {
     public internal(set) var guestDisplaySize: GuestDisplaySize?
     /// Called with where each applied mirrored-window mouse event put the guest cursor, so the app can move
     /// QEMU's tablet there; see `QEMUTabletPositionSync`.
+    /// True when Windows' clock is off and cannot be corrected until the user approves, once, the task that
+    /// does it (`time.sync.repair.request`). Set after each guest state sync.
+    public internal(set) var guestClockNeedsRepair = false
     @ObservationIgnored public var onGuestPointerMoved: (@MainActor (GuestPointerPosition) -> Void)?
     /// Carries input to windows the agent cannot reach, such as an installer run as administrator; see
     /// `HardwareInputTranslator`. Nil where there is no virtual hardware to send through.

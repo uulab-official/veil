@@ -34,6 +34,30 @@ extension VeilHostShellApp {
         Task { @MainActor in await flushGuestStateSync() }
     }
 
+    /// Asks Windows to register the task that corrects its clock, then checks the clock again a few times:
+    /// the approval prompt waits for the user, and network time takes a moment to answer.
+    func repairWindowsClock() {
+        Task { @MainActor in
+            guard let status = await model.repairGuestClock() else {
+                displayMessage = "Windows could not be asked to set its clock."
+                return
+            }
+            guard status.outcome == "approval-requested" || status.outcome == "already-running" else {
+                displayMessage = status.message.map { String(localized: "Windows could not set its clock: \($0)") }
+                return
+            }
+            displayMessage = "Approve the request in Windows to set its clock."
+            for seconds in [20, 60, 180] {
+                try? await Task.sleep(for: .seconds(seconds))
+                guestStateSync.requestTimeSync(.manual)
+                await flushGuestStateSync()
+                if !model.guestClockNeedsRepair {
+                    return
+                }
+            }
+        }
+    }
+
     @MainActor
     func flushGuestStateSync() async {
         await model.flushGuestStateSync(

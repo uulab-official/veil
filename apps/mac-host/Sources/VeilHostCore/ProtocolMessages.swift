@@ -46,6 +46,8 @@ public enum MessageType: String, Codable, Sendable {
     case timeSyncResponse = "time.sync.response"
     case appearanceSetRequest = "appearance.set.request"
     case appearanceSetResponse = "appearance.set.response"
+    case timeSyncRepairRequest = "time.sync.repair.request"
+    case timeSyncRepairResponse = "time.sync.repair.response"
     case visualEffectsSetRequest = "visual.effects.set.request"
     case visualEffectsSetResponse = "visual.effects.set.response"
     case toolsUpdateRequest = "tools.update.request"
@@ -153,6 +155,9 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// True when the agent understands `time.sync.request`. Optional so an older agent decodes as `nil`
     /// and is never sent a message it would answer with `unknown_message_type`.
     public var timeSync: Bool? = nil
+    /// The agent can ask Windows for administrator approval to register the task that corrects its clock
+    /// (`time.sync.repair.request`).
+    public var timeSyncRepair: Bool? = nil
     /// True when the agent understands `appearance.set.request`. Optional for the same reason.
     public var appearanceSync: Bool? = nil
     /// The agent can turn Windows' transparency and animations down (`visual.effects.set.request`).
@@ -560,6 +565,49 @@ public struct AppearanceSetResponse: Codable, Equatable, Sendable {
         self.requestId = requestId
         self.protocolVersion = protocolVersion
         self.appearance = appearance
+    }
+}
+
+/// Asks Windows to register the task that corrects its clock, which needs the user's approval there once.
+public struct TimeSyncRepairRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+
+    public init(requestId: String, protocolVersion: Int = 1) {
+        self.type = .timeSyncRepairRequest
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+    }
+}
+
+public struct GuestTimeSyncRepairStatus: Codable, Equatable, Sendable {
+    /// What `time.sync.response` recommends when the task is missing.
+    public static let neededAction = "install-time-sync-task-elevated"
+
+    public var isSupported: Bool
+    /// `approval-requested`, `already-running`, `failed`, or `unsupported`.
+    public var outcome: String
+    public var message: String?
+
+    public init(isSupported: Bool, outcome: String, message: String? = nil) {
+        self.isSupported = isSupported
+        self.outcome = outcome
+        self.message = message
+    }
+}
+
+public struct TimeSyncRepairResponse: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+    public var repair: GuestTimeSyncRepairStatus
+
+    public init(requestId: String, protocolVersion: Int = 1, repair: GuestTimeSyncRepairStatus) {
+        self.type = .timeSyncRepairResponse
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.repair = repair
     }
 }
 
