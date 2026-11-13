@@ -2,6 +2,7 @@
   "type": "window.layout",
   "sequence": 412,
   "display": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+  "secureDesktop": false,
   "windows": [
     {
       "windowId": "hwnd:000F0254",

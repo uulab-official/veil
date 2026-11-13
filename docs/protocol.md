@@ -702,6 +702,7 @@ Event (agent → host), sent when the agent advertises `capabilities.windowLayou
   "type": "window.layout",
   "sequence": 412,
   "display": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+  "secureDesktop": false,
   "windows": [
     {
       "windowId": "hwnd:000F0254",
@@ -719,6 +720,7 @@ Event (agent → host), sent when the agent advertises `capabilities.windowLayou
 Fields:
 
 - `display` is the guest's virtual screen.
+- `secureDesktop` is true while Windows' secure desktop has the display: a User Account Control prompt, the lock or sign-in screen, or the Ctrl+Alt+Del screen. Optional; a host treats a missing value as false.
 - `windows` lists every tracked window, topmost first.
 - Each window has:
   - `frame`: its visible frame in display pixels (see Window Geometry).
@@ -733,11 +735,17 @@ Rules:
   - The agent sends a layout only when it differs from the previous one.
   - It checks every 8 ms while windows are tracked and every 250 ms otherwise.
   - When the last tracked window goes away it sends one layout with no windows.
+  - While `secureDesktop` is true it sends layouts with no window tracked as well, and one more when it ends: a prompt can come up before the app asking for it has a window.
   - A host that connects while windows are tracked receives the current layout first, before any other event.
 - **`sequence`:** counts up per agent process. The host ignores a layout older than one it has applied.
 - **Choosing a source per window:**
   - A window that is not `fullyVisible` keeps its `window.frame` stream.
   - The host may crop a `fullyVisible` window from the framebuffer and pause its frame stream.
+- **Secure desktop:**
+  - The secure desktop belongs to no tracked window and takes the whole display, so while `secureDesktop` is true no window is `fullyVisible` and the host crops nothing from the framebuffer.
+  - Input the agent injects does not reach it. The host shows the guest display itself and sends pointer and key events through the virtual hardware (QEMU's display connection) until `secureDesktop` is false again.
+  - The agent captures no window frames meanwhile and keeps sending `window.frame.unchanged`, so a prompt left unanswered does not look like a stalled stream.
+  - The agent reads the state by opening the input desktop ([OpenInputDesktop](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-openinputdesktop)): a refusal, or a desktop other than `Default`, counts as secure. Not yet checked on the live Windows 11 Arm guest.
 - **Read-only:** the message moves no window. Positioning and z-order requests stay with `window.resize.request` and `window.focus.request`.
 
 Fixture: `harness/protocol-fixtures/window.layout.json`.
