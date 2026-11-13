@@ -45,6 +45,38 @@ public class WindowLayoutTests
     }
 
     [Fact]
+    public void WindowsThatDrawNothingDoNotOcclude()
+    {
+        var scan = new[]
+        {
+            // A one-pixel helper window and a transparent overlay, both of other processes and both above.
+            new WindowLayoutEntry("hwnd:00000020", 700, new WindowRect(400, 300, 1, 1), true, CoversPixels: false),
+            new WindowLayoutEntry("hwnd:00000021", 800, new WindowRect(0, 0, 1920, 1080), true, CoversPixels: false),
+            new WindowLayoutEntry("hwnd:00000001", 100, new WindowRect(0, 0, 800, 600), true),
+        };
+        var tracked = new Dictionary<string, string?> { ["hwnd:00000001"] = null };
+
+        var layout = WindowLayoutComposer.Compose(scan, tracked, Display, "hwnd:00000001");
+
+        Assert.True(layout.Windows.Single().FullyVisible);
+    }
+
+    [Theory]
+    [InlineData(300, 200, null, true)]
+    // SetLayeredWindowAttributes with partial opacity still draws.
+    [InlineData(300, 200, 128, true)]
+    [InlineData(300, 200, 0, false)]
+    [InlineData(1, 1, null, false)]
+    [InlineData(1, 200, null, false)]
+    [InlineData(300, 1, null, false)]
+    public void TellsWhetherAShownWindowCanHideAnother(int width, int height, int? opacity, bool expected)
+    {
+        var frame = new WindowRect(10, 10, width, height);
+
+        Assert.Equal(expected, WindowLayoutComposer.CoversPixels(frame, (byte?)opacity));
+    }
+
+    [Fact]
     public void AWindowPastTheDisplayEdgeOrMinimizedIsNotFullyVisible()
     {
         var scan = new[]

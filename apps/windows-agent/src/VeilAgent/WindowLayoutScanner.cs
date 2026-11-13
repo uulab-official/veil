@@ -33,7 +33,14 @@ public static class WindowLayoutScanner
 
             GetWindowThreadProcessId(hwnd, out var processId);
             var shown = IsWindowVisible(hwnd) && !IsIconic(hwnd) && !IsCloaked(hwnd);
-            entries.Add(new WindowLayoutEntry(FormatWindowId(hwnd), (int)processId, geometry.Value.Visible, shown));
+            var frame = geometry.Value.Visible;
+            entries.Add(new WindowLayoutEntry(
+                FormatWindowId(hwnd),
+                (int)processId,
+                frame,
+                shown,
+                // Only read for windows that draw at all.
+                !shown || WindowLayoutComposer.CoversPixels(frame, LayeredOpacity(hwnd))));
             return true;
         }, 0);
 
@@ -55,7 +62,34 @@ public static class WindowLayoutScanner
     private static bool IsCloaked(nint hwnd) =>
         DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out var cloaked, sizeof(int)) == 0 && cloaked != 0;
 
+    /// <summary>
+    /// The opacity a layered window set for itself with <c>SetLayeredWindowAttributes</c>, or null: not
+    /// layered, or drawn with <c>UpdateLayeredWindow</c>, whose opacity is per pixel and cannot be read.
+    /// <see href="https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-getlayeredwindowattributes"/>
+    /// </summary>
+    private static byte? LayeredOpacity(nint hwnd)
+    {
+        if ((GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64() & WS_EX_LAYERED) == 0
+            || !GetLayeredWindowAttributes(hwnd, out _, out var alpha, out var flags)
+            || (flags & LWA_ALPHA) == 0)
+        {
+            return null;
+        }
+
+        return alpha;
+    }
+
     private delegate bool EnumWindowsProc(nint hwnd, nint lParam);
+
+    private const int GWL_EXSTYLE = -20;
+    private const long WS_EX_LAYERED = 0x00080000;
+    private const uint LWA_ALPHA = 0x00000002;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern nint GetWindowLongPtr(nint hwnd, int index);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetLayeredWindowAttributes(nint hwnd, out uint colorKey, out byte alpha, out uint flags);
 
     private const int DWMWA_CLOAKED = 14;
     private const int SM_XVIRTUALSCREEN = 76;

@@ -9,7 +9,10 @@ public sealed record WindowLayoutEntry(
     // The visible frame (DWMWA_EXTENDED_FRAME_BOUNDS), as everywhere else in the protocol.
     WindowRect Frame,
     // Visible, not minimized, and not cloaked: the window draws on the framebuffer.
-    bool IsShown
+    bool IsShown,
+    // False for a shown window that cannot hide another window's pixels: one pixel across, as the helper
+    // windows File Explorer and other programs keep, or layered with zero opacity.
+    bool CoversPixels = true
 );
 
 /// <summary>A tracked window's place on the guest display.</summary>
@@ -68,7 +71,9 @@ public sealed record WindowLayout(WindowRect Display, IReadOnlyList<WindowLayout
 /// A tracked window is <c>fullyVisible</c> when the host can take its pixels straight from the guest
 /// framebuffer: it is shown, lies inside the display, and no shown window of another process above it
 /// overlaps it. Windows of the same process above it (its menus, tooltips, dialogs) do not count, since
-/// their pixels are what the user should see there anyway.
+/// their pixels are what the user should see there anyway. Neither do windows that draw nothing over it
+/// (<see cref="WindowLayoutEntry.CoversPixels"/>): one of those above the window in use sent it back to
+/// captured frames, which are slower and include the Windows border.
 /// </remarks>
 public static class WindowLayoutComposer
 {
@@ -91,7 +96,10 @@ public static class WindowLayoutComposer
             for (var above = 0; fullyVisible && above < index; above++)
             {
                 var other = zOrdered[above];
-                if (other.IsShown && other.ProcessId != entry.ProcessId && Intersects(other.Frame, entry.Frame))
+                if (other.IsShown
+                    && other.CoversPixels
+                    && other.ProcessId != entry.ProcessId
+                    && Intersects(other.Frame, entry.Frame))
                 {
                     fullyVisible = false;
                 }
@@ -115,6 +123,16 @@ public static class WindowLayoutComposer
         && inner.Y >= outer.Y
         && inner.X + inner.Width <= outer.X + outer.Width
         && inner.Y + inner.Height <= outer.Y + outer.Height;
+
+    /// <summary>
+    /// Whether a shown window of this size and opacity can hide pixels of a window beneath it.
+    /// </summary>
+    /// <param name="layeredOpacity">
+    /// The opacity of a layered window that sets one for the whole window, 0 to 255, or null for any other
+    /// window.
+    /// </param>
+    public static bool CoversPixels(WindowRect frame, byte? layeredOpacity) =>
+        frame.Width > 1 && frame.Height > 1 && layeredOpacity != 0;
 
     internal static bool Intersects(WindowRect a, WindowRect b) =>
         a.X < b.X + b.Width && b.X < a.X + a.Width && a.Y < b.Y + b.Height && b.Y < a.Y + a.Height;
