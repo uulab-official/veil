@@ -62,3 +62,39 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
   `taskkill /f` took the agent down and it answered again 2 seconds later, with a new supervisor; after
   `Stop-Process` it stayed down and the log says `ended with code -1 ...; left stopped`. The hidden
   PowerShell stays in memory for as long as the agent runs. The five-restart limit is not checked live.
+
+## Found without touching the running guest on 2026-11-13
+
+Nothing here was checked in the running app: Veil was not relaunched and the agent was not updated. The
+checks are unit tests, a read-only screen dump of the guest, and screens drawn to image files in a test.
+
+- **A line of the window behind showed along a Mac window's edges.** A user screenshot of Notepad had
+  Paint's palette colours in its top row. All four edge rows matched the guest's translucent one-pixel DWM
+  border plus the Mac window's own edge highlight, so the frame on screen was one the agent copied from the
+  guest screen, border included. Cropped framebuffer windows already replaced that ring
+  (`CoherenceBorderlessCrop`); captured frames did not. `FrameLayerView` now does the same.
+- **Why the window in use was on captured frames is not known.** It was in front and the layout should have
+  marked it `fullyVisible`. One cause that fits, and is fixed in the agent: any shown window of another
+  process above a window counted as covering it, including one-pixel helper windows and layered windows
+  with zero opacity. Whether that was the cause that day cannot be told from what was recorded.
+- **A dropped app connection switched to the desktop view.** `DetailView` fell back to the desktop whenever
+  the agent connection was lost, which hid every app window and brought the main window forward with all of
+  Windows in it. It returned to apps only on a first app frame, and windows that kept their frames never
+  sent one, so the desktop stayed. The agent restarts and updates by itself now, so this is ordinary use.
+  Open app windows now stay on screen through a dropped connection, and the automatic desktop gives way to
+  apps when the connection is back.
+- **Installation Assistant.** Drawn to image files at 1100×760 and 760×560.
+  - The steps and the page sat at the top of a mostly empty window. They now sit together a little above
+    the middle.
+  - The Prepare page listed the runtime's five steps in English with wording such as "Run Prepare VM to
+    create the Windows unattended setup answer file", and marked what continuing creates with a warning.
+    It now names each step for what it is for, is translated, shows not-yet-created steps as waiting, and
+    keeps the warning for an installer Veil cannot read.
+  - The Install page had a title and two buttons. It now shows the installer, the hardware, and the
+    Windows account that setup will use.
+  - Not drawn or reviewed: the download page (drawing it starts a download), the live Windows Setup panel,
+    and the Korean strings on screen, since a test process does not load the app's string tables.
+- **Lag.** With Veil closed, this guest's QEMU used about a third of one core idle on an 18-core Mac, and
+  another project's VM and builds were running beside it. Veil's own share while mirroring was not
+  measured, since that needs the app running. Builds and tests for this work ran at background priority
+  (`taskpolicy -b`) and only the tests for the changed code.
