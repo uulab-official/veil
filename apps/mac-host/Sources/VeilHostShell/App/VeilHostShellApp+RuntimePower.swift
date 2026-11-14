@@ -146,17 +146,58 @@ extension VeilHostShellApp {
         }
     }
 
-    /// Quit with "Suspend Windows when Veil quits" on saves the session instead of leaving QEMU running.
+    /// Decides what happens to a running Windows as Veil quits (`StartupBehaviorPolicy.quitAction`).
+    /// Returns false when the user cancelled the quit.
     @MainActor
-    func suspendWindowsForQuitIfNeeded() async {
-        guard StartupBehaviorPolicy.suspendsWindowsOnQuit(
+    func handleWindowsBeforeQuit(isSystemQuit: Bool) async -> Bool {
+        let action = StartupBehaviorPolicy.quitAction(
             snapshot: vmModel.snapshot,
             canSuspend: vmModel.canSuspend,
-            isBusy: vmModel.phase == .loading
-        ) else {
-            return
+            isBusy: vmModel.phase == .loading,
+            keepsWindowsRunningWithoutAsking: UserDefaults.standard.bool(forKey: StartupBehaviorPolicy.keepsWindowsRunningOnQuitKey),
+            isSystemQuit: isSystemQuit
+        )
+        switch action {
+        case .quit:
+            return true
+        case .suspend:
+            await suspendWindowsForQuit()
+            return true
+        case .ask:
+            break
         }
 
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Windows Is Still Running")
+        alert.informativeText = String(localized: "If Veil quits and leaves Windows running, Windows keeps using memory and battery in the background. Suspending saves your open Windows apps and stops Windows until you open Veil again.")
+        alert.addButton(withTitle: String(localized: "Suspend Windows"))
+        alert.addButton(withTitle: String(localized: "Keep Running"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = String(localized: "Do not ask again")
+        NSApp.activate()
+        let response = alert.runModal()
+        let remembers = alert.suppressionButton?.state == .on
+        switch response {
+        case .alertFirstButtonReturn:
+            if remembers, let snapshot = vmModel.snapshot {
+                // The same setting as "Suspend Windows when Veil quits".
+                await vmModel.updateStartupBehavior(autoStart: snapshot.autoStart ?? false, suspendOnQuit: true)
+            }
+            await suspendWindowsForQuit()
+            return true
+        case .alertSecondButtonReturn:
+            if remembers {
+                UserDefaults.standard.set(true, forKey: StartupBehaviorPolicy.keepsWindowsRunningOnQuitKey)
+            }
+            return true
+        default:
+            return false
+        }
+    }
+
+    @MainActor
+    private func suspendWindowsForQuit() async {
         cancelAutomaticQuietRuntime()
         cancelAutomaticRuntimeConnectionRecovery()
         displayMessage = "Suspending Windows before Veil quits."

@@ -9,7 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var dockMenuProvider: (() -> NSMenu?)?
     var reopenHandler: (() -> Void)?
     /// Runs before Veil quits, for example to suspend Windows. A second Quit while it runs exits at once.
-    var terminationHandler: (@MainActor () async -> Void)?
+    /// Runs before Veil quits. Returning false cancels the quit.
+    var terminationHandler: (@MainActor (_ isSystemQuit: Bool) async -> Bool)?
     private var isRunningTerminationHandler = false
     /// Handles `veil://` URLs once the main scene has configured itself. URLs that arrive earlier, such as the
     /// one that cold-launched Veil from a Windows app launcher, wait in `pendingURLs` until then.
@@ -51,11 +52,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         isRunningTerminationHandler = true
+        let isSystemQuit = Self.isSystemQuit()
         Task { @MainActor in
-            await terminationHandler()
-            sender.reply(toApplicationShouldTerminate: true)
+            let proceeds = await terminationHandler(isSystemQuit)
+            isRunningTerminationHandler = false
+            sender.reply(toApplicationShouldTerminate: proceeds)
         }
         return .terminateLater
+    }
+
+    /// Whether macOS is quitting Veil to log out, restart, or shut down, rather than the user quitting it.
+    /// The quit Apple event then names a reason; a question asked then would hold up the logout.
+    private static func isSystemQuit() -> Bool {
+        guard let reason = NSAppleEventManager.shared().currentAppleEvent?
+            .attributeDescriptor(forKeyword: AEKeyword(kAEQuitReason))?.enumCodeValue else {
+            return false
+        }
+        return [kAELogOut, kAEReallyLogOut, kAEShowRestartDialog, kAEShowShutdownDialog, kAERestart, kAEShutDown]
+            .map { OSType($0) }
+            .contains(reason)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

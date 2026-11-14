@@ -24,13 +24,39 @@ enum StartupBehaviorPolicy {
         }
     }
 
-    /// Suspend saves the session to disk; without it QEMU keeps Windows running after Veil exits.
-    static func suspendsWindowsOnQuit(snapshot: VMRuntimeSnapshot?, canSuspend: Bool, isBusy: Bool) -> Bool {
-        guard let snapshot, snapshot.suspendOnQuit == true, canSuspend, !isBusy else {
-            return false
-        }
-        return snapshot.state == .running
+    enum QuitAction: Equatable {
+        /// Quit, leaving Windows as it is.
+        case quit
+        /// Suspend Windows, then quit.
+        case suspend
+        /// Ask whether to suspend Windows or keep it running.
+        case ask
     }
+
+    /// What quitting Veil does with a running Windows. Quitting used to leave Windows running in the
+    /// background without a word whenever "Suspend Windows when Veil quits" was off, still using memory
+    /// and battery with nothing on screen to say so. Veil asks instead, as Parallels does, unless the
+    /// user already answered for good or macOS is logging out, where a question would hold the logout up.
+    static func quitAction(
+        snapshot: VMRuntimeSnapshot?,
+        canSuspend: Bool,
+        isBusy: Bool,
+        keepsWindowsRunningWithoutAsking: Bool,
+        isSystemQuit: Bool
+    ) -> QuitAction {
+        guard let snapshot, snapshot.state == .running, !isBusy, canSuspend else {
+            return .quit
+        }
+        if snapshot.suspendOnQuit == true {
+            return .suspend
+        }
+        if keepsWindowsRunningWithoutAsking || isSystemQuit {
+            return .quit
+        }
+        return .ask
+    }
+
+    static let keepsWindowsRunningOnQuitKey = "veil.quit.keepsWindowsRunningWithoutAsking"
 }
 
 /// When a cold start may add the VirtIO driver ISO to a profile that has none.

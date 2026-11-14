@@ -104,7 +104,7 @@ struct StartupBehaviorPanel: View {
                 get: { snapshot.suspendOnQuit ?? false },
                 set: { applyAction(snapshot.autoStart ?? false, $0) }
             ))
-            Text("When suspend is off, Windows keeps running in the background after Veil quits.")
+            Text("When suspend is off, Veil asks whether to suspend Windows or keep it running when it quits.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

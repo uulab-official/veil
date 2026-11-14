@@ -205,7 +205,7 @@
 "Applies to the installed Windows on this Mac." = "이 Mac에 설치된 Windows에 적용됩니다.";
 "Start Windows when Veil opens" = "Veil을 열 때 Windows 시작";
 "Suspend Windows when Veil quits" = "Veil을 종료할 때 Windows 일시 중단";
-"When suspend is off, Windows keeps running in the background after Veil quits." = "일시 중단을 끄면 Veil을 종료한 뒤에도 Windows가 백그라운드에서 계속 실행됩니다.";
+"When suspend is off, Veil asks whether to suspend Windows or keep it running when it quits." = "일시 중단을 끄면 Veil을 종료할 때 Windows를 일시 중단할지, 계속 실행할지 묻습니다.";
 "Resource Plan" = "리소스 계획";
 "Device Plan" = "장치 계획";
 "Devices" = "장치";
@@ -824,3 +824,6 @@
 "Windows is still running." = "Windows가 계속 실행 중입니다.";
 "Windows is still running. Finish what it is waiting for, then stop it again." = "Windows가 계속 실행 중입니다. Windows가 기다리는 작업을 마친 뒤 다시 중지하세요.";
 "Windows did not shut down by itself, so Veil left it running." = "Windows가 스스로 종료되지 않아 Veil이 그대로 실행해 두었습니다.";
+"Windows Is Still Running" = "Windows가 아직 실행 중입니다";
+"If Veil quits and leaves Windows running, Windows keeps using memory and battery in the background. Suspending saves your open Windows apps and stops Windows until you open Veil again." = "Windows를 실행 상태로 두고 Veil을 종료하면 Windows가 백그라운드에서 계속 메모리와 배터리를 사용합니다. 일시 중단하면 열려 있는 Windows 앱을 저장하고, Veil을 다시 열 때까지 Windows를 멈춥니다.";
+"Do not ask again" = "다시 묻지 않기";

@@ -40,13 +40,45 @@ struct StartupBehaviorPolicyTests {
         #expect(StartupBehaviorPolicy.startsWindowsOnLaunch(snapshot: nil, launchArgumentRequested: true, canRunWindows: false))
     }
 
-    @Test("quitting suspends only a running Windows with the setting on")
+    private func quitAction(
+        _ snapshot: VMRuntimeSnapshot?,
+        canSuspend: Bool = true,
+        isBusy: Bool = false,
+        keepsRunning: Bool = false,
+        isSystemQuit: Bool = false
+    ) -> StartupBehaviorPolicy.QuitAction {
+        StartupBehaviorPolicy.quitAction(
+            snapshot: snapshot,
+            canSuspend: canSuspend,
+            isBusy: isBusy,
+            keepsWindowsRunningWithoutAsking: keepsRunning,
+            isSystemQuit: isSystemQuit
+        )
+    }
+
+    @Test("quitting suspends a running Windows with the setting on")
     func suspendsOnQuit() {
-        #expect(StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .running), canSuspend: true, isBusy: false))
-        #expect(!StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .running, suspendOnQuit: false), canSuspend: true, isBusy: false))
-        #expect(!StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .stopped), canSuspend: true, isBusy: false))
-        #expect(!StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .running), canSuspend: false, isBusy: false))
-        #expect(!StartupBehaviorPolicy.suspendsWindowsOnQuit(snapshot: snapshot(state: .running), canSuspend: true, isBusy: true))
+        #expect(quitAction(snapshot(state: .running)) == .suspend)
+        // The setting wins over a logout: suspending is what the user asked for.
+        #expect(quitAction(snapshot(state: .running), isSystemQuit: true) == .suspend)
+    }
+
+    @Test("quitting asks about a running Windows instead of leaving it running unannounced")
+    func asksOnQuit() {
+        #expect(quitAction(snapshot(state: .running, suspendOnQuit: false)) == .ask)
+        #expect(quitAction(snapshot(state: .running, suspendOnQuit: nil)) == .ask)
+    }
+
+    @Test("quitting just quits when there is nothing to ask about")
+    func quitsWithoutAsking() {
+        #expect(quitAction(nil) == .quit)
+        #expect(quitAction(snapshot(state: .stopped, suspendOnQuit: false)) == .quit)
+        #expect(quitAction(snapshot(state: .suspended, suspendOnQuit: false)) == .quit)
+        #expect(quitAction(snapshot(state: .running, suspendOnQuit: false), canSuspend: false) == .quit)
+        #expect(quitAction(snapshot(state: .running), isBusy: true) == .quit)
+        #expect(quitAction(snapshot(state: .running, suspendOnQuit: false), keepsRunning: true) == .quit)
+        // A logout must not wait on a question.
+        #expect(quitAction(snapshot(state: .running, suspendOnQuit: false), isSystemQuit: true) == .quit)
     }
 }
 

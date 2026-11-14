@@ -223,8 +223,8 @@ extension VeilHostShellApp {
     }
 
     func configureDockMenuBridge() {
-        appDelegate.terminationHandler = {
-            await suspendWindowsForQuitIfNeeded()
+        appDelegate.terminationHandler = { isSystemQuit in
+            await handleWindowsBeforeQuit(isSystemQuit: isSystemQuit)
         }
         appDelegate.reopenHandler = {
             let destination = LauncherReopenPolicy.destination(

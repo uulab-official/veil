@@ -420,6 +420,9 @@ struct VMRuntimeView: View {
             case .general:
                 MachineSummaryPanel(snapshot: snapshot)
                 StartupBehaviorPanel(snapshot: snapshot) { autoStart, suspendOnQuit in
+                    // Changing the setting here is an answer of its own; a "do not ask again" given when
+                    // quitting no longer stands.
+                    UserDefaults.standard.removeObject(forKey: StartupBehaviorPolicy.keepsWindowsRunningOnQuitKey)
                     Task {
                         await model.updateStartupBehavior(autoStart: autoStart, suspendOnQuit: suspendOnQuit)
                     }
