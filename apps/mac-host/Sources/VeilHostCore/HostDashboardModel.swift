@@ -59,6 +59,8 @@ public final class HostDashboardModel {
     /// True when Windows' clock is off and cannot be corrected until the user approves, once, the task that
     /// does it (`time.sync.repair.request`). Set after each guest state sync.
     public internal(set) var guestClockNeedsRepair = false
+    /// How far the guest clock is from the Mac's while `guestClockNeedsRepair`, as the agent last said.
+    public internal(set) var guestClockSkewMilliseconds: Int?
     @ObservationIgnored public var onGuestPointerMoved: (@MainActor (GuestPointerPosition) -> Void)?
     /// Carries input to windows the agent cannot reach, such as an installer run as administrator; see
     /// `HardwareInputTranslator`. Nil where there is no virtual hardware to send through.

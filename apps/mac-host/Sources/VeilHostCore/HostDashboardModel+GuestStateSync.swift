@@ -22,6 +22,10 @@ extension HostDashboardModel {
         if guestClockNeedsRepair != needsRepair {
             guestClockNeedsRepair = needsRepair
         }
+        let skew = needsRepair ? coordinator.lastTimeSync?.skewMilliseconds : nil
+        if guestClockSkewMilliseconds != skew {
+            guestClockSkewMilliseconds = skew
+        }
     }
 
     /// Asks Windows to register the task that corrects its clock. Windows shows its approval prompt, which

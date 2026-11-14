@@ -39,6 +39,7 @@ struct VeilHostShellApp: App {
     @State var automaticFrameStreamMaintenanceTask: Task<Void, Never>?
     @State var memoryBalloonTask: Task<Void, Never>?
     @State var diskSpaceGuardTask: Task<Void, Never>?
+    @State var notifiedWrongGuestClock = false
     @State var automaticGuestAgentRecoveryAttemptedTokens: Set<String> = []
     @State var automaticRuntimeConnectionRecoveryCooldownUntil: [String: Date] = [:]
     @State var hasObservedLiveAgentConnection = false

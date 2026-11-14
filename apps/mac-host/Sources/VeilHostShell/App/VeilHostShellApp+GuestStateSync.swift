@@ -58,6 +58,26 @@ extension VeilHostShellApp {
         }
     }
 
+    /// Once per Veil session, so a clock that stays wrong does not notify on every agent poll.
+    @MainActor
+    private func noticeWrongGuestClockIfNeeded() async {
+        guard GuestClockNotice.shouldNotify(
+            needsRepair: model.guestClockNeedsRepair,
+            skewMilliseconds: model.guestClockSkewMilliseconds,
+            alreadyNotified: notifiedWrongGuestClock
+        ), let skew = model.guestClockSkewMilliseconds else {
+            return
+        }
+        notifiedWrongGuestClock = true
+        await windowsNotificationPresenter.presentHostNotice(WindowsNotificationPresentationRequest(
+            identifier: GuestClockNotice.identifier,
+            title: String(localized: "The Windows Clock Is Wrong"),
+            body: GuestClockNotice.body(skewMilliseconds: skew),
+            threadIdentifier: "org.uulab.veil.runtime",
+            userInfo: [:]
+        ))
+    }
+
     @MainActor
     func flushGuestStateSync() async {
         await model.flushGuestStateSync(
@@ -66,6 +86,7 @@ extension VeilHostShellApp {
             matchMacAppearance: matchMacAppearanceInWindows,
             reduceVisualEffects: reduceWindowsVisualEffects
         )
+        await noticeWrongGuestClockIfNeeded()
         // Also called on every agent poll, so a reconnected agent gets the IME mode back.
         await syncGuestImeMode()
         await HostFolderSharing.shared.sync(model: model)

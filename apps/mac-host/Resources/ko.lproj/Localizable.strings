@@ -827,3 +827,5 @@
 "Windows Is Still Running" = "Windows가 아직 실행 중입니다";
 "If Veil quits and leaves Windows running, Windows keeps using memory and battery in the background. Suspending saves your open Windows apps and stops Windows until you open Veil again." = "Windows를 실행 상태로 두고 Veil을 종료하면 Windows가 백그라운드에서 계속 메모리와 배터리를 사용합니다. 일시 중단하면 열려 있는 Windows 앱을 저장하고, Veil을 다시 열 때까지 Windows를 멈춥니다.";
 "Do not ask again" = "다시 묻지 않기";
+"The Windows Clock Is Wrong" = "Windows 시계가 맞지 않습니다";
+"The clock in Windows is %@ off. Choose Set Windows Clock in the Veil menu and approve it once in Windows; after that Veil keeps it right." = "Windows 시계가 %@ 틀립니다. Veil 메뉴에서 'Windows 시계 맞추기…'를 선택하고 Windows에서 한 번 승인하면 그 뒤로는 Veil이 시계를 맞춥니다.";
