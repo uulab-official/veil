@@ -449,3 +449,15 @@ Done without relaunching Veil or touching the guest; unit-tested only.
 - **The guest event queue could hold 32 GiB** (1,024 messages of up to 32 MiB). Waiting bytes are now
   counted and the stream reconnects past 96 MiB. The frame channel was already bounded at 256 messages of
   1 MiB each, URLSession's default message limit.
+
+## Eleventh relaunch on 2026-11-14
+
+Veil only, in the background, with the user's go-ahead; the agent was not updated and nothing was opened
+or moved in Windows.
+
+- Veil did not come to the front; the three Mac windows opened where they were.
+- **The wrong-clock notification was delivered**: NotificationCenter logged `org.uulab.veil.guest-clock-wrong`
+  for Veil once, with the guest 9.6 hours behind (`skew 34404442 ms`).
+- The hidden main window reported a 435 x 273 frame. It is resized to the preferred size whenever it is
+  shown (`MainWindowChrome.fitToPreferredSize`), so nothing shows at that size.
+- Not exercised: the quit question, which needs the user to quit Veil while Windows runs.
