@@ -8,10 +8,11 @@ namespace Veil.Agent;
 /// captured frames. It also says when the secure desktop takes the display (<see cref="InputDesktop"/>). See docs/superpowers/specs/2026-11-10-coherence-framebuffer-design.md.
 /// </summary>
 /// <remarks>
-/// It polls rather than hooking WinEvents: a scan of the top-level windows takes well under a
-/// millisecond, needs no message loop, and the comparison sends nothing while the layout holds still.
-/// The fast interval only runs while windows are tracked and something moved within the last second,
-/// under a 1 ms timer resolution so the 8 ms interval is not rounded up to Windows' 15.6 ms tick.
+/// It polls, and a WinEvent (<see cref="WindowChangeSignal"/>) cuts the wait short when a top-level window
+/// changes: a scan of the top-level windows takes well under a millisecond and the comparison sends
+/// nothing while the layout holds still, while the event closes the gap between a change and the next
+/// poll. The fast interval only runs while windows are tracked and something moved within the last
+/// second, under a 1 ms timer resolution so the 8 ms interval is not rounded up to Windows' 15.6 ms tick.
 /// </remarks>
 public sealed class WindowLayoutStreamer
 {
@@ -25,12 +26,19 @@ public sealed class WindowLayoutStreamer
     public static readonly TimeSpan IdleInterval = TimeSpan.FromMilliseconds(250);
     /// <summary>Scans without a change, at the fast pace, before the settled pace: one second's worth.</summary>
     public const int UnchangedScansBeforeSettled = 125;
+    /// <summary>
+    /// The least time between scans when window changes wake the loop. A drag reports a location change
+    /// for every mouse movement, up to a thousand a second with some mice; one scan in 4 ms is more often
+    /// than the guest presents frames, and keeps that from spending a core.
+    /// </summary>
+    public static readonly TimeSpan MinimumWakeInterval = TimeSpan.FromMilliseconds(4);
 
     private readonly Func<IReadOnlyDictionary<string, string?>> trackedOwners;
     private readonly Func<WindowLayoutScan?> scan;
     private readonly Func<TimeSpan, CancellationToken, Task> delay;
     private readonly Func<bool> inputDesktopIsSecure;
     private readonly Func<int, bool> isElevated;
+    private readonly Func<CancellationToken, Task>? windowChanged;
     private int sequence;
     private int unchangedScans;
     private string? lastSent;
@@ -39,8 +47,9 @@ public sealed class WindowLayoutStreamer
     public WindowLayoutStreamer(
         AgentSession session,
         Func<WindowLayoutScan?>? scan = null,
-        Func<TimeSpan, CancellationToken, Task>? delay = null)
-        : this(session.SnapshotTrackedWindowOwners, scan, delay)
+        Func<TimeSpan, CancellationToken, Task>? delay = null,
+        WindowChangeSignal? changes = null)
+        : this(session.SnapshotTrackedWindowOwners, scan, delay, windowChanged: changes is null ? null : changes.WaitAsync)
     {
     }
 
@@ -49,8 +58,10 @@ public sealed class WindowLayoutStreamer
         Func<WindowLayoutScan?>? scan = null,
         Func<TimeSpan, CancellationToken, Task>? delay = null,
         Func<bool>? inputDesktopIsSecure = null,
-        Func<int, bool>? isElevated = null)
+        Func<int, bool>? isElevated = null,
+        Func<CancellationToken, Task>? windowChanged = null)
     {
+        this.windowChanged = windowChanged;
         this.isElevated = isElevated ?? ProcessElevation.IsAboveAgent;
         this.trackedOwners = trackedOwners;
         this.scan = scan ?? WindowLayoutScanner.Scan;
@@ -61,8 +72,13 @@ public sealed class WindowLayoutStreamer
     public async Task StreamAsync(Func<JsonObject, CancellationToken, Task> onEvent, CancellationToken cancellationToken)
     {
         using var timerResolution = new TimerResolutionLease();
+        var sinceScan = System.Diagnostics.Stopwatch.StartNew();
         while (!cancellationToken.IsCancellationRequested)
         {
+            using var iteration = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            // Armed before the scan, so a change made while scanning still wakes the next one.
+            var changed = windowChanged?.Invoke(iteration.Token);
+            sinceScan.Restart();
             var layoutEvent = NextEvent();
             if (layoutEvent is not null)
             {
@@ -74,7 +90,23 @@ public sealed class WindowLayoutStreamer
             // Only the fast pace needs the fine timer; the others wait longer than Windows' own tick.
             var interval = CurrentInterval;
             timerResolution.SetInterval(interval);
-            await delay(interval, cancellationToken);
+            if (changed is null)
+            {
+                await delay(interval, cancellationToken);
+                continue;
+            }
+
+            var sleep = delay(interval, iteration.Token);
+            if (await Task.WhenAny(sleep, changed) == changed && !cancellationToken.IsCancellationRequested)
+            {
+                var remaining = MinimumWakeInterval - sinceScan.Elapsed;
+                if (remaining > TimeSpan.Zero)
+                {
+                    await delay(remaining, cancellationToken);
+                }
+            }
+            iteration.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 

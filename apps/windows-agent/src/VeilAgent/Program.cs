@@ -25,7 +25,9 @@ var session = new AgentSession(desktop, capture, packageIdentityProbe, startMenu
 session.WindowActivity = streamer.Wake;
 var windowDiscoveryStreamer = new WindowDiscoveryStreamer(session, desktop);
 var notificationStreamer = new WindowsNotificationStreamer(WindowsNotificationListenerFactory.Create(packageIdentityProbe));
-var windowLayoutStreamer = new WindowLayoutStreamer(session);
+// Wakes the layout scan when Windows moves a window by itself; see WindowChangeSignal.
+using var windowChanges = WindowChangeSignal.Start();
+var windowLayoutStreamer = new WindowLayoutStreamer(session, changes: windowChanges);
 var server = new WebSocketAgentServer(endpoint, session, streamer, clipboardStreamer, windowDiscoveryStreamer, notificationStreamer, windowLayoutStreamer);
 
 Console.WriteLine($"Veil Windows Agent listening on {endpoint.WebSocketUrl}");
