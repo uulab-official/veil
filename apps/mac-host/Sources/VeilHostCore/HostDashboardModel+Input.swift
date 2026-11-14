@@ -144,6 +144,7 @@ extension HostDashboardModel {
             return nil
         }
 
+        GuestWindowLayoutStore.shared.expectFrameChange(windowId: windowId)
         do {
             return try await service.resizeWindow(windowId: windowId, width: width, height: height)
         } catch {

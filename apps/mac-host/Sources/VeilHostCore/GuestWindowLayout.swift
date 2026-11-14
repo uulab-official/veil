@@ -97,7 +97,12 @@ public final class GuestWindowLayoutStore {
     /// and the guest presents, the area a window just took over still shows what was behind it, and
     /// cropping the new frame put the Windows desktop into the Mac window. See `settleSeconds`.
     private var frameChangedAt: [String: Date] = [:]
+    /// Moves Veil asked for whose new frame the layout has not shown yet, and until when to wait for it.
+    private var awaitedMoves: [String: Date] = [:]
     private let now: () -> Date
+
+    /// How long a move Veil asked for may take to appear in the layout before cropping resumes anyway.
+    public static let awaitedMoveSeconds: TimeInterval = 1
 
     /// How long a moved or resized window keeps its captured frame before cropping resumes; a few guest
     /// frames at the 25-30 a second the software renderer presents.
@@ -123,6 +128,8 @@ public final class GuestWindowLayoutStore {
         // and until that ends the framebuffer shows the desktop and the windows behind in its place.
         for window in event.windows where previousFrames[window.windowId].map({ $0 != window.frame }) ?? true {
             frameChangedAt[window.windowId] = changedAt
+            // The move has reached the layout; the usual settle period covers the redraw from here.
+            awaitedMoves[window.windowId] = nil
         }
         latest = event
         observers.values.forEach { $0() }
@@ -136,17 +143,48 @@ public final class GuestWindowLayoutStore {
         return true
     }
 
-    /// True while a window's frame changed less than `settleSeconds` ago.
+    /// Notes that Veil asked Windows to move a window, before the layout says it moved.
+    ///
+    /// When a caption drag on the Mac ends, Veil moves the guest window to where the Mac window was
+    /// dropped. Windows can present the moved window before the agent's next layout scan reaches the host,
+    /// and cropping the old frame from that newer picture showed the desktop the window had just left, once
+    /// per drag. The window keeps its last cropped picture from the request until the layout shows the move
+    /// and it settles, or `awaitedMoveSeconds` pass.
+    public func expectMove(windowId: String, toX x: Int, toY y: Int) {
+        if let frame = latest?.windows.first(where: { $0.windowId == windowId })?.frame,
+           frame.x == x, frame.y == y {
+            return
+        }
+        expectFrameChange(windowId: windowId)
+    }
+
+    /// The same for a resize Veil asked for: Windows redraws the window at its new size before the layout
+    /// reports it, and the old frame of that picture shows what the window uncovered.
+    public func expectFrameChange(windowId: String) {
+        awaitedMoves[windowId] = now().addingTimeInterval(Self.awaitedMoveSeconds)
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.awaitedMoveSeconds + 0.02))
+            self?.observers.values.forEach { $0() }
+        }
+    }
+
+    /// True while a window's frame changed less than `settleSeconds` ago, or a move Veil asked for has
+    /// not reached the layout yet.
     public func isSettling(windowId: String) -> Bool {
+        let current = now()
+        if let until = awaitedMoves[windowId], current < until {
+            return true
+        }
         guard let changedAt = frameChangedAt[windowId] else {
             return false
         }
-        return now().timeIntervalSince(changedAt) < Self.settleSeconds
+        return current.timeIntervalSince(changedAt) < Self.settleSeconds
     }
 
     public func reset() {
         latest = nil
         frameChangedAt = [:]
+        awaitedMoves = [:]
         observers.values.forEach { $0() }
     }
 

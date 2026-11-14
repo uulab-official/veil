@@ -504,6 +504,7 @@ extension HostDashboardModel {
               mirrorSessions.contains(where: { $0.id == windowId }) else {
             return
         }
+        GuestWindowLayoutStore.shared.expectMove(windowId: windowId, toX: x, toY: y)
         do {
             try await service.moveWindow(windowId: windowId, x: x, y: y)
         } catch {

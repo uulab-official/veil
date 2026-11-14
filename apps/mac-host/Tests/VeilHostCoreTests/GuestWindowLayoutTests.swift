@@ -227,6 +227,44 @@ struct GuestWindowLayoutTests {
             == CGRect(x: 120, y: 80, width: 900, height: 600))
     }
 
+    @Test func aMoveVeilAskedForHoldsTheLastPictureUntilTheLayoutShowsIt() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let store = GuestWindowLayoutStore(now: { clock })
+        let crop = { store.framebufferCrop(windowId: "hwnd:1", framebufferWidth: 1920, framebufferHeight: 1080) }
+        store.apply(layout(sequence: 1))
+        clock += GuestWindowLayoutStore.settleSeconds + 0.01
+        #expect(crop() != nil)
+
+        // The drop of a caption drag: Windows may present the moved window before the layout says so, and
+        // the old frame of that picture is desktop.
+        store.expectMove(windowId: "hwnd:1", toX: 400, toY: 300)
+        #expect(crop() == nil)
+        clock += 0.5
+        #expect(crop() == nil)
+
+        // The layout catches up; the usual settle period follows, then cropping resumes at the new frame.
+        store.apply(layout(sequence: 2, frame: GuestPixelRect(x: 400, y: 300, width: 800, height: 600)))
+        #expect(crop() == nil)
+        clock += GuestWindowLayoutStore.settleSeconds + 0.01
+        #expect(crop() == CGRect(x: 400, y: 300, width: 800, height: 600))
+    }
+
+    @Test func aMoveThatNeverArrivesStopsHoldingAfterAWhile() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let store = GuestWindowLayoutStore(now: { clock })
+        let crop = { store.framebufferCrop(windowId: "hwnd:1", framebufferWidth: 1920, framebufferHeight: 1080) }
+        store.apply(layout(sequence: 1))
+        clock += GuestWindowLayoutStore.settleSeconds + 0.01
+
+        // A move to where the window already is waits for nothing.
+        store.expectMove(windowId: "hwnd:1", toX: 120, toY: 80)
+        #expect(crop() != nil)
+
+        store.expectMove(windowId: "hwnd:1", toX: 400, toY: 300)
+        clock += GuestWindowLayoutStore.awaitedMoveSeconds + 0.01
+        #expect(crop() != nil)
+    }
+
     @Test func placesAMacWindowAtTheSameSpotOnAMatchingGuestDisplay() throws {
         // A 1512x982-point screen and a guest display of the same size.
         let screen = CGRect(x: 0, y: 0, width: 1512, height: 982)
