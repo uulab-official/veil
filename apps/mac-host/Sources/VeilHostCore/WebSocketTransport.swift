@@ -17,18 +17,26 @@ public enum URLSessionWebSocketTransportError: Error, LocalizedError, Equatable,
 public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
     private let url: URL
     private let session: URLSession
+    /// Sent with every connection; see `GuestAgentAccessToken`.
+    private let accessToken: String?
 
-    public init(url: URL, session: URLSession = .shared) {
+    public init(url: URL, session: URLSession = .shared, accessToken: String? = GuestAgentAccessToken.load()) {
         self.url = url
         self.session = session
+        self.accessToken = accessToken
     }
 
-    public init(url: URL, requestTimeout: TimeInterval) {
+    public init(url: URL, requestTimeout: TimeInterval, accessToken: String? = GuestAgentAccessToken.load()) {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = requestTimeout
         configuration.timeoutIntervalForResource = requestTimeout
         self.url = url
         self.session = URLSession(configuration: configuration)
+        self.accessToken = accessToken
+    }
+
+    private func webSocketTask() -> URLSessionWebSocketTask {
+        session.webSocketTask(with: GuestAgentAccessToken.request(for: url, token: accessToken))
     }
 
     public func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
@@ -47,7 +55,7 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
         if let replyTimeout, !replyTimeout.isFinite || replyTimeout < 0 {
             throw VeilHostError.missingReply("reply timeout must be finite and nonnegative")
         }
-        let task = session.webSocketTask(with: url)
+        let task = webSocketTask()
         task.maximumMessageSize = Self.maximumMessageByteCount
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
@@ -234,14 +242,14 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
         ) { continuation in
             // This connection only listens. The agent stops sending events to a connection once that
             // connection has sent a request, so nothing may be sent on it.
-            let task = session.webSocketTask(with: url)
+            let task = webSocketTask()
             task.maximumMessageSize = Self.maximumMessageByteCount
             task.resume()
             // Asks for the windows already open in Windows, on a connection of its own. The answers are
             // passed into this stream as the `window.created` events they are, so they are handled like any
             // window that opens later. When the request went out on the listening connection, every event
             // after the answer was lost: layouts, new and closed windows, the clipboard, notifications.
-            let listTask = session.webSocketTask(with: url)
+            let listTask = webSocketTask()
             listTask.maximumMessageSize = Self.maximumMessageByteCount
             listTask.resume()
 

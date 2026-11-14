@@ -2178,7 +2178,8 @@ struct QEMUWindowsBootPlanTests {
                 capture.frontmostCallCount += 1
             },
             bootKeySender: { _ in true },
-            displayMode: .vncLoopback
+            displayMode: .vncLoopback,
+            agentAccessTokenFileURL: directory.appendingPathComponent("Agent Access/agent-token.smbios")
         )
 
         let state = try await booter.start(profile: profile)
@@ -2192,6 +2193,11 @@ struct QEMUWindowsBootPlanTests {
         #expect(!capture.arguments.contains { $0.hasPrefix("127.0.0.1:") })
         #expect(!capture.arguments.containsSequence(["-display", "cocoa"]))
         #expect(capture.frontmostCallCount == 0)
+        // A cold boot hands Windows the agent token by file, never in the arguments.
+        let tokenFile = directory.appendingPathComponent("Agent Access/agent-token.smbios")
+        let token = try #require(GuestAgentAccessToken.load(fileURL: tokenFile))
+        #expect(capture.arguments.containsSequence(GuestAgentAccessToken.smbiosArguments(fileURL: tokenFile)))
+        #expect(!capture.arguments.contains { $0.contains(token) })
 
         let recordURL = directory
             .appendingPathComponent("QEMU Launch", isDirectory: true)

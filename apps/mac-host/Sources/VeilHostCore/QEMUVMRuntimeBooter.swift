@@ -133,6 +133,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let suspensionController: QEMUVMSuspensionController
     private let suspensionRecordStore: any VMSuspensionRecordStore
     private let qmpControl: any QEMUQMPControlling
+    private let agentAccessTokenFileURL: URL
     private var process: Process?
     private var monitorSocketURL: URL?
     private var qmpSocketURL: URL?
@@ -148,9 +149,11 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa,
         suspensionController: QEMUVMSuspensionController = QEMUVMSuspensionController(),
         suspensionRecordStore: (any VMSuspensionRecordStore)? = nil,
-        qmpControl: any QEMUQMPControlling = QEMUQMPClient()
+        qmpControl: any QEMUQMPControlling = QEMUQMPClient(),
+        agentAccessTokenFileURL: URL = GuestAgentAccessToken.defaultFileURL
     ) {
         self.fixedDiagnosticsDirectory = diagnosticsDirectory
+        self.agentAccessTokenFileURL = agentAccessTokenFileURL
         self.planBuilder = planBuilder
         self.tpmEmulatorRunner = tpmEmulatorRunner
         self.processRunner = processRunner
@@ -253,6 +256,11 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             vncSocketPath: vncSocketURL?.path,
             incomingMemoryStatePath: incomingMemoryStatePath
         )
+        if !isResuming, let tokenArguments = agentAccessTokenArguments() {
+            // A cold boot only: Windows reads SMBIOS as it starts, and a resumed Windows keeps the tables
+            // it booted with.
+            process.arguments = (process.arguments ?? []) + tokenArguments
+        }
         process.standardOutput = logHandle
         process.standardError = logHandle
         try processRunner(process)
@@ -292,6 +300,18 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
         scheduleConsoleScreenshotCapture(monitorSocketURL: monitorSocketURL, imageURL: consoleScreenshotURL)
         return .running
+    }
+
+    /// The arguments that hand Windows the agent token, or nil when it could not be stored; Windows then
+    /// starts without one and its agent accepts connections as before.
+    private func agentAccessTokenArguments() -> [String]? {
+        do {
+            _ = try GuestAgentAccessToken.loadOrCreate(fileURL: agentAccessTokenFileURL)
+            return GuestAgentAccessToken.smbiosArguments(fileURL: agentAccessTokenFileURL)
+        } catch {
+            VeilLog.runtime.error("Could not store the Windows agent token: \(String(describing: error))")
+            return nil
+        }
     }
 
     /// How long a fresh QEMU is watched for exiting at once. QEMU checks its arguments and opens the disk,
