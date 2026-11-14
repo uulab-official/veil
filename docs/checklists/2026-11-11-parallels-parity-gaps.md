@@ -383,3 +383,42 @@ In the background, with the user's go-ahead; nothing was opened or moved in Wind
   in the minute after the update against 9 to 11% before it, with the Mac's load average at 18 to 26.
 - Still not seen: an approval prompt in its own Mac window, and input reaching a window run as
   administrator. Both wait for the user to run something in Windows that asks for administrator rights.
+
+## Second production pass on 2026-11-14
+
+Done without relaunching Veil or touching the guest. Each item is covered by unit tests; none has run in
+the app yet.
+
+- **A full Mac disk failed Windows' writes instead of pausing it.** QEMU's NVMe controller, which carries
+  the Windows disk, ignores the drive's `werror` policy and completes a write the Mac volume refused as an
+  NVMe write fault (`nvme_rw_complete_cb` in `hw/nvme/ctrl.c`), which can corrupt the guest file system.
+  Veil now reads the free space of the disk's volume every two seconds, pauses a running Windows below
+  2 GiB, and continues it at 4 GiB, as Parallels does. It continues only a pause it made, says so in the
+  menu bar menu and in a notification. This Mac had 74 GiB free (96% used) when this was written.
+- **Opened with no Windows app open, the main window kept the whole Windows desktop.** Veil shows the
+  desktop until the app connection is up and returned to apps only when an app window had a frame, which
+  never came with no app open. It now returns as soon as the connection is up and no app window is waiting.
+- **Stop turned off a Windows that was waiting on the user**, such as an app asking to save a document,
+  when the shutdown deadline passed. It now asks: show Windows, keep it running, or turn it off. The
+  automatic quiet after the last app window closes never turns Windows off.
+- **QEMU exiting right after launch was reported as a running Windows.** The start now fails with the end
+  of QEMU's output when QEMU exits within 800 ms.
+- **The display connection was open to every account on the Mac.** QEMU's display server now listens on
+  `/tmp/vq-*.vnc.sock`, and that socket, QMP, and the monitor are set to 0600. Checked headless with the
+  bundled QEMU, which answered `RFB 003.008` on the socket. This takes effect from the next Windows start
+  or resume; the running QEMU keeps its TCP port until then, and the app still connects to it.
+- **WebDAV checked a path, then opened it by path again.** Reads, uploads, and the file a LOCK creates now
+  check the path of the open descriptor (`F_GETPATH`).
+- Translated the agent, launch result, and configuration titles into Korean.
+
+Confirmed by reading, from the lifecycle audit: resume deletes the saved state only after the guest runs,
+so that item was not a bug. Still open:
+
+- The agent's port is still a loopback TCP port without a secret. QEMU's user networking can forward to a
+  Unix socket instead (`hostfwd=unix:`, libslirp 4.7 or later), but the host connects with
+  `URLSessionWebSocketTask`, which needs TCP, and the forward is part of the machine's arguments, so moving
+  it invalidates a saved session.
+- The guest reaches every service on the Mac's loopback interface through QEMU's user networking.
+- The event and frame queues from the guest are bounded by message count, not bytes.
+- The system disk is opened with `file.locking=off`; only a process listing keeps two QEMUs off one disk.
+- Quitting Veil without "suspend on quit" leaves QEMU running, by design, without saying so.
