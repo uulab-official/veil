@@ -134,6 +134,12 @@ extension VeilHostShellApp {
             guard vmModel.canSuspend, vmModel.phase != .loading else {
                 return
             }
+            // Saving Windows' memory would fill the volume that is already nearly full, and a failed save
+            // continues Windows on it.
+            guard !isWindowsPausedForDiskSpace else {
+                displayMessage = String(localized: "Windows cannot be suspended while your Mac's disk is almost full.")
+                return
+            }
 
             cancelAutomaticQuietRuntime()
             cancelAutomaticRuntimeConnectionRecovery()
@@ -150,6 +156,11 @@ extension VeilHostShellApp {
     /// Returns false when the user cancelled the quit.
     @MainActor
     func handleWindowsBeforeQuit(isSystemQuit: Bool) async -> Bool {
+        // Paused for disk space, Windows stays paused: suspending it would fill the volume, and the next
+        // Veil continues it once there is room (the pause is recorded against the running QEMU).
+        if isWindowsPausedForDiskSpace {
+            return true
+        }
         let action = StartupBehaviorPolicy.quitAction(
             snapshot: vmModel.snapshot,
             canSuspend: vmModel.canSuspend,
@@ -212,22 +223,38 @@ extension VeilHostShellApp {
             cancelAutomaticRuntimeConnectionRecovery()
             hasObservedLiveAgentConnection = false
             activateMainWindow()
-            displayMessage = String(localized: "Shutting down Windows. Windows may ask to save changes or finish updates first.")
-            let outcome = await shutDownWindowsGracefully()
-            // Windows still running past the deadline is usually waiting on the user: an app asking to
-            // save a document, or an update. Turning it off then loses that work, so Veil asks first.
-            if let outcome, !outcome.poweredOff, vmModel.snapshot?.state == .running {
-                switch confirmForcedWindowsStop() {
-                case .turnOff:
-                    break
-                case .showWindows:
-                    shellNavigation.showsWindowsDesktop = true
-                    activateMainWindow()
-                    displayMessage = String(localized: "Windows is still running. Finish what it is waiting for, then stop it again.")
+            var outcome: GracefulWindowsShutdown.Outcome?
+            if isWindowsPausedForDiskSpace {
+                // A paused Windows answers neither the tools nor the power button; waiting would only
+                // end in a question about unsaved documents that is not the reason.
+                guard confirmForcedWindowsStop(reason: .pausedForDiskSpace) == .turnOff else {
+                    displayMessage = String(localized: "Windows stays paused until there is more free space on your Mac.")
                     return
-                case .keepRunning:
-                    displayMessage = String(localized: "Windows is still running.")
-                    return
+                }
+                outcome = .timedOut
+            } else {
+                displayMessage = String(localized: "Shutting down Windows. Windows may ask to save changes or finish updates first.")
+                outcome = await shutDownWindowsGracefully()
+                // Windows still running past the deadline is usually waiting on the user: an app asking to
+                // save a document, or an update. Turning it off then loses that work, so Veil asks first.
+                if let current = outcome, !current.poweredOff, vmModel.snapshot?.state == .running {
+                    switch confirmForcedWindowsStop(reason: .notShutDown) {
+                    case .turnOff:
+                        break
+                    case .showWindows:
+                        // The shutdown request stands: once the user has saved, Windows carries on, and
+                        // Veil finishes the stop then instead of leaving a Windows that shut down showing
+                        // as running.
+                        shellNavigation.showsWindowsDesktop = true
+                        activateMainWindow()
+                        displayMessage = String(localized: "Windows is waiting for you. Veil stops it once Windows has shut down.")
+                        let waited = await waitForWindowsShutdown()
+                        guard waited.poweredOff || vmModel.snapshot?.state != .running else {
+                            displayMessage = String(localized: "Windows is still running.")
+                            return
+                        }
+                        outcome = waited
+                    }
                 }
             }
             await vmModel.stop()
@@ -244,45 +271,61 @@ extension VeilHostShellApp {
 
     enum ForcedWindowsStopChoice {
         case turnOff
+        /// Look at Windows; for a paused Windows, leave it paused.
         case showWindows
-        case keepRunning
     }
 
-    /// Asked only after the user chose Stop and Windows did not shut down by itself.
+    enum ForcedWindowsStopReason {
+        /// Asked to shut down, Windows was still running at the deadline.
+        case notShutDown
+        /// Paused because the Mac volume holding its disk is nearly full.
+        case pausedForDiskSpace
+    }
+
+    /// Asked only after the user chose Stop and Windows cannot finish by itself.
     @MainActor
-    func confirmForcedWindowsStop() -> ForcedWindowsStopChoice {
+    func confirmForcedWindowsStop(reason: ForcedWindowsStopReason) -> ForcedWindowsStopChoice {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = String(localized: "Windows Did Not Shut Down")
-        alert.informativeText = String(localized: "Windows may be waiting for you to save a document or close an app. Turning it off now loses anything that is not saved.")
-        alert.addButton(withTitle: String(localized: "Show Windows"))
-        alert.addButton(withTitle: String(localized: "Keep Running"))
+        switch reason {
+        case .notShutDown:
+            alert.messageText = String(localized: "Windows Did Not Shut Down")
+            alert.informativeText = String(localized: "Windows may be waiting for you to save a document or close an app. Turning it off now loses anything that is not saved.")
+            alert.addButton(withTitle: String(localized: "Show Windows"))
+        case .pausedForDiskSpace:
+            alert.messageText = String(localized: "Windows Is Paused")
+            alert.informativeText = String(localized: "Your Mac's disk is almost full, so Windows cannot shut down. Free up space and Windows continues by itself. Turning it off now loses anything that is not saved.")
+            alert.addButton(withTitle: String(localized: "Keep Paused"))
+        }
         let turnOff = alert.addButton(withTitle: String(localized: "Turn Off"))
         turnOff.hasDestructiveAction = true
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            return .showWindows
-        case .alertThirdButtonReturn:
-            return .turnOff
-        default:
-            return .keepRunning
-        }
+        return alert.runModal() == .alertSecondButtonReturn ? .turnOff : .showWindows
     }
 
-    /// Shuts Windows down before the VM is turned off; see `GracefulWindowsShutdown`. Nil when Windows
-    /// was not running, so there was nothing to shut down.
+    /// Waits again for a shutdown Windows was already asked for, as long as the first wait did.
     @MainActor
-    func shutDownWindowsGracefully() async -> GracefulWindowsShutdown.Outcome? {
-        guard vmModel.snapshot?.state == .running else {
-            return nil
-        }
+    private func waitForWindowsShutdown() async -> GracefulWindowsShutdown.Outcome {
+        let probes = shutdownProbes()
+        return await GracefulWindowsShutdown.waitForPowerOff(
+            viaTools: lastShutdownRequestedViaTools,
+            isStillRunning: probes.isStillRunning,
+            hasFinishedShuttingDown: probes.hasFinishedShuttingDown,
+            timeout: lastShutdownRequestedViaTools
+                ? GracefulWindowsShutdown.toolsShutdownSeconds
+                : GracefulWindowsShutdown.powerButtonSeconds
+        )
+    }
+
+    @MainActor
+    private func shutdownProbes() -> (
+        isStillRunning: @MainActor () async -> Bool,
+        hasFinishedShuttingDown: @MainActor () async -> Bool
+    ) {
         let launch = vmModel.snapshot?.latestConsoleLaunch
         let completionProbe = launch?.pid.map {
             GuestShutdownCompletionProbe(pid: $0, monitorSocketPath: launch?.monitorSocketPath ?? "")
         }
-        let outcome = await GracefulWindowsShutdown.run(
-            requestToolsShutdown: { await model.requestSystemShutdown() },
-            pressPowerButton: { await vmModel.pressPowerButton() },
+        return (
             isStillRunning: {
                 await vmModel.load()
                 return vmModel.snapshot?.state == .running
@@ -298,7 +341,27 @@ extension VeilHostShellApp {
                 }.value
             }
         )
-        return outcome
+    }
+
+    /// Shuts Windows down before the VM is turned off; see `GracefulWindowsShutdown`. Nil when Windows
+    /// was not running, so there was nothing to shut down.
+    @MainActor
+    func shutDownWindowsGracefully() async -> GracefulWindowsShutdown.Outcome? {
+        guard vmModel.snapshot?.state == .running else {
+            return nil
+        }
+        let probes = shutdownProbes()
+        lastShutdownRequestedViaTools = false
+        return await GracefulWindowsShutdown.run(
+            requestToolsShutdown: {
+                let accepted = await model.requestSystemShutdown()
+                lastShutdownRequestedViaTools = accepted
+                return accepted
+            },
+            pressPowerButton: { await vmModel.pressPowerButton() },
+            isStillRunning: probes.isStillRunning,
+            hasFinishedShuttingDown: probes.hasFinishedShuttingDown
+        )
     }
 
     /// The quiet policy resolved against the live VM snapshot.
@@ -320,6 +383,10 @@ extension VeilHostShellApp {
     /// things for the same state.
     @MainActor
     private func performQuietRuntime(_ quietRuntime: WindowsAppRuntimeQuietPolicyStatus) async {
+        guard !isWindowsPausedForDiskSpace else {
+            // Neither a suspend nor a shutdown can finish then; Windows stays paused.
+            return
+        }
         cancelAutomaticRuntimeConnectionRecovery()
         if quietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.suspendMode,
            vmModel.canSuspend {

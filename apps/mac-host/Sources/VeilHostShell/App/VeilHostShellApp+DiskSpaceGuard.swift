@@ -16,7 +16,14 @@ extension VeilHostShellApp {
                 guard !Task.isCancelled else {
                     return
                 }
+                let launchKey = currentLaunchPauseOwnerKey
+                let recordedOwner = UserDefaults.standard.string(forKey: Self.diskSpaceGuardPauseOwnerKey)
+                if let recordedOwner, recordedOwner != launchKey, launchKey != nil {
+                    // Recorded for a QEMU that is gone; this one was not paused by the guard.
+                    UserDefaults.standard.removeObject(forKey: Self.diskSpaceGuardPauseOwnerKey)
+                }
                 let pausedByGuard = vmModel.lowDiskSpacePauseAvailableBytes != nil
+                    || (launchKey != nil && recordedOwner == launchKey)
                 // While an operation such as a suspend runs, the machine's state belongs to it.
                 guard vmModel.phase != .loading,
                       pausedByGuard || vmModel.snapshot?.state == .running,
@@ -34,11 +41,34 @@ extension VeilHostShellApp {
             break
         case .paused(let available):
             vmModel.lowDiskSpacePauseAvailableBytes = available
+            if let launchKey = currentLaunchPauseOwnerKey {
+                UserDefaults.standard.set(launchKey, forKey: Self.diskSpaceGuardPauseOwnerKey)
+            }
             await notifyLowDiskSpacePause(availableBytes: available)
+        case .stillPaused(let available):
+            // Also what a Veil opened after the pause sees first, so the menu says why Windows is still.
+            vmModel.lowDiskSpacePauseAvailableBytes = available
         case .resumed, .released:
             vmModel.lowDiskSpacePauseAvailableBytes = nil
+            UserDefaults.standard.removeObject(forKey: Self.diskSpaceGuardPauseOwnerKey)
             await windowsNotificationPresenter.removeDelivered(identifier: Self.lowDiskSpaceNotificationIdentifier)
         }
+    }
+
+    /// Which QEMU launch a recorded pause belongs to; see `HostDiskSpaceGuard.pauseOwnerKey`.
+    static let diskSpaceGuardPauseOwnerKey = "veil.diskSpaceGuard.pausedLaunch"
+
+    private var currentLaunchPauseOwnerKey: String? {
+        guard let launch = vmModel.snapshot?.latestConsoleLaunch, let pid = launch.pid else {
+            return nil
+        }
+        return HostDiskSpaceGuard.pauseOwnerKey(pid: pid, startedAt: launch.startedAt)
+    }
+
+    /// Windows is paused because the Mac volume holding its disk is nearly full. It can neither shut down
+    /// nor be suspended then: it answers nothing, and saving its memory would fill the volume.
+    var isWindowsPausedForDiskSpace: Bool {
+        vmModel.lowDiskSpacePauseAvailableBytes != nil
     }
 
     static let lowDiskSpaceNotificationIdentifier = "org.uulab.veil.low-disk-space-pause"

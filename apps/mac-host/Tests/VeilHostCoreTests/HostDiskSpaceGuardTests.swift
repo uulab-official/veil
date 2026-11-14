@@ -76,6 +76,8 @@ struct HostDiskSpaceGuardTests {
             #expect(await check(qmp: qmp, available: 5 * Self.gib, pausedByGuard: true) == .released)
             #expect(await qmp.commands == [.queryStatus])
         }
+        let stillPausedQMP = StatusQMP(status: "paused")
+        #expect(await check(qmp: stillPausedQMP, available: 3 * Self.gib, pausedByGuard: true) == .stillPaused(availableBytes: 3 * Self.gib))
         let lowQMP = StatusQMP(status: "running")
         #expect(await check(qmp: lowQMP, available: 3 * Self.gib, pausedByGuard: true) == .released)
     }

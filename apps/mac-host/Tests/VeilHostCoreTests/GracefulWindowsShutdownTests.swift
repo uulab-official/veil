@@ -53,6 +53,31 @@ struct GracefulWindowsShutdownTests {
         #expect(clock.timeIntervalSince1970 >= GracefulWindowsShutdown.powerButtonSeconds)
     }
 
+    @Test("waiting again for a shutdown already asked for asks nothing and still sees it finish")
+    func waitsAgainWithoutAsking() async {
+        var clock = Date(timeIntervalSince1970: 0)
+        var polls = 0
+        let poweredOff = await GracefulWindowsShutdown.waitForPowerOff(
+            viaTools: true,
+            isStillRunning: { polls += 1; clock.addTimeInterval(10); return polls < 3 },
+            timeout: 60,
+            pollInterval: .zero,
+            now: { clock }
+        )
+        #expect(poweredOff == .poweredOffViaTools)
+
+        let stillOn = await GracefulWindowsShutdown.waitForPowerOff(
+            viaTools: false,
+            isStillRunning: { clock.addTimeInterval(10); return true },
+            hasFinishedShuttingDown: { true },
+            timeout: 60,
+            pollInterval: .zero,
+            now: { clock }
+        )
+        // A power button press never counts a quiet guest as finished.
+        #expect(stillOn == .timedOut)
+    }
+
     @Test("nothing to ask means nothing to wait for")
     func notRequested() async {
         var checks = 0

@@ -28,6 +28,8 @@ public enum HostDiskSpaceGuard {
         case unchanged
         /// Windows was running with too little space and is now paused.
         case paused(availableBytes: Int64)
+        /// Windows is still paused here, with this much free.
+        case stillPaused(availableBytes: Int64)
         /// Windows had been paused here, there is room again, and it is running.
         case resumed(availableBytes: Int64)
         /// Windows had been paused here but is no longer paused (stopped, or continued by something else):
@@ -101,6 +103,12 @@ public enum HostDiskSpaceGuard {
         return options
     }
 
+    /// Names one QEMU launch, so a pause the guard made survives Veil quitting and opening again: the
+    /// next Veil continues a pause it finds recorded for the QEMU still running, and no other.
+    public static func pauseOwnerKey(pid: Int32, startedAt: Date) -> String {
+        "\(pid)@\(Int64(startedAt.timeIntervalSince1970))"
+    }
+
     /// One check of the running machine described by `launchRecord`.
     ///
     /// The guard pauses only a machine QEMU reports as running, and continues only one it paused itself and
@@ -156,7 +164,7 @@ public enum HostDiskSpaceGuard {
             )
             return .paused(availableBytes: available)
         case .confirmStillPaused:
-            return status == "paused" ? .unchanged : .released
+            return status == "paused" ? .stillPaused(availableBytes: available) : .released
         case .resume:
             guard status == "paused" else {
                 return .released

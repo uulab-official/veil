@@ -822,7 +822,6 @@
 "Keep Running" = "계속 실행";
 "Turn Off" = "전원 끄기";
 "Windows is still running." = "Windows가 계속 실행 중입니다.";
-"Windows is still running. Finish what it is waiting for, then stop it again." = "Windows가 계속 실행 중입니다. Windows가 기다리는 작업을 마친 뒤 다시 중지하세요.";
 "Windows did not shut down by itself, so Veil left it running." = "Windows가 스스로 종료되지 않아 Veil이 그대로 실행해 두었습니다.";
 "Windows Is Still Running" = "Windows가 아직 실행 중입니다";
 "If Veil quits and leaves Windows running, Windows keeps using memory and battery in the background. Suspending saves your open Windows apps and stops Windows until you open Veil again." = "Windows를 실행 상태로 두고 Veil을 종료하면 Windows가 백그라운드에서 계속 메모리와 배터리를 사용합니다. 일시 중단하면 열려 있는 Windows 앱을 저장하고, Veil을 다시 열 때까지 Windows를 멈춥니다.";
@@ -830,3 +829,9 @@
 "The Windows Clock Is Wrong" = "Windows 시계가 맞지 않습니다";
 "The clock in Windows is %@ off. Choose Set Windows Clock in the Veil menu and approve it once in Windows; after that Veil keeps it right." = "Windows 시계가 %@ 틀립니다. Veil 메뉴에서 'Windows 시계 맞추기…'를 선택하고 Windows에서 한 번 승인하면 그 뒤로는 Veil이 시계를 맞춥니다.";
 "Check for Updates…" = "업데이트 확인…";
+"Windows stays paused until there is more free space on your Mac." = "Mac에 여유 공간이 생길 때까지 Windows는 일시정지 상태로 있습니다.";
+"Windows is waiting for you. Veil stops it once Windows has shut down." = "Windows가 사용자의 조치를 기다리고 있습니다. Windows가 종료되면 Veil이 마무리합니다.";
+"Windows Is Paused" = "Windows가 일시정지되어 있습니다";
+"Your Mac's disk is almost full, so Windows cannot shut down. Free up space and Windows continues by itself. Turning it off now loses anything that is not saved." = "Mac 디스크 공간이 거의 없어 Windows를 종료할 수 없습니다. 공간을 확보하면 Windows가 저절로 이어서 실행됩니다. 지금 전원을 끄면 저장하지 않은 내용이 사라집니다.";
+"Keep Paused" = "일시정지 유지";
+"Windows cannot be suspended while your Mac's disk is almost full." = "Mac 디스크 공간이 거의 없어 Windows를 일시 중단할 수 없습니다.";

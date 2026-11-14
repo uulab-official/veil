@@ -52,7 +52,31 @@ public enum GracefulWindowsShutdown {
             return .notRequested
         }
 
-        let deadline = now().addingTimeInterval(viaTools ? toolsTimeout : powerButtonTimeout)
+        return await waitForPowerOff(
+            viaTools: viaTools,
+            isStillRunning: isStillRunning,
+            hasFinishedShuttingDown: hasFinishedShuttingDown,
+            timeout: viaTools ? toolsTimeout : powerButtonTimeout,
+            settleTimeout: settleTimeout,
+            pollInterval: pollInterval,
+            now: now
+        )
+    }
+
+    /// Waits for a shutdown already asked for: until the VM powers off, the guest looks finished for
+    /// `settleTimeout` (tools shutdowns only), or `timeout` passes. Also used after the user chose to look
+    /// at Windows instead of turning it off: the request stands, and Windows may still finish.
+    @MainActor
+    public static func waitForPowerOff(
+        viaTools: Bool,
+        isStillRunning: () async -> Bool,
+        hasFinishedShuttingDown: () async -> Bool = { false },
+        timeout: TimeInterval,
+        settleTimeout: TimeInterval = settledSeconds,
+        pollInterval: Duration = .seconds(2),
+        now: () -> Date = Date.init
+    ) async -> Outcome {
+        let deadline = now().addingTimeInterval(timeout)
         var finishedSince: Date?
         repeat {
             try? await Task.sleep(for: pollInterval)
