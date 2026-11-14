@@ -27,11 +27,11 @@ public sealed class WindowLayoutStreamer
     /// <summary>Scans without a change, at the fast pace, before the settled pace: one second's worth.</summary>
     public const int UnchangedScansBeforeSettled = 125;
     /// <summary>
-    /// The least time between scans when window changes wake the loop. A drag reports a location change
-    /// for every mouse movement, up to a thousand a second with some mice; one scan in 4 ms is more often
-    /// than the guest presents frames, and keeps that from spending a core.
+    /// The least time between scans when window changes wake the loop: the fast pace. A drag reports a
+    /// location change for every mouse movement, up to a thousand a second with some mice. The wake is for
+    /// seeing the first change at once, not for scanning more often than the fast pace already does.
     /// </summary>
-    public static readonly TimeSpan MinimumWakeInterval = TimeSpan.FromMilliseconds(4);
+    public static readonly TimeSpan MinimumWakeInterval = ActiveInterval;
 
     private readonly Func<IReadOnlyDictionary<string, string?>> trackedOwners;
     private readonly Func<WindowLayoutScan?> scan;

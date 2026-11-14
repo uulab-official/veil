@@ -14,6 +14,8 @@ namespace Veil.Agent;
 /// manager makes the change, before the next frame is presented
 /// (<see href="https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setwineventhook"/>).
 ///
+/// The scan still runs at most every 8 ms (<see cref="WindowLayoutStreamer.MinimumWakeInterval"/>).
+///
 /// Out-of-context hooks are delivered to the thread that set them, which therefore runs a message loop
 /// of its own. Polling stays as the fallback: a missed or unavailable hook only costs the old delay.
 /// </remarks>
