@@ -62,6 +62,14 @@ struct VeilMenuBarMenu: View {
 
         Label(primaryAction.statusTitle, systemImage: primaryAction.symbolName)
 
+        if let available = vmModel.lowDiskSpacePauseAvailableBytes {
+            Label(
+                WindowsShellCopy.lowDiskSpacePauseTitle(availableBytes: available),
+                systemImage: "externaldrive.badge.exclamationmark"
+            )
+            .help("Windows continues by itself once there is more free space on your Mac.")
+        }
+
         if !model.mirrorSessions.isEmpty {
             Label(runningAppsTitle, systemImage: "rectangle.3.group")
         }

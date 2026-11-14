@@ -782,3 +782,7 @@
 "Approve the request in Windows to set its clock." = "시계를 맞추려면 Windows에 뜬 요청을 승인하세요.";
 "Windows could not be asked to set its clock." = "Windows에 시계 맞추기를 요청하지 못했습니다.";
 "Windows could not set its clock: %@" = "Windows가 시계를 맞추지 못했습니다: %@";
+"Windows Paused: Mac Disk Almost Full" = "Windows 일시정지됨: Mac 디스크 공간 부족";
+"Windows Paused: Mac Disk Almost Full (%@ free)" = "Windows 일시정지됨: Mac 디스크 공간 부족(%@ 남음)";
+"Only %@ is free on the disk that holds Windows. Veil paused Windows so it cannot fail mid-write. Free up space and Windows continues by itself." = "Windows가 있는 디스크에 %@만 남았습니다. 쓰기 도중 실패하지 않도록 Veil이 Windows를 일시정지했습니다. 공간을 확보하면 Windows가 저절로 이어서 실행됩니다.";
+"Windows continues by itself once there is more free space on your Mac." = "Mac에 여유 공간이 더 생기면 Windows가 저절로 이어서 실행됩니다.";

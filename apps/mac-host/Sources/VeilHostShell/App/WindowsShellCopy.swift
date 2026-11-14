@@ -118,6 +118,16 @@ enum WindowsShellCopy {
     static let quietStopWaitingMessage =
         String(localized: "Windows app windows are closed. Veil will stop Windows after status refreshes.")
 
+    static func lowDiskSpacePauseTitle(availableBytes: Int64) -> String {
+        let free = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+        return String(localized: "Windows Paused: Mac Disk Almost Full (\(free) free)")
+    }
+
+    static func lowDiskSpacePauseNotificationBody(availableBytes: Int64) -> String {
+        let free = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+        return String(localized: "Only \(free) is free on the disk that holds Windows. Veil paused Windows so it cannot fail mid-write. Free up space and Windows continues by itself.")
+    }
+
     static func displayRecoveryStillStaleMessage(statusText: String) -> String {
         String(localized: "Display is still \(statusText). Refresh the Windows display before opening an app.")
     }

@@ -18,6 +18,9 @@ public final class VMRuntimeModel {
     /// whenever a saved session exists.
     public private(set) var savedSessionCannotResume = false
     public private(set) var diagnosticsURL: URL?
+    /// Free space on the Mac volume holding the Windows disk, in bytes, while Veil keeps Windows paused
+    /// because that volume is nearly full (`HostDiskSpaceGuard`); nil while it is not.
+    public var lowDiskSpacePauseAvailableBytes: Int64?
     /// The running Windows' removable CD drive, as QEMU last reported it.
     public private(set) var removableMedia: VMRemovableMediaStatus?
 
