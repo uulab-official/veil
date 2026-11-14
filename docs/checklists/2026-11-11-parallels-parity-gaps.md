@@ -414,10 +414,7 @@ the app yet.
 Confirmed by reading, from the lifecycle audit: resume deletes the saved state only after the guest runs,
 so that item was not a bug. Still open:
 
-- The agent's port is still a loopback TCP port without a secret. QEMU's user networking can forward to a
-  Unix socket instead (`hostfwd=unix:`, libslirp 4.7 or later), but the host connects with
-  `URLSessionWebSocketTask`, which needs TCP, and the forward is part of the machine's arguments, so moving
-  it invalidates a saved session.
+- The agent's port is a loopback TCP port; since 2026-11-14 a token keeps other accounts off it (below).
 - The guest reaches every service on the Mac's loopback interface through QEMU's user networking.
 - The system disk is opened with `file.locking=off`; only a process listing keeps two QEMUs off one disk.
 
@@ -461,3 +458,17 @@ or moved in Windows.
 - The hidden main window reported a 435 x 273 frame. It is resized to the preferred size whenever it is
   shown (`MainWindowChrome.fitToPreferredSize`), so nothing shows at that size.
 - Not exercised: the quit question, which needs the user to quit Veil while Windows runs.
+
+## Agent token on 2026-11-14
+
+- **Another account on the Mac could drive Windows through the agent.** Veil now keeps one random token
+  per Mac user in `Application Support/Veil/Agent Access/agent-token.smbios` (0700 folder, 0600 file),
+  hands it to Windows on a cold boot as an SMBIOS OEM string through `-smbios type=11,path=`, and sends it
+  in `X-Veil-Agent-Token` on every connection. The path, not the value, goes in QEMU's arguments: `ps`
+  showed this account the arguments of root's processes, so other accounts can read QEMU's. An agent that
+  finds the token refuses connections without it (401); without it, as before.
+- Checked headless: the bundled QEMU 11.1.3 accepts the option with a path holding spaces and a doubled
+  comma. Not checked: that Windows on the `virt` machine sees the OEM string, which needs a Windows cold
+  boot. If it does not, the agent finds no token and nothing changes.
+- Takes effect only with all three: Veil relaunched (sends the header), the agent updated (checks it), and
+  Windows restarted (reads the tables). The order does not matter; none of them alone locks Veil out.
