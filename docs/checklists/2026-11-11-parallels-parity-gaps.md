@@ -486,3 +486,23 @@ In the background, with the user's go-ahead; Windows was not restarted and nothi
   switch on the Mac at that moment, not Veil moving them.
 - Still to check after the next Windows start from Veil: that Windows sees the OEM string, so that a probe
   without the token gets 401 and Veil still connects.
+
+## What stands between this branch and a production release, 2026-11-14
+
+Code-side items that can be done without the user are done. What remains needs the user, an outside
+service, or work outside this repository:
+
+- **A notarized build.** `script/release_macos.sh` signs with hardened runtime, notarizes, staples, and
+  checks Gatekeeper (`2026-08-03-notarized-macos-release.md`). This Mac has a Developer ID Application
+  identity; a `notarytool` keychain profile and a run against Apple's service are still to do, and the
+  current app is ad-hoc signed.
+- **Updates of Veil itself.** There is no in-app update channel; it needs a decision on where releases are
+  hosted.
+- **GPU acceleration** (gap 13): Triton measured 72 fps against 23.5 with WARP, but Windows does not shut
+  down with its driver.
+- **Guest access to the Mac's loopback interface.** QEMU 11.1.3's user networking has no option to refuse
+  it (`-netdev user` help lists none); closing it means patching libslirp's `disable_host_loopback` into
+  the bundled QEMU and serving the shared folder through a fixed `guestfwd` instead.
+- **Checks only the user can start**: the approval prompt in its own Mac window and input to an
+  administrator's window (Set Windows Clock), the quit question, and the agent token after Windows is
+  started again from Veil.
