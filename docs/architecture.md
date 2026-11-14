@@ -51,13 +51,82 @@ The provider probe is intentionally read-only. `veil-vmctl providers --json` rep
 
 The QEMU boot plan remains inspectable before execution. `veil-vmctl qemu-plan --json` converts the stored Windows Arm VM profile into a dry-run QEMU/HVF command plan and reports whether `qemu-system-aarch64` is locally available. `veil-vmctl qemu-start` is the guarded local execution spike for that plan: it checks QEMU doctor readiness first, starts QEMU with `-display none` plus a loopback VNC endpoint, forwards the Windows guest agent port to `127.0.0.1:18444`, attaches a QEMU HMP monitor socket for compatibility screenshots plus a QMP socket for structured input/recovery control, sends boot-prompt key input during the initial wait window, and writes process/serial logs under `~/Library/Application Support/Veil/Diagnostics`. App-launched QEMU sessions share the same monitor/QMP/VNC evidence shape. The host renders that RFB surface in one reusable, resizable, full-screen-capable macOS desktop window; the app launcher and per-HWND app windows remain separate surfaces. Screen-gated recovery reads the active VNC framebuffer, uses local OCR and pixel metrics to distinguish blank, desktop, Run, UAC, modal, and command states, and records stable latest screenshots instead of blindly sending timed input. HMP `screendump` is fallback evidence because it can target an inactive display head after Windows switches graphics devices. `veil-vmctl qemu-start --native-display` and `VEIL_USE_NATIVE_QEMU_DISPLAY=1` keep the temporary Cocoa display as explicit recovery fallbacks. A lower-latency accelerated renderer and dynamic guest-resolution renegotiation remain roadmap work.
 
+## Other Guest Operating Systems
+
+Decided 2026-11-05 (see docs/project-brief.md, "Scope change"). `VMProfile.os` now names a `VMGuestOS`:
+`windows-arm64` (the existing value, and the fallback for anything unknown), `linux-arm64`, and `x86_64`.
+Only Windows uses `QEMUWindowsBootPlanner`, the readiness doctor, the answer-file ISO, the agent port
+forward, and the SMB share. The other kinds go through `QEMUGuestBootPlanner`:
+
+- Linux Arm64: `virt,highmem=on`, `-accel hvf`, `-cpu host`, QEMU's `edk2-aarch64-code.fd` with a per-VM
+  copy of `edk2-arm-vars.fd`, `virtio-blk-pci` disk, `virtio-net-pci` on user NAT with no port
+  forwards, `virtio-gpu-pci`, `virtio-rng-pci`, USB keyboard and tablet, and the ISO as a
+  `virtio-scsi` CD. TPM 2.0 (swtpm) and Secure Boot are opt-in; Secure Boot reuses Veil's Secure Boot
+  build, whose `--microsoft-db all` store includes the Microsoft third-party UEFI CA that signs
+  distribution shims (Debian 13 booted with it below).
+- x86_64: `q35`, `-accel tcg,thread=multi,tb-size=512`, `-cpu max`, OVMF (`edk2-x86_64-code.fd` with
+  `edk2-i386-vars.fd`), the same virtio disk/NIC/CD, and standard `VGA`. Secure Boot is not offered
+  because Veil ships no x86 variable store with enrolled keys; the plan warns instead. Every x86 plan
+  carries a performance warning.
+- Boot order is disk first, ISO second: an empty disk has no EFI system partition, so firmware falls
+  through to the installer, and once a bootloader is installed the disk wins with the ISO still attached.
+
+Guests live in `~/Virtual Machines/Veil Guests/<id>/` (`guest.json`, `disk.img` raw sparse,
+`uefi-vars.fd`, optional `tpm/`), never in the Windows profile store or the Windows VM folder, and
+`GuestVMLauncher` shows them in QEMU's own Cocoa window. Entry points: File > New Virtual Machine…
+(⌥⌘N) in the app, and `veil-vmctl guest-create|guest-list|guest-plan|guest-start|guest-capture|guest-stop`.
+Guest ids are 12 hex characters so `tpm/swtpm.sock` stays under the 104-byte Unix socket limit.
+
+### x86_64 emulator in the bundle
+
+Decision: `script/bundle_qemu_runtime.sh` bundles `qemu-system-x86_64` (with `edk2-x86_64-code.fd`,
+`edk2-i386-vars.fd`, `vgabios-stdvga.bin`, `kvmvapic.bin`) by default; `VEIL_BUNDLE_X86=0` leaves it
+out. It links the same libraries as `qemu-system-aarch64`, so no new dylibs are added. Under the
+hardened runtime it is signed with `script/qemu-tcg-runtime.entitlements` (`allow-jit`) because TCG
+writes translated code to `MAP_JIT` memory.
+
+Measured 2026-11-05 with Homebrew QEMU 11.1.3, Secure Boot firmware skipped in both runs:
+
+| Runtime directory | Uncompressed | `tar | gzip -6` |
+|---|---|---|
+| without x86_64 | 190.9 MB | 16.0 MB |
+| with x86_64 | 220.3 MB | 21.4 MB |
+
+That is +29.4 MB (+15%) on disk and +5.5 MB compressed, against a 212 MB app, so it is bundled rather
+than downloaded on demand.
+
+### Boot measurements
+
+Debian 13.7.0 netinst ISOs from `cdimage.debian.org`, SHA256 checked against the published
+`SHA256SUMS`, headless (`guest-start --headless`), timed with 2-second `screendump` polls on an
+Apple Silicon Mac (so ±2 s):
+
+| Guest | Power-on to GRUB | GRUB "Install" to installer language screen |
+|---|---|---|
+| Linux Arm64 (HVF, 4 vCPU, 4 GB) | 10 s | 4 s |
+| Linux Arm64, Secure Boot + TPM | reached GRUB and the installer language screen | not timed |
+| x86_64 (TCG, 2 vCPU, 2 GB) | 8 s (second boot) | 14 s |
+
+The Secure Boot run used Veil's Secure Boot firmware and its enrolled variable store, padded to the
+64 MiB flash bank as the Windows path does; the guest's own `mokutil --sb-state` was not checked.
+The first x86_64 boot with a fresh variable store was still in OVMF's CD boot at 67 s; later boots
+reach GRUB in about 8 s. The kernel-to-installer step is about 3.5 times slower under TCG; desktop
+workloads will be slower still, which is why the plan warns. The app bundle's own
+`qemu-system-x86_64` booted the same ISO to GRUB using only its bundled data directory.
+
+Known issue: QEMU's HMP monitor socket stopped answering after two monitor connections were opened
+back to back during an x86_64 kernel boot; spacing connections a second apart avoided it. The guest
+CLI opens one connection per command.
+
 ## Session Persistence Boundary
 
 Stopping a VM and suspending a Windows session are different products. Stop shuts Windows down; suspend keeps the user's open apps. Veil implements suspend inside the local runtime provider boundary: `VMRuntimeBooting.suspend(profile:)`/`resume(profile:)` pause the guest, stream RAM and device state through QEMU's migration path to a local file next to the virtual disk, and later relaunch QEMU with `-incoming` before unpausing. Providers that cannot persist a session throw `suspendNotSupported` instead of silently falling back to stop and start, because that fallback would destroy the user's open work.
 
 That memory-state file is guest data, not diagnostics. It lives beside the virtual disk as `.vmsave`, while the metadata-only record (paths, machine fingerprint, migration status) lives with the other diagnostics records. The stream is single-use: Veil deletes it once the guest runs again, discards it on a cold boot, and refuses to load one whose recorded machine fingerprint no longer matches the rebuilt boot plan, since a migration stream is only valid against an identically configured machine and an advanced disk.
 
-Snapshots are a separate capability with a separate prerequisite. QEMU internal snapshots store guest state inside the disk image, which requires `qcow2`, while Veil's default system disk is raw. Veil reports that difference through an explicit capability rather than offering a snapshot action that cannot succeed, and points at the `qemu-img convert` path plus the suspend alternative that does work on the shipping format.
+Snapshots are a separate capability with a separate prerequisite. QEMU internal snapshots store guest state inside the disk image, which requires `qcow2`. Veil creates new system disks as `qcow2` with the bundled `qemu-img` (raw only when no `qemu-img` exists), and the boot plan reads the format from the disk header, so a raw disk from an older build keeps booting as raw (`format=raw`, unchanged arguments) and a `qcow2` disk boots as `format=qcow2,node-name=veil-system`. Converting raw to `qcow2` happens only when the user chooses it in Configuration > Disk, with Windows stopped and enough free space; the raw original goes to the Trash.
+
+Configuration > Disk also grows the disk (`qemu-img resize`, Windows stopped, grow only) and lists, takes, restores, and deletes snapshots. With Windows running they are QMP `snapshot-save`/`snapshot-load`/`snapshot-delete` jobs that name only the `veil-system` node: HMP `savevm` snapshots every writable drive and refuses the raw UEFI variable store (`Device 'pflash1' is writable but does not support snapshots`, measured with QEMU 11.1.3). The `uefi-vars.fd` and TPM state files are therefore not part of the snapshot on disk; what QEMU holds of them in memory travels in the snapshot's VM state (measured on a scratch VM without TPM; not yet measured with an installed Windows). With Windows stopped, `qemu-img snapshot` takes disk-only snapshots, and restoring one cold-boots Windows from that disk state next time. Starting or suspended Windows refuses snapshot actions, and a disk-only snapshot cannot be loaded into a running Windows. Without a `qcow2` disk, Veil reports the capability as unsupported and points at the conversion plus the suspend alternative that works on either format.
 
 ## Windows Arm Install Flow
 
@@ -145,11 +214,11 @@ synthesized input, clipboard read and write — and the guest's SMB server to th
 Veil runs QEMU as the logged-in user. That is a deliberate architectural choice, and it is why Veil
 needs no admin password to install or run.
 
-It is also the single reason for the two largest remaining gaps against Parallels:
+It is also the single reason for the largest remaining gaps against Parallels:
 
 | Capability | Blocker |
 |---|---|
-| USB device passthrough | macOS binds most USB devices to a kernel driver; libusb cannot take exclusive access without root. QEMU upstream tracks this as unusable on Apple Silicon. |
+| USB devices a macOS driver owns | libusb takes a device from its macOS driver only with the [`com.apple.vm.device-access`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.vm.device-access) entitlement or root; without them it refuses the capture ("USB device capture requires either an entitlement … or root privilege", `libusb/os/darwin_usb.c`). Devices with no macOS driver are not blocked; see [USB Device Passthrough](#usb-device-passthrough). |
 | Bridged / host-only networking | Both are macOS `vmnet` modes, which require root or the `com.apple.vm.networking` entitlement Apple grants case by case. |
 
 Parallels closes both by shipping a signed system extension and a privileged helper. Veil has three
@@ -162,11 +231,64 @@ options and has not chosen one:
 3. Running QEMU under `sudo`. **Refused outright** — it would put a user-controlled command line and a
    network-reachable guest behind root.
 
-Until that decision is made, both capabilities are reported as unavailable with their prerequisite by
-`veil-vmctl device-passthrough-status` rather than silently missing. The live shared folder covers the
-file-transfer reason people usually want USB for, and loopback port forwards cover the private
-host-to-guest access people usually want host-only networking for. Neither substitutes for a security
-key or a licence dongle, and the report says so.
+Until that decision is made, the network modes are reported as unavailable with their prerequisite
+by `veil-vmctl device-passthrough-status` rather than silently missing, and the USB menu explains why a
+driver-owned device was not handed over. Loopback port forwards cover the private host-to-guest access
+people usually want host-only networking for, and the live shared folder covers moving files without
+handing Windows a whole disk.
+
+## USB Device Passthrough
+
+Added 2026-11-05 for UTM parity. Configuration > USB Devices lists every USB device on this Mac (read
+from the IORegistry's `IOUSBHostDevice` entries, which needs no privilege) with a switch per device.
+
+```text
+switch on   -> QMP device_add usb-host,id=veil-usb-<bus><addr>-<vid>-<pid>,bus=usb0.0,
+                              hostbus=…,hostaddr=…,vendorid=…,productid=…
+            -> qom-get /machine/peripheral/<id> attached   (repeat up to 3 times)
+            -> false: device_del, and say why
+switch off  -> QMP device_del <id>
+stop/suspend-> device_del every veil-usb-* device first
+```
+
+- Devices are never in the boot plan. A `usb-host` that cannot claim its device would otherwise sit in
+  every boot, and a saved suspend state that contains one cannot be loaded by a boot plan that does not
+  create it, which is why stop and suspend return every device first.
+- `device_add usb-host` succeeds even when libusb cannot open the device: QEMU keeps it pending and
+  retries. Veil therefore reads QEMU's `attached` property and removes a device that never attached, so
+  the switch never shows "connected" for something Windows cannot see.
+- Bus and address pin the exact device; vendor and product are matched too, so a re-used address
+  cannot hand Windows a different device. libusb on macOS numbers the bus as the top byte of the
+  location ID and takes the address from `GetDeviceAddress`, which is what `hostbus`/`hostaddr` match.
+- Only ids with the `veil-usb-` prefix are ever removed, so the boot plan's keyboard, tablet, network
+  adapter, and install media cannot be detached from the menu. Ids encode the device, so the menu
+  recovers the state of a running VM after Veil restarts, and a Veil device whose Mac device has gone
+  (unplugged or re-enumerated) is removed on the next refresh instead of waiting forever.
+- The controller is the boot plan's `qemu-xhci,id=usb0,p2=8,p3=8`: 16 ports, of which the boot plan
+  uses at most seven (keyboard, tablet, `usb-net`, installer, answer file, driver media, `usb-audio`).
+  A full bus comes back as QEMU's own error.
+
+What works without any entitlement is a device no macOS driver has matched, such as many development
+boards, programmers, and vendor-class dongles. A keyboard, mouse, disk, or audio device is held by a
+macOS driver; attaching it fails with an explanation naming the missing entitlement. The UI still warns
+before handing over an input device (the Mac stops receiving its input) or a disk (its volumes leave the
+Mac; eject first), because a Veil signed with `com.apple.vm.device-access` would capture them.
+
+Entitlements, checked against Apple's documentation on 2026-11-05:
+
+- [`com.apple.security.device.usb`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.device.usb)
+  is an App Sandbox entitlement ("allow your sandboxed app to interact with USB devices"). Veil and its
+  bundled QEMU are not sandboxed, so it changes nothing and is not added.
+- [`com.apple.vm.device-access`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.vm.device-access)
+  is "required to use the IOUSBHost APIs for USB device capture", and it is what libusb checks before
+  detaching a macOS driver. It is not added: Veil has no Apple grant for it. UTM is the reference
+  here: its signed build's [`macOS.entitlements`](https://github.com/utmapp/UTM/blob/main/Platform/macOS/macOS.entitlements)
+  claims `com.apple.vm.device-access` and `com.apple.vm.networking`, while its
+  [`macOS-unsigned.entitlements`](https://github.com/utmapp/UTM/blob/main/Platform/macOS/macOS-unsigned.entitlements)
+  leaves both out. Veil is in the unsigned position until it has that grant.
+- The [Hardened Runtime](https://developer.apple.com/documentation/security/hardened-runtime) the
+  release signature enables has no USB or IOKit resource-access exception; it does not block opening a
+  driverless device as the logged-in user.
 
 Current scaffold status:
 

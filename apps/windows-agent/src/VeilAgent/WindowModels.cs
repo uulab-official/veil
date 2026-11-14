@@ -9,7 +9,19 @@ public sealed record WindowsAppDescriptor(
     string Publisher,
     string IconId,
     string[]? AlternateExecutables = null,
-    TimeSpan? WindowDiscoveryTimeoutOverride = null
+    TimeSpan? WindowDiscoveryTimeoutOverride = null,
+    // Packaged inbox apps launch through an execution alias stub whose own icon is a generic window; the
+    // AppUserModelID lets the icon come from the package instead.
+    string? AppUserModelId = null,
+    // Start menu entries (see StartMenuCatalog). A shortcut carries its own command-line arguments and start
+    // folder, which launching only the target executable would lose.
+    string? ShortcutArguments = null,
+    string? WorkingDirectory = null,
+    // Set for a packaged Start menu app: it is activated by AppUserModelID instead of started from an
+    // executable, and its windows are matched by that id because they can belong to ApplicationFrameHost.exe.
+    string? LaunchAumid = null,
+    // The Start menu folder the entry sits in, relative to Programs, for grouping on the Mac.
+    string? Folder = null
 )
 {
     /// <summary>
@@ -28,7 +40,14 @@ public sealed record LaunchedWindow(
     string Title,
     WindowRect Bounds,
     string State,
-    bool Focused
+    bool Focused,
+    // A window without a title bar, such as Paint's text formatting bar, a menu, or a tooltip. The host
+    // shows it as a borderless overlay on its owner instead of as a Mac window of its own.
+    bool IsPopup = false,
+    // The window Windows says owns this one, when there is one.
+    string? OwnerWindowId = null,
+    // False for a window Windows does not let the user resize, such as a dialog or Character Map.
+    bool Resizable = true
 );
 
 public sealed record WindowFrame(
@@ -47,8 +66,20 @@ public sealed record WindowMouseInput(
     string Event,
     int X,
     int Y,
-    IReadOnlyList<string> Modifiers
+    IReadOnlyList<string> Modifiers,
+    // Scroll amounts in wheel units, 120 per notch, positive up and right as Windows counts them. A scroll
+    // with neither set is one notch up, the original behavior.
+    int DeltaX = 0,
+    int DeltaY = 0
 );
+
+/// <summary>
+/// A cursor position in the 0...32767 absolute range QEMU's USB tablet reports on both axes.
+/// </summary>
+public sealed record GuestPointerPosition(int X, int Y)
+{
+    public const int MaximumAbsolute = 32_767;
+}
 
 public sealed record WindowKeyInput(
     string WindowId,
@@ -66,9 +97,14 @@ public sealed record WindowKeyInput(
 /// outside the virtual key map -- every Hangul syllable, kana, and Han character. The macOS host owns
 /// the IME and sends only finished text, so this record never carries in-progress composition.
 /// </remarks>
+/// <param name="ReplaceLength">
+/// Characters to delete, one Backspace each, before typing <paramref name="Text"/>: the part of an open
+/// host IME composition that changed (<c>input.text</c> with <c>replaceLength</c>).
+/// </param>
 public sealed record WindowTextInput(
     string WindowId,
-    string Text
+    string Text,
+    int ReplaceLength = 0
 );
 
 public sealed record WindowResizeInput(
@@ -76,6 +112,10 @@ public sealed record WindowResizeInput(
     int Width,
     int Height
 );
+
+public sealed record DisplayResizeInput(int Width, int Height);
+
+public sealed record DisplayResizeResult(int Width, int Height);
 
 /// <summary>
 /// Outcome of one capture tick: either a frame to send, or proof that nothing changed.
@@ -137,5 +177,7 @@ public sealed record WindowFrameTile(
     double Scale,
     bool IsKeyFrame,
     WindowFrameTileRect Rect,
-    string EncodedData
+    string EncodedData,
+    // How EncodedData is encoded; see FrameChannelCodec.PngFormat and BgraDeflateFormat.
+    byte PayloadFormat = FrameChannelCodec.PngFormat
 );

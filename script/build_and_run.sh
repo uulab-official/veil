@@ -26,12 +26,52 @@ pkill -x "$APP_EXECUTABLE" >/dev/null 2>&1 || true
 
 swift build --package-path "$PACKAGE_DIR" --product "$APP_EXECUTABLE"
 BUILD_BINARY="$(swift build --package-path "$PACKAGE_DIR" --show-bin-path)/$APP_EXECUTABLE"
+# The program inside every Windows app launcher Veil writes to ~/Applications/Veil Apps.
+swift build --package-path "$PACKAGE_DIR" --product veil-app-launcher
+LAUNCHER_BINARY="$(swift build --package-path "$PACKAGE_DIR" --show-bin-path)/veil-app-launcher"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
+mkdir -p "$APP_CONTENTS/Helpers"
+cp "$LAUNCHER_BINARY" "$APP_CONTENTS/Helpers/veil-app-launcher"
+chmod +x "$APP_CONTENTS/Helpers/veil-app-launcher"
 swift "$ROOT_DIR/script/generate_app_icon.swift" "$APP_ICON"
+# UI translations; SwiftUI looks string literals up in these Localizable.strings tables.
+cp -R "$ROOT_DIR/apps/mac-host/Resources/"*.lproj "$APP_RESOURCES/"
+# Shortcuts and Siri list Veil's App Intents only when the bundle carries Metadata.appintents, which
+# `swift build` does not produce on its own. A development build still runs without it, so warn rather than stop.
+"$ROOT_DIR/script/extract_app_intents_metadata.sh" debug "$BUILD_BINARY" "$APP_RESOURCES" \
+  || echo "warning: Veil was built without App Intents metadata; its actions will not appear in Shortcuts." >&2
+
+# Ship the Windows engine (QEMU, swtpm, Secure Boot firmware) inside the app. Bundling relinks and
+# re-signs ~30 libraries, so the result is cached until the script or the source binaries change.
+# Set VEIL_SKIP_ENGINE_BUNDLE=1 to build without it; Veil then looks for Homebrew's QEMU.
+if [[ "${VEIL_SKIP_ENGINE_BUNDLE:-0}" != "1" ]]; then
+  ENGINE_CACHE="$DIST_DIR/.engine-runtime"
+  brew_prefix="$(brew --prefix 2>/dev/null || true)"
+  engine_stamp="$(shasum "$ROOT_DIR/script/bundle_qemu_runtime.sh" "$ROOT_DIR/script/build_secure_firmware.sh" "$ROOT_DIR/script/build_patched_qemu.sh" "$ROOT_DIR"/script/qemu-patches/*.patch | cut -c1-16 | tr '\n' ' ')$(readlink -f "$brew_prefix/bin/qemu-system-aarch64" 2>/dev/null || true) $(readlink -f "$brew_prefix/bin/swtpm" 2>/dev/null || true)"
+  if [[ "$(cat "$ENGINE_CACHE/.stamp" 2>/dev/null || true)" != "$engine_stamp" ]]; then
+    if "$ROOT_DIR/script/bundle_qemu_runtime.sh" "$ENGINE_CACHE" >/dev/null; then
+      echo "$engine_stamp" >"$ENGINE_CACHE/.stamp"
+    else
+      rm -rf "$ENGINE_CACHE"
+      echo "warning: Veil was built without its Windows engine; it will look for Homebrew's QEMU instead." >&2
+    fi
+  fi
+  if [[ -f "$ENGINE_CACHE/.stamp" ]]; then
+    ditto "$ENGINE_CACHE" "$APP_RESOURCES/Runtime"
+    rm -f "$APP_RESOURCES/Runtime/.stamp"
+  fi
+fi
+
+# Ship the Windows guest tools so Veil installs and updates them without this repository.
+# Without the .NET 8 SDK the app falls back to the repository's apps/windows-agent folder.
+if [[ "${VEIL_SKIP_WINDOWS_AGENT_BUNDLE:-0}" != "1" ]]; then
+  PATH="$HOME/.dotnet:$PATH" "$ROOT_DIR/script/bundle_windows_agent.sh" "$APP_RESOURCES" >/dev/null \
+    || echo "warning: Veil was built without its Windows tools; install the .NET 8 SDK to bundle them." >&2
+fi
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -44,6 +84,13 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
   <string>$BUNDLE_NAME</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>ko</string>
+  </array>
   <key>CFBundleIconFile</key>
   <string>VeilAppIcon</string>
   <key>CFBundleShortVersionString</key>
@@ -60,6 +107,20 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <!-- veil:// URLs; see docs/protocol.md "Mac Integration URLs". -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>org.uulab.veil.open</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>veil</string>
+      </array>
+    </dict>
+  </array>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Windows apps in Veil can use your microphone, for example in calls or voice recording.</string>
 </dict>
 </plist>
 PLIST
@@ -70,10 +131,19 @@ PLIST
 # quarantine marker before signing; do not remove any other extended attributes.
 xattr -dr com.apple.quarantine "$APP_BUNDLE" 2>/dev/null || true
 
+# Sparkle is linked into Veil even though a development build never updates itself (it has no feed).
+"$ROOT_DIR/script/embed_sparkle.sh" "$APP_BUNDLE" "$(swift build --package-path "$PACKAGE_DIR" --show-bin-path)" -
+
+codesign --force --sign - "$APP_CONTENTS/Helpers/veil-app-launcher" >/dev/null
 codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BINARY" >/dev/null
 codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BUNDLE" >/dev/null
 
 open_app() {
+  # VEIL_LAUNCH_IN_BACKGROUND=1 relaunches without taking the Mac over: no activation, windows behind.
+  if [[ "${VEIL_LAUNCH_IN_BACKGROUND:-0}" == "1" ]]; then
+    /usr/bin/open -g -n "$APP_BUNDLE" --args -VeilLaunchInBackground "$@"
+    return
+  fi
   /usr/bin/open -n "$APP_BUNDLE" --args "$@"
 }
 

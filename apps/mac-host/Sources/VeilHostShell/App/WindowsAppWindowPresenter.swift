@@ -5,16 +5,38 @@ import VeilHostCore
 
 @MainActor
 final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
-    private var windowsById: [String: NSWindow] = [:]
     private var windowOrder: [String] = []
     private var suppressedCloseWindowIds: Set<String> = []
+    private var identitiesById: [String: WindowsAppWindowIdentity] = [:]
+    /// Windows that have shown at least one frame. Only these are paused while the desktop hides them.
+    private var windowsWithFirstFrame: Set<String> = []
+    private var otherWindowKeyObserver: NSObjectProtocol?
+#if DEBUG
+    private var debugCommandObserver: NSObjectProtocol?
+#endif
+    /// When each zooming window's animation ends. Guest updates arriving before then must not touch the frame.
+    private var zoomEndsAt: [String: Date] = [:]
+    /// When each window last reported a size during a live resize, so the guest follows without being flooded.
+    private var lastLiveResizeReportAt: [String: Date] = [:]
+    /// How often a window being dragged to a new size tells Windows to follow.
+    private static let liveResizeReportInterval: TimeInterval = 0.12
     private(set) var foregroundWindowId: String?
+    /// Whether the full Windows desktop is showing instead, which keeps every mirrored window off screen.
+    private(set) var isHiddenForDesktop = false
+    /// Windows that were in the Dock when the desktop took over, so returning puts them back there.
+    private var minimizedBeforeDesktop: Set<String> = []
 
     var onUserWindowClose: ((String) -> Void)?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
+    /// Window id, guest x and y, and scroll amounts in Windows wheel units (x right, y up).
+    var onScrollInput: ((String, Int, Int, Int, Int, [String]) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
-    var onTextInput: ((String, String) -> Void)?
-    var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
+    var onTextInput: ((String, String, Int) -> Void)?
+    /// Whether the agent can show an open IME composition (`capabilities.textComposition`).
+    var textCompositionSupported: (() -> Bool)?
+    /// Whether keys go to Windows by position for the Windows IME to compose (`capabilities.imeMode`).
+    var keysPassThrough: (() -> Bool)?
+    var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
     /// `(appId, windowId, fileName, contentBase64)`. Carries the window id so a failure that only Windows
     /// can report can still be shown on the window the file was dropped onto.
     var onFileDrop: ((String, String, String, String) -> Void)?
@@ -24,16 +46,57 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     /// Reads the composited surface for a window. Supplied by the app, which owns the model that owns the
     /// compositor.
     var compositedImageProvider: ((String) -> CGImage?)?
+    /// Reads the model's current session for a window. The hosting view is rebuilt only when a frame or
+    /// window update arrives, so without this the stream badge would judge liveness from that snapshot and
+    /// call an idle window paused even while `window.frame.unchanged` heartbeats keep it fresh.
+    var sessionProvider: ((String) -> WindowMirrorSession?)?
+    /// Resolves the current app identity for window chrome. The catalog can refresh after reconnects, so
+    /// this is deliberately a provider rather than a snapshot held by the presenter.
+    var appIdentityProvider: ((String) -> WindowsAppWindowIdentity)?
+    /// Apps a window arrived for before the app list knew them. Each gets one app list refresh.
+    var appIdsAwaitingIdentity: Set<String> = []
     var onRestartFrameStream: ((String) -> Void)?
     /// `(windowId, isVisible)`. Fires when a mirrored window is minimized or restored, so frame streaming can
     /// stop for a window that cannot show anything.
     var onWindowVisibilityChange: ((String, Bool) -> Void)?
     /// `(windowId, contentWidth, contentHeight)`. Fires once after the user finishes resizing a mirrored
     /// window so the real Windows HWND can follow without sending one request per drag event.
-    var onWindowResize: ((String, Int, Int) -> Void)?
+    /// Window id, content width and height in points, and the size of the Mac screen the window is on.
+    var onWindowResize: ((String, Int, Int, CGSize?) -> Void)?
+    /// A mirrored window became the Mac's key window.
+    var onWindowBecameKey: ((String) -> Void)?
+    /// Where a mirrored window's content sits on its screen, both in screen points, after it moved or
+    /// changed size; the guest window is moved to match (`window.move.request`).
+    var onWindowPlacement: ((String, CGRect, CGRect) -> Void)?
 
     var visibleWindowIds: [String] {
         windowOrder.filter { windowsById[$0] != nil }
+    }
+
+    /// Presses the Windows Hangul key in the mirrored window that is key on the Mac, if one is.
+    func pressWindowsHangulKeyInKeyWindow() {
+        guard let keyWindow = NSApp.keyWindow,
+              let windowId = keyWindow.identifier?.rawValue,
+              windowsById[windowId] === keyWindow else {
+            return
+        }
+        WindowsHangulKey.press(windowId: windowId, send: onKeyInput)
+    }
+
+    /// Fires after a mirrored window is created or removed, on whatever path did it, so the Veil window can
+    /// hide behind the apps or come back. A relaunch reattaches windows without the launch path that used to
+    /// hide it, which left the Veil window up behind the app.
+    var onMirroredWindowsChanged: (() -> Void)?
+
+    private var windowsById: [String: NSWindow] = [:] {
+        didSet {
+            guard Set(windowsById.keys) != Set(oldValue.keys) else {
+                return
+            }
+            DispatchQueue.main.async { [weak self] in
+                self?.onMirroredWindowsChanged?()
+            }
+        }
     }
 
     /// Presents a mirrored window, creating it if needed.
@@ -44,9 +107,24 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     ///   background window steal focus from whatever the user is actually working in. Only a
     ///   deliberate launch, restore, or focus action should raise a window that already exists.
     ///   Newly created windows are always raised, since an app the user just opened has to appear.
-    func showWindow(for session: WindowMirrorSession, bringToFront: Bool = false) {
+    /// - Parameter activatesApplication: False for a window Windows opened while the person is working in
+    ///   another Mac app. The window comes to the front of Veil's windows without taking the keyboard.
+    func showWindow(
+        for session: WindowMirrorSession,
+        bringToFront: Bool = false,
+        activatesApplication: Bool = true
+    ) {
+        if session.latestFrame != nil {
+            windowsWithFirstFrame.insert(session.id)
+        }
         if let window = windowsById[session.id] {
-            updateExistingWindow(window, for: session, bringToFront: bringToFront)
+            // The desktop shows this app already; raising its Mac window would put it on screen twice.
+            updateExistingWindow(
+                window,
+                for: session,
+                bringToFront: bringToFront && !isHiddenForDesktop,
+                activatesApplication: activatesApplication
+            )
             return
         }
 
@@ -58,9 +136,18 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         //
         // Placement below cascades off `windowsById.count`, so window two does not land exactly on
         // top of window one.
+        if session.window.isPopup {
+            showPopup(for: session)
+            return
+        }
+
         let window = NSWindow(
-            contentRect: frame(for: session.window.bounds, existingWindowCount: windowsById.count),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            contentRect: frame(for: session.window.bounds, existingWindowCount: windowsById.count, windowId: session.id),
+            // A window Windows keeps at one size, such as Character Map, has no resize edges on the Mac
+            // either. Dragging them would only uncover an empty frame around the app.
+            styleMask: session.window.isResizable
+                ? [.titled, .closable, .miniaturizable, .resizable]
+                : [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
@@ -72,7 +159,171 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             for: session
         )
         windowsById[session.id] = window
-        present(window, windowId: session.id)
+        guard !isHiddenForDesktop else {
+            // Opened while the desktop shows Windows: kept off screen until apps mode returns. Its stream keeps
+            // running until the first frame arrives: Veil opens on the desktop while the app connection comes
+            // up and returns to apps mode on that first frame, so pausing here left every window hidden.
+            rememberWindowId(session.id)
+            if session.latestFrame != nil {
+                onWindowVisibilityChange?(session.id, false)
+            }
+            return
+        }
+        present(window, windowId: session.id, activatesApplication: activatesApplication)
+    }
+
+    /// Applies the app list's names and icons to windows that opened before the list knew their app.
+    func refreshIdentities() {
+        for (windowId, window) in windowsById {
+            guard let appId = identitiesById[windowId]?.appId,
+                  let identity = appIdentityProvider?(appId),
+                  identity != identitiesById[windowId] else {
+                continue
+            }
+            identitiesById[windowId] = identity
+            window.miniwindowImage = WindowsAppDockIcon.image(for: identity)
+            if foregroundWindowId == windowId, window.isKeyWindow {
+                WindowsAppDockIcon.showInDock(identity)
+            }
+        }
+    }
+
+    /// Shows a Windows popup, such as Paint's text formatting bar or a menu, the way it looks in Windows: a
+    /// borderless, transparent overlay at its place on the owning app window, moving with that window, and
+    /// never taking key focus from it. As an ordinary Mac window it had a shadow, rounded corners, and a black
+    /// slab wherever the popup's own window is transparent.
+    private func showPopup(for session: WindowMirrorSession) {
+        let owner = popupOwner(for: session)
+        let panel = NSPanel(
+            contentRect: popupFrame(for: session, owner: owner),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.identifier = NSUserInterfaceItemIdentifier(session.id)
+        panel.delegate = self
+        panel.isReleasedWhenClosed = false
+        panel.hidesOnDeactivate = false
+        panel.becomesKeyOnlyIfNeeded = true
+        configurePopup(panel, for: session)
+        panel.contentView = hostingView(for: session)
+        windowsById[session.id] = panel
+        rememberWindowId(session.id)
+        guard !isHiddenForDesktop else {
+            if session.latestFrame != nil {
+                onWindowVisibilityChange?(session.id, false)
+            }
+            return
+        }
+
+        if let owner {
+            owner.addChildWindow(panel, ordered: .above)
+        }
+        panel.orderFront(nil)
+    }
+
+    private func configurePopup(_ panel: NSWindow, for session: WindowMirrorSession) {
+        panel.title = session.window.title
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.collectionBehavior = [.managed, .fullScreenAuxiliary]
+    }
+
+    /// The window a popup belongs to: the one Windows names as its owner, or else the front window of the same
+    /// app, since some popups are owned by a hidden helper window rather than the app window the user sees.
+    private func popupOwner(for session: WindowMirrorSession) -> NSWindow? {
+        if let ownerWindowId = session.window.ownerWindowId,
+           let owner = windowsById[ownerWindowId],
+           !(owner is NSPanel) {
+            return owner
+        }
+
+        return visibleWindowIds.reversed().lazy.compactMap { windowId -> NSWindow? in
+            guard windowId != session.id,
+                  let window = self.windowsById[windowId],
+                  !(window is NSPanel),
+                  self.sessionProvider?(windowId)?.window.appId == session.window.appId else {
+                return nil
+            }
+            return window
+        }.first
+    }
+
+    /// Places the popup at the same offset from its owner's top-left as in Windows. Mirrored windows draw the
+    /// guest bitmap unscaled from their top-left, so guest logical units and Mac points line up.
+    private func popupFrame(for session: WindowMirrorSession, owner: NSWindow?) -> NSRect {
+        let bounds = session.window.bounds
+        let size = NSSize(width: max(1, bounds.width), height: max(1, bounds.height))
+        guard let owner,
+              let ownerId = owner.identifier?.rawValue,
+              let ownerBounds = sessionProvider?(ownerId)?.window.bounds else {
+            let fallback = frame(for: bounds, existingWindowCount: windowsById.count)
+            return NSRect(origin: fallback.origin, size: size)
+        }
+
+        let ownerFrame = owner.frame
+        let left = ownerFrame.minX + CGFloat(bounds.x - ownerBounds.x)
+        let top = ownerFrame.maxY - CGFloat(bounds.y - ownerBounds.y)
+        return NSRect(x: left, y: top - size.height, width: size.width, height: size.height)
+    }
+
+    /// Takes every mirrored window off screen while the full Windows desktop is shown, the way Parallels
+    /// leaves Coherence. Windows stay open in the guest; only their frame streams pause, through the same
+    /// path minimizing uses. Minimized windows leave the Dock too, so one cannot be restored behind the
+    /// desktop's back, and they are remembered so `showAllAfterDesktop()` puts them back there.
+    func hideAllForDesktop() {
+        guard !isHiddenForDesktop else {
+            return
+        }
+        isHiddenForDesktop = true
+
+        for windowId in visibleWindowIds {
+            guard let window = windowsById[windowId] else {
+                continue
+            }
+            if window.isMiniaturized {
+                // Already paused when it was minimized.
+                minimizedBeforeDesktop.insert(windowId)
+            } else if windowsWithFirstFrame.contains(windowId) {
+                // A window still waiting for its first frame keeps streaming; see `showWindow`.
+                onWindowVisibilityChange?(windowId, false)
+            }
+            window.orderOut(nil)
+        }
+    }
+
+    /// Brings back the windows `hideAllForDesktop()` took off screen, in their previous stacking order, and
+    /// resumes their frame streams. Windows that were minimized go back to the Dock still paused.
+    func showAllAfterDesktop() {
+        guard isHiddenForDesktop else {
+            return
+        }
+        isHiddenForDesktop = false
+        let minimized = minimizedBeforeDesktop
+        minimizedBeforeDesktop.removeAll()
+
+        for windowId in visibleWindowIds {
+            guard let window = windowsById[windowId] else {
+                continue
+            }
+            if minimized.contains(windowId) {
+                window.miniaturize(nil)
+            } else {
+                window.orderFront(nil)
+                onWindowVisibilityChange?(windowId, true)
+            }
+        }
+        if let front = visibleWindowIds.last(where: { !minimized.contains($0) }),
+           let window = windowsById[front] {
+            window.makeKeyAndOrderFront(nil)
+            foregroundWindowId = front
+        }
+    }
+
+    /// Whether a mirrored window is actually on screen, as opposed to tracked but hidden or minimized.
+    func isWindowOnScreen(windowId: String) -> Bool {
+        windowsById[windowId]?.isVisible == true
     }
 
     func closeAll() {
@@ -82,7 +333,11 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         }
         windowsById.removeAll()
         windowOrder.removeAll()
+        identitiesById.removeAll()
+        windowsWithFirstFrame.removeAll()
         foregroundWindowId = nil
+        minimizedBeforeDesktop.removeAll()
+        WindowsAppDockIcon.showInDock(nil)
     }
 
     func closeWindow(windowId: String, suppressWindowCloseCallback: Bool = true) {
@@ -99,7 +354,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     }
 
     func bringAllToFront() {
-        guard !windowsById.isEmpty else {
+        guard !windowsById.isEmpty, !isHiddenForDesktop else {
             return
         }
 
@@ -109,7 +364,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             }
         }
         foregroundWindowId = visibleWindowIds.last
-        NSApp.activate(ignoringOtherApps: true)
+        QuietLaunch.activateApplication()
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -135,6 +390,197 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
         rememberWindowId(windowId)
         foregroundWindowId = windowId
+        WindowsAppDockIcon.showInDock(identitiesById[windowId])
+        observeOtherWindowsBecomingKey()
+        onWindowBecameKey?(windowId)
+    }
+
+#if DEBUG
+    /// Development builds only: lets a script drive the front mirrored window without touching the user's
+    /// mouse, for checking zoom and resize behavior against a live guest.
+    /// `zoom` and `minimize` use the same AppKit paths as the Windows caption buttons; `resize` steps the
+    /// window to `width` x `height` the way an edge drag reports sizes while it moves.
+    func installDebugCommandObserver() {
+        guard debugCommandObserver == nil else {
+            return
+        }
+        debugCommandObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("org.uulab.veil.debug.mirroredWindow"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let action = notification.userInfo?["action"] as? String
+            let width = (notification.userInfo?["width"] as? String).flatMap(Double.init)
+            let height = (notification.userInfo?["height"] as? String).flatMap(Double.init)
+            MainActor.assumeIsolated {
+                if action == "dump-icons" {
+                    Self.dumpDebugIcons(window: self?.foregroundWindowId.flatMap { self?.windowsById[$0] })
+                    return
+                }
+                self?.performDebugCommand(action: action, width: width, height: height)
+            }
+        }
+    }
+
+    private static func inputCaptureView(in view: NSView) -> InputCaptureNSView? {
+        if let inputView = view as? InputCaptureNSView {
+            return inputView
+        }
+        return view.subviews.lazy.compactMap(inputCaptureView(in:)).first
+    }
+
+    /// Delivered straight to the input view rather than through `NSWindow.sendEvent`, which would first
+    /// activate Veil and take focus from whatever the user is working in.
+    private static func postDebugMouseEvent(_ type: NSEvent.EventType, at point: NSPoint, in window: NSWindow) {
+        guard let contentView = window.contentView,
+              let inputView = contentView.hitTest(point) as? InputCaptureNSView,
+              let event = NSEvent.mouseEvent(
+            with: type,
+            location: point,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: type == .leftMouseUp ? 0 : 1
+        ) else {
+            return
+        }
+        switch type {
+        case .leftMouseDown:
+            inputView.mouseDown(with: event)
+        case .leftMouseDragged:
+            inputView.mouseDragged(with: event)
+        default:
+            inputView.mouseUp(with: event)
+        }
+    }
+
+    /// Writes the current Dock icon and the front window's minimized icon as PNGs to the temporary directory,
+    /// since neither can be screenshotted without capturing the user's whole screen.
+    private static func dumpDebugIcons(window: NSWindow?) {
+        let directory = FileManager.default.temporaryDirectory
+        let images: [(String, NSImage?)] = [
+            ("veil-dock-icon.png", NSApp.applicationIconImage),
+            ("veil-miniwindow-icon.png", window?.miniwindowImage)
+        ]
+        for (name, image) in images {
+            guard let image,
+                  let tiff = image.tiffRepresentation,
+                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
+                continue
+            }
+            try? png.write(to: directory.appendingPathComponent(name))
+        }
+        VeilLog.window.notice("Debug icons written to \(directory.path, privacy: .public)")
+    }
+
+    private func performDebugCommand(action: String?, width: Double?, height: Double?) {
+        guard let windowId = foregroundWindowId ?? visibleWindowIds.last,
+              let window = windowsById[windowId] else {
+            return
+        }
+        VeilLog.window.notice("Debug command \(action ?? "nil", privacy: .public) on \(windowId, privacy: .public)")
+
+        switch action {
+        case "zoom":
+            window.performZoom(nil)
+        case "minimize":
+            window.performMiniaturize(nil)
+        case "restore":
+            MacWindowRestorePolicy.restoreToFront(window)
+        case "draw":
+            // A stroke across the middle of the window, delivered as real AppKit events to the window so it
+            // takes the same hit-testing and input path as the user's mouse.
+            guard let contentView = window.contentView else {
+                return
+            }
+            let bounds = contentView.bounds
+            let points = (0...20).map { step in
+                NSPoint(
+                    x: bounds.midX - 120 + Double(step) * 12,
+                    y: bounds.midY + 40 * sin(Double(step) / 3)
+                )
+            }
+            Task { @MainActor in
+                for (index, point) in points.enumerated() {
+                    let type: NSEvent.EventType = index == 0 ? .leftMouseDown : .leftMouseDragged
+                    Self.postDebugMouseEvent(type, at: point, in: window)
+                    try? await Task.sleep(for: .milliseconds(30))
+                }
+                Self.postDebugMouseEvent(.leftMouseUp, at: points[points.count - 1], in: window)
+            }
+        case "scroll":
+            // Straight to the scroll callback at the window's center, so the user's pointer stays put.
+            guard let session = sessionProvider?(windowId) ?? nil,
+                  let frame = session.latestFrame else {
+                return
+            }
+            let deltaY = Int(height ?? -360)
+            Task { @MainActor in
+                for _ in 0..<12 {
+                    onScrollInput?(windowId, frame.width / 2, frame.height / 2, 0, deltaY / 12, [])
+                    try? await Task.sleep(for: .milliseconds(16))
+                }
+            }
+        case "undo":
+            if let event = NSEvent.keyEvent(
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: .command,
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber,
+                context: nil,
+                characters: "z",
+                charactersIgnoringModifiers: "z",
+                isARepeat: false,
+                keyCode: 6
+            ),
+               let inputView = window.contentView.flatMap(Self.inputCaptureView(in:)) {
+                _ = inputView.performKeyEquivalent(with: event)
+            }
+        case "resize":
+            guard let width, let height, let contentView = window.contentView else {
+                return
+            }
+            let start = contentView.bounds.size
+            Task { @MainActor in
+                let steps = 10
+                for step in 1...steps {
+                    let fraction = Double(step) / Double(steps)
+                    window.setContentSize(NSSize(
+                        width: start.width + (width - start.width) * fraction,
+                        height: start.height + (height - start.height) * fraction
+                    ))
+                    reportContentSize(contentView.bounds.size, windowId: windowId, screen: window.screen)
+                    try? await Task.sleep(for: .milliseconds(120))
+                }
+            }
+        default:
+            break
+        }
+    }
+#endif
+
+    /// Veil's own windows (the launcher, settings, the desktop) take the Dock icon back from a Windows app.
+    private func observeOtherWindowsBecomingKey() {
+        guard otherWindowKeyObserver == nil else {
+            return
+        }
+        otherWindowKeyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let windowId = (notification.object as? NSWindow)?.identifier?.rawValue
+            MainActor.assumeIsolated {
+                guard let self, windowId.map({ self.windowsById[$0] == nil }) ?? true else {
+                    return
+                }
+                WindowsAppDockIcon.showInDock(nil)
+            }
+        }
     }
 
     /// A minimized window shows nothing, so nothing should be produced for it.
@@ -171,21 +617,124 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             return
         }
 
-        // AppKit reports content dimensions in points. They intentionally map to the logical dimensions
-        // used by window.created/window.updated; the Windows agent applies its own per-monitor DPI when
-        // converting the request to physical pixels.
-        let size = contentView.bounds.size
+        lastLiveResizeReportAt[windowId] = nil
+        reportContentSize(contentView.bounds.size, windowId: windowId, screen: window.screen)
+        reportPlacement(of: window, windowId: windowId)
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              let windowId = window.identifier?.rawValue,
+              windowsById[windowId] != nil else {
+            return
+        }
+        // While the user drags, the Windows window stays where it is and the Mac window moves on its own, so
+        // the content keeps cropping the same guest pixels at the Mac's frame rate. Moving the guest window
+        // along made each step re-settle and fall back to once-a-second captures, which stuttered.
+        if MirroredWindowDrag.isDragging(window) {
+            guard !MirroredWindowDrag.isMouseButtonDown() else {
+                return
+            }
+            MirroredWindowDrag.end(window)
+        }
+        reportPlacement(of: window, windowId: windowId)
+    }
+
+    /// Every visible mirrored window's content frame and screen frame, for placing the guest windows after
+    /// the guest display or the connection changed.
+    func currentPlacements() -> [(windowId: String, contentFrame: CGRect, screenFrame: CGRect)] {
+        windowsById.compactMap { windowId, window in
+            guard window.isVisible, let contentView = window.contentView, let screen = window.screen else {
+                return nil
+            }
+            let content = window.convertToScreen(contentView.convert(contentView.bounds, to: nil))
+            return (windowId, content, screen.frame)
+        }
+    }
+
+    private func reportPlacement(of window: NSWindow, windowId: String) {
+        guard let contentView = window.contentView, let screen = window.screen else {
+            return
+        }
+        let content = window.convertToScreen(contentView.convert(contentView.bounds, to: nil))
+        onWindowPlacement?(windowId, content, screen.frame)
+    }
+
+    /// Keeps the Windows app resizing along with the Mac window while its edge is dragged, instead of
+    /// stretching the old bitmap until the drag ends, which is how Parallels Coherence windows behave.
+    func windowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window.inLiveResize,
+              let windowId = window.identifier?.rawValue,
+              windowsById[windowId] != nil,
+              let contentView = window.contentView else {
+            return
+        }
+
+        let now = Date()
+        if let last = lastLiveResizeReportAt[windowId],
+           now.timeIntervalSince(last) < Self.liveResizeReportInterval {
+            return
+        }
+        lastLiveResizeReportAt[windowId] = now
+        reportContentSize(contentView.bounds.size, windowId: windowId, screen: window.screen)
+        reportPlacement(of: window, windowId: windowId)
+    }
+
+    /// Zooming, from the Windows maximize button or a caption double-click, is not a live resize. The target
+    /// size is sent as the animation starts, so Windows redraws at the new size while the Mac window grows.
+    func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
+        guard let windowId = window.identifier?.rawValue,
+              windowsById[windowId] != nil else {
+            return true
+        }
+
+        zoomEndsAt[windowId] = Date().addingTimeInterval(window.animationResizeTime(newFrame) + 0.3)
+        reportContentSize(window.contentRect(forFrameRect: newFrame).size, windowId: windowId, screen: window.screen)
+        return true
+    }
+
+    /// AppKit reports content dimensions in points. They intentionally map to the logical dimensions used by
+    /// window.created/window.updated; the Windows agent applies its own per-monitor DPI when converting the
+    /// request to physical pixels.
+    private func reportContentSize(_ size: NSSize, windowId: String, screen: NSScreen?) {
         let width = Int(size.width.rounded())
         let height = Int(size.height.rounded())
         guard width > 0, height > 0 else {
             return
         }
 
-        onWindowResize?(windowId, width, height)
+        onWindowResize?(windowId, width, height, screen?.frame.size)
     }
 
-    private func present(_ window: NSWindow, windowId: String) {
+    /// Whether the user is resizing the window right now. Guest updates then leave its frame and shape alone:
+    /// pinning the frame from mid-animation snapped a zoomed window back to its old size.
+    private func isBeingResized(_ window: NSWindow, windowId: String) -> Bool {
+        if window.inLiveResize {
+            return true
+        }
+        guard let end = zoomEndsAt[windowId] else {
+            return false
+        }
+        if end > Date() {
+            return true
+        }
+        zoomEndsAt[windowId] = nil
+        return false
+    }
+
+    private func present(_ window: NSWindow, windowId: String, activatesApplication: Bool = true) {
         rememberWindowId(windowId)
+        if QuietLaunch.isActive {
+            foregroundWindowId = windowId
+            window.orderBack(nil)
+            return
+        }
+        guard activatesApplication else {
+            // Shown, but the app the person is typing in keeps the keyboard.
+            window.orderFront(nil)
+            return
+        }
         foregroundWindowId = windowId
         MacWindowRestorePolicy.restoreToFront(window)
         NSApp.activate(ignoringOtherApps: true)
@@ -194,14 +743,35 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private func updateExistingWindow(
         _ window: NSWindow,
         for session: WindowMirrorSession,
-        bringToFront: Bool
+        bringToFront: Bool,
+        activatesApplication: Bool = true
     ) {
+        if session.window.isPopup {
+            configurePopup(window, for: session)
+            if let existingView = window.contentView as? NSHostingView<WindowsAppMirrorView> {
+                existingView.rootView = mirrorView(for: session)
+            }
+            let owner = window.parent ?? popupOwner(for: session)
+            let target = popupFrame(for: session, owner: owner)
+            if !NSEqualRects(window.frame, target) {
+                window.setFrame(target, display: true, animate: false)
+            }
+            return
+        }
+
         let preservedFrame = window.frame
-        configure(window, for: session)
-        window.contentView = hostingView(
-            for: session
-        )
-        if !NSEqualRects(window.frame, preservedFrame) {
+        let isBeingResized = isBeingResized(window, windowId: session.id)
+        configure(window, for: session, appliesResizeConstraints: !isBeingResized)
+        // Every frame tile lands here. Building a new hosting view each time rebuilt the whole SwiftUI tree
+        // and the input view on the main thread, which held mouse events back about 200 ms apiece while an
+        // app was redrawing and could swap the input view out from under a drag. The existing hosting view
+        // only gets the new session.
+        if let existingView = window.contentView as? NSHostingView<WindowsAppMirrorView> {
+            existingView.rootView = mirrorView(for: session)
+        } else {
+            window.contentView = hostingView(for: session)
+        }
+        if !isBeingResized, !NSEqualRects(window.frame, preservedFrame) {
             window.setFrame(preservedFrame, display: true, animate: false)
         }
 
@@ -211,7 +781,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             return
         }
 
-        present(window, windowId: session.id)
+        present(window, windowId: session.id, activatesApplication: activatesApplication)
     }
 
     private func rememberWindowId(_ windowId: String) {
@@ -221,6 +791,14 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
     private func forgetWindowId(_ windowId: String) {
         windowOrder.removeAll { $0 == windowId }
+        minimizedBeforeDesktop.remove(windowId)
+        windowsWithFirstFrame.remove(windowId)
+        identitiesById[windowId] = nil
+        if windowsById.isEmpty {
+            WindowsAppDockIcon.showInDock(nil)
+        }
+        zoomEndsAt[windowId] = nil
+        lastLiveResizeReportAt[windowId] = nil
         if foregroundWindowId == windowId {
             foregroundWindowId = visibleWindowIds.last
         }
@@ -283,7 +861,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     /// Every case carries plain values and nothing else. That is the point: it can cross back to the main actor
     /// without dragging a closure or a SwiftUI view with it, which is what let the six separate main-actor hops
     /// this replaced collapse into one.
-    private enum DroppedFileOutcome: Sendable {
+    enum DroppedFileOutcome: Sendable, Equatable {
         case ready(fileName: String, contentBase64: String)
         case refused(WindowsAppFileDropRefusal)
     }
@@ -318,6 +896,12 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             return .refused(.unreadableItem)
         }
 
+        return droppedFileOutcome(forFileAt: url)
+    }
+
+    /// The same rules for a file named by URL rather than dragged: used when Finder opens Mac files with a
+    /// Windows app launcher, so both ways into a Windows app refuse and rename files identically.
+    nonisolated static func droppedFileOutcome(forFileAt url: URL) -> DroppedFileOutcome {
         let fileName = url.lastPathComponent
         let byteCount = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
 
@@ -358,94 +942,137 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
     private func hostingView(
         for session: WindowMirrorSession
     ) -> NSHostingView<WindowsAppMirrorView> {
-        NSHostingView(
-            rootView: WindowsAppMirrorView(
-                session: session,
-                onMouseInput: { [weak self] windowId, event, x, y in
-                    self?.onMouseInput?(windowId, event, x, y)
-                },
-                onKeyInput: { [weak self] windowId, event, key, windowsVirtualKey, modifiers in
-                    self?.onKeyInput?(windowId, event, key, windowsVirtualKey, modifiers)
-                },
-                onTextInput: { [weak self] windowId, text in
-                    self?.onTextInput?(windowId, text)
-                },
-                onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, text in
-                    self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, text)
-                },
-                onDropProviders: { [weak self] providers in
-                    self?.loadDroppedFiles(
-                        providers,
-                        windowId: session.id,
-                        appId: session.window.appId
-                    )
-                },
-                onDropRefused: { [weak self] refusal in
-                    self?.presentDropRefusal(refusal, windowId: session.id)
-                },
-                onRestartFrameStream: { [weak self] windowId in
-                    self?.onRestartFrameStream?(windowId)
-                },
-                compositedImageProvider: { [weak self] windowId in
-                    self?.compositedImageProvider?(windowId)
-                }
-            )
+        NSHostingView(rootView: mirrorView(for: session))
+    }
+
+    private func mirrorView(for session: WindowMirrorSession) -> WindowsAppMirrorView {
+        WindowsAppMirrorView(
+            session: session,
+            onMouseInput: { [weak self] windowId, event, x, y in
+                self?.onMouseInput?(windowId, event, x, y)
+            },
+            onScrollInput: { [weak self] windowId, x, y, deltaX, deltaY, modifiers in
+                self?.onScrollInput?(windowId, x, y, deltaX, deltaY, modifiers)
+            },
+            onKeyInput: { [weak self] windowId, event, key, windowsVirtualKey, modifiers in
+                self?.onKeyInput?(windowId, event, key, windowsVirtualKey, modifiers)
+            },
+            onTextInput: { [weak self] windowId, text, replaceLength in
+                self?.onTextInput?(windowId, text, replaceLength)
+            },
+            textCompositionSupported: { [weak self] in
+                self?.textCompositionSupported?() ?? false
+            },
+            keysPassThrough: { [weak self] in
+                self?.keysPassThrough?() ?? false
+            },
+            onPasteShortcut: { [weak self] windowId, key, windowsVirtualKey, modifiers, content in
+                self?.onPasteShortcut?(windowId, key, windowsVirtualKey, modifiers, content)
+            },
+            onDropProviders: { [weak self] providers in
+                self?.loadDroppedFiles(
+                    providers,
+                    windowId: session.id,
+                    appId: session.window.appId
+                )
+            },
+            onDropRefused: { [weak self] refusal in
+                self?.presentDropRefusal(refusal, windowId: session.id)
+            },
+            onRestartFrameStream: { [weak self] windowId in
+                self?.onRestartFrameStream?(windowId)
+            },
+            compositedImageProvider: { [weak self] windowId in
+                self?.compositedImageProvider?(windowId)
+            },
+            sessionProvider: { [weak self] windowId in
+                self?.sessionProvider?(windowId)
+            }
         )
     }
 
-    private func configure(_ window: NSWindow, for session: WindowMirrorSession) {
+    private func configure(
+        _ window: NSWindow,
+        for session: WindowMirrorSession,
+        appliesResizeConstraints: Bool = true
+    ) {
+        let identity = appIdentityProvider?(session.window.appId)
+            ?? WindowsAppWindowIdentity.resolve(appId: session.window.appId, apps: [])
         window.title = session.window.title
-        applyResizeConstraints(to: window, for: session)
+        if appliesResizeConstraints {
+            applyResizeConstraints(to: window, for: session)
+        }
         window.tabbingMode = .disallowed
         window.collectionBehavior = [.managed, .fullScreenPrimary]
         window.backgroundColor = .black
         window.isOpaque = true
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
+        // The guest bitmap already starts with the Windows app's own title bar, so that caption is the only
+        // one shown, as in Parallels Coherence. Stacking a macOS titlebar on top doubled the title and the
+        // window buttons. The Mac window stays `.titled` for its shadow, rounded corners, resizing, and the
+        // Window menu; the input view turns presses in the Windows caption into the matching Mac actions.
         window.styleMask.insert(.fullSizeContentView)
-        window.isMovableByWindowBackground = true
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = false
         window.toolbar = nil
+        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            window.standardWindowButton(button)?.isHidden = true
+        }
+        identitiesById[session.id] = identity
+        window.miniwindowImage = WindowsAppDockIcon.image(for: identity)
+        if foregroundWindowId == session.id, window.isKeyWindow {
+            WindowsAppDockIcon.showInDock(identity)
+        }
     }
 
-    /// Locks a mirrored window to the guest window's shape while the user resizes it.
-    ///
-    /// Veil cannot resize the Windows window — the protocol has no host-to-guest resize message — so dragging
-    /// a corner only changes how the guest's bitmap is presented. `WindowsAppFrameSurface` renders with
-    /// `scaledToFit` over black, so before this, any shape other than the guest's produced black letterbox
-    /// bars: the window grew and the app did not follow.
-    ///
-    /// Re-applied whenever guest bounds change, because the guest window really can be resized from inside
-    /// Windows, and the lock has to track it rather than pin the shape it had at launch.
+    /// Keeps a mirrored window at least as large as Windows allows, re-applied whenever guest bounds change.
     private func applyResizeConstraints(to window: NSWindow, for session: WindowMirrorSession) {
         let minimumSize = WindowsAppWindowPlacement.minimumContentSize(for: session.window.bounds)
         window.contentMinSize = NSSize(width: minimumSize.width, height: minimumSize.height)
 
-        guard let ratio = WindowsAppWindowPlacement.contentAspectRatio(for: session.window.bounds) else {
-            // A degenerate guest size would produce a ratio derived from nothing. Leaving the window freely
-            // resizable is better than locking it to a guess.
-            //
-            // `contentResizeIncrements`, not `resizeIncrements`: AppKit pairs content-space aspect ratio with
-            // content-space increments, and frame-space with frame-space. Clearing the wrong pair would leave
-            // a stale ratio from an earlier refresh in place.
-            window.contentResizeIncrements = NSSize(width: 1, height: 1)
-            return
-        }
-
-        window.contentAspectRatio = NSSize(width: ratio.width, height: ratio.height)
+        // Free resizing, like any Mac window. The guest window follows every size the Mac reports, and the
+        // frame surface draws content unscaled from the top-left while it catches up, so there is no stretched
+        // bitmap to protect with an aspect lock. Setting the increments is what clears an aspect ratio:
+        // `contentResizeIncrements` pairs with the content-space ratio a previous version of Veil set.
+        window.contentResizeIncrements = NSSize(width: 1, height: 1)
     }
 
-    private func frame(for bounds: WindowBounds, existingWindowCount: Int) -> NSRect {
+    /// Where a new Mac window goes: where its Windows window already is when the guest display stands for
+    /// this screen, and otherwise the middle of the screen, stepped aside for each window already open.
+    private func frame(for bounds: WindowBounds, existingWindowCount: Int, windowId: String? = nil) -> NSRect {
         let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let frame = WindowsAppWindowPlacement.initialFrame(
+        let visibleGeometry = HostVisibleFrameGeometry(
+            x: Double(visibleFrame.origin.x),
+            y: Double(visibleFrame.origin.y),
+            width: Double(visibleFrame.width),
+            height: Double(visibleFrame.height)
+        )
+        var frame = WindowsAppWindowPlacement.initialFrame(
             for: bounds,
-            visibleFrame: HostVisibleFrameGeometry(
-                x: Double(visibleFrame.origin.x),
-                y: Double(visibleFrame.origin.y),
-                width: Double(visibleFrame.width),
-                height: Double(visibleFrame.height)
-            ),
+            visibleFrame: visibleGeometry,
             existingWindowCount: existingWindowCount
         )
+        if let windowId,
+           let screen = NSScreen.main,
+           let layout = GuestWindowLayoutStore.shared.latest {
+            // The layout has the window's place now; the bounds are from when it was first reported.
+            let guestFrame = layout.windows.first { $0.windowId == windowId }?.frame
+                ?? GuestPixelRect(x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height)
+            if let matching = WindowsAppWindowPlacement.frameMatchingGuest(
+                guestFrame: guestFrame,
+                size: (frame.width, frame.height),
+                screenFrame: HostVisibleFrameGeometry(
+                    x: Double(screen.frame.origin.x),
+                    y: Double(screen.frame.origin.y),
+                    width: Double(screen.frame.width),
+                    height: Double(screen.frame.height)
+                ),
+                visibleFrame: visibleGeometry,
+                display: layout.display
+            ) {
+                frame = matching
+            }
+        }
 
         return NSRect(
             x: frame.x,
@@ -477,14 +1104,18 @@ enum MacWindowRestorePolicy {
 private struct WindowsAppMirrorView: View {
     var session: WindowMirrorSession
     var onMouseInput: (String, String, Int, Int) -> Void
+    var onScrollInput: (String, Int, Int, Int, Int, [String]) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
-    var onTextInput: (String, String) -> Void
-    var onPasteShortcut: (String, String, Int, [String], String) -> Void
+    var onTextInput: (String, String, Int) -> Void
+    var textCompositionSupported: () -> Bool
+    var keysPassThrough: () -> Bool
+    var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
     /// Called synchronously on the main actor with the accepted providers. Loading them is the presenter's job.
     var onDropProviders: ([NSItemProvider]) -> Void
     var onDropRefused: (WindowsAppFileDropRefusal) -> Void
     var onRestartFrameStream: (String) -> Void
     var compositedImageProvider: (String) -> CGImage?
+    var sessionProvider: (String) -> WindowMirrorSession?
     @State private var isTargetedForDrop = false
 
     var body: some View {
@@ -492,14 +1123,18 @@ private struct WindowsAppMirrorView: View {
             WindowsAppFrameSurface(
                 session: session,
                 restartFrameStreamAction: onRestartFrameStream,
-                compositedImageProvider: compositedImageProvider
+                compositedImageProvider: compositedImageProvider,
+                sessionProvider: sessionProvider
             )
 
             InputCaptureView(
                 session: session,
                 onMouseInput: onMouseInput,
+                onScrollInput: onScrollInput,
                 onKeyInput: onKeyInput,
                 onTextInput: onTextInput,
+                textCompositionSupported: textCompositionSupported,
+                keysPassThrough: keysPassThrough,
                 onPasteShortcut: onPasteShortcut
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -511,7 +1146,7 @@ private struct WindowsAppMirrorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
+        .background(session.window.isPopup ? Color.clear : Color.black)
         .ignoresSafeArea()
         .onDrop(of: [.fileURL], isTargeted: $isTargetedForDrop, perform: handleDrop)
     }
@@ -546,9 +1181,12 @@ private struct WindowsAppMirrorView: View {
 private struct InputCaptureView: NSViewRepresentable {
     var session: WindowMirrorSession
     var onMouseInput: (String, String, Int, Int) -> Void
+    var onScrollInput: (String, Int, Int, Int, Int, [String]) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
-    var onTextInput: (String, String) -> Void
-    var onPasteShortcut: (String, String, Int, [String], String) -> Void
+    var onTextInput: (String, String, Int) -> Void
+    var textCompositionSupported: () -> Bool
+    var keysPassThrough: () -> Bool
+    var onPasteShortcut: (String, String, Int, [String], HostPasteboardContent) -> Void
 
     func makeNSView(context: Context) -> InputCaptureNSView {
         InputCaptureNSView()
@@ -557,8 +1195,11 @@ private struct InputCaptureView: NSViewRepresentable {
     func updateNSView(_ nsView: InputCaptureNSView, context: Context) {
         nsView.session = session
         nsView.onMouseInput = onMouseInput
+        nsView.onScrollInput = onScrollInput
         nsView.onKeyInput = onKeyInput
         nsView.onTextInput = onTextInput
+        nsView.textCompositionSupported = textCompositionSupported
+        nsView.keysPassThrough = keysPassThrough
         nsView.onPasteShortcut = onPasteShortcut
     }
 }
@@ -566,14 +1207,21 @@ private struct InputCaptureView: NSViewRepresentable {
 private final class InputCaptureNSView: NSView {
     var session: WindowMirrorSession?
     var onMouseInput: ((String, String, Int, Int) -> Void)?
+    var onScrollInput: ((String, Int, Int, Int, Int, [String]) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
-    var onTextInput: ((String, String) -> Void)?
-    var onPasteShortcut: ((String, String, Int, [String], String) -> Void)?
+    var onTextInput: ((String, String, Int) -> Void)?
+    var textCompositionSupported: (() -> Bool)?
+    var keysPassThrough: (() -> Bool)?
+    var onPasteShortcut: ((String, String, Int, [String], HostPasteboardContent) -> Void)?
     private let keyboardMapper = MacKeyboardInputMapper()
     private let textInputRouter = MacTextInputRouter()
 
-    /// In-progress IME composition. The guest never sees this; only committed text is sent.
+    /// In-progress IME composition.
     private var markedText = ""
+
+    /// What of `markedText` the guest shows, when the agent can show a composition. Nil while it is drawn in
+    /// the overlay instead, for an agent without `textComposition`.
+    private var guestComposition: GuestTextComposition?
 
     /// Set when the current key press produced committed text.
     ///
@@ -582,7 +1230,21 @@ private final class InputCaptureNSView: NSView {
     /// but apps that act on key-up would fire twice for one keystroke.
     private var didCommitTextForCurrentKeyPress = false
 
+    /// A press in the Windows caption that has not yet turned into a window drag or a click.
+    private var captionPress: (region: WindowsCaptionRegion, mouseDown: NSEvent)?
+
+    /// How far a caption press travels before it becomes a window drag, matching a Windows drag threshold.
+    private static let captionDragThreshold: CGFloat = 4
+
     override var acceptsFirstResponder: Bool { true }
+
+    /// A click on a mirrored window or popup that is not key still reaches Windows, as it would there. Without
+    /// this the first click on a popup or a background app window only activated it and was lost.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    /// The macOS titlebar is hidden over this view, and AppKit would otherwise drag the window for any press
+    /// in that band before the Windows caption buttons under it ever saw the click.
+    override var mouseDownCanMoveWindow: Bool { false }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -597,7 +1259,8 @@ private final class InputCaptureNSView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        guard !markedText.isEmpty else {
+        // The guest shows the composition itself in the app's own text.
+        guard !markedText.isEmpty, guestComposition == nil else {
             return
         }
 
@@ -626,11 +1289,43 @@ private final class InputCaptureNSView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        send("leftDown", event)
+        endCompositionForPointer()
+        let region = captionRegion(for: event)
+        guard region != .content else {
+            send("leftDown", event)
+            return
+        }
+
+        if region == .caption, event.clickCount == 2 {
+            performCaptionDoubleClick()
+            return
+        }
+
+        // Held back until the press either moves (a window drag) or is released (a click), since a press on
+        // the caption cannot be both forwarded to Windows and turned into a Mac window drag.
+        captionPress = (region, event)
     }
 
     override func mouseUp(with event: NSEvent) {
-        send("leftUp", event)
+        guard let press = captionPress else {
+            send("leftUp", event)
+            return
+        }
+
+        captionPress = nil
+        VeilLog.window.notice("Caption click \(String(describing: press.region), privacy: .public)")
+        switch press.region {
+        case .closeButton:
+            window?.performClose(nil)
+        case .minimizeButton:
+            window?.performMiniaturize(nil)
+        case .maximizeButton:
+            window?.performZoom(nil)
+        case .caption, .content:
+            // Some apps put tabs or a search box in the caption, so a plain click still reaches Windows.
+            send("leftDown", press.mouseDown)
+            send("leftUp", event)
+        }
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -642,12 +1337,177 @@ private final class InputCaptureNSView: NSView {
         send("rightUp", event)
     }
 
+    /// Windows wheel units per point of precise (trackpad or Magic Mouse) scrolling. A notch of 120 scrolls
+    /// three lines, about 60 points, so 2 keeps content tracking the fingers.
+    static let wheelUnitsPerPoint = 2.0
+    /// Sub-unit scroll amounts carried to the next event so slow trackpad movement still scrolls.
+    private var scrollRemainder = (x: 0.0, y: 0.0)
+
+    /// Trackpad and wheel scrolling, sent with its amount so Windows scrolls as far and as smoothly as the
+    /// Mac gesture. macOS has already applied the user's natural-scrolling setting to these deltas.
+    override func scrollWheel(with event: NSEvent) {
+        guard let session,
+              session.connectionMode == .agent,
+              let point = guestPoint(for: event, session: session) else {
+            return
+        }
+
+        let unitsPerDelta = event.hasPreciseScrollingDeltas ? Self.wheelUnitsPerPoint : 120
+        let amount = WindowsScrollAmount.accumulate(
+            remainder: scrollRemainder,
+            scrollingDeltaX: Double(event.scrollingDeltaX),
+            scrollingDeltaY: Double(event.scrollingDeltaY),
+            unitsPerDelta: unitsPerDelta
+        )
+        scrollRemainder = amount.remainder
+        guard amount.deltaX != 0 || amount.deltaY != 0 else {
+            return
+        }
+        onScrollInput?(session.id, point.x, point.y, amount.deltaX, amount.deltaY, [])
+    }
+
+    /// Pinch progress not yet worth a whole Ctrl+wheel notch.
+    private var pinchRemainder = 0.0
+
+    /// Trackpad pinch, sent as Ctrl+wheel at the pinch location so Windows apps zoom there.
+    override func magnify(with event: NSEvent) {
+        guard let session,
+              session.connectionMode == .agent,
+              let point = guestPoint(for: event, session: session) else {
+            return
+        }
+
+        if event.phase == .began {
+            pinchRemainder = 0
+        }
+        let wheel = WindowsTrackpadGesture.pinchWheel(
+            remainder: pinchRemainder,
+            magnification: Double(event.magnification)
+        )
+        pinchRemainder = event.phase == .ended || event.phase == .cancelled ? 0 : wheel.remainder
+        guard wheel.deltaY != 0 else {
+            return
+        }
+        onScrollInput?(session.id, point.x, point.y, 0, wheel.deltaY, WindowsTrackpadGesture.pinchModifiers)
+    }
+
+    /// A page swipe, sent as the Windows browser Back or Forward key.
+    ///
+    /// AppKit delivers this for the three-finger page swipe ("Swipe between pages" set to three fingers, or
+    /// two or three). A two-finger horizontal swipe stays a horizontal scroll: Veil cannot tell whether the
+    /// Windows content is already at its edge, which is when a Mac browser turns it into navigation, and
+    /// Windows apps such as Excel and timelines need horizontal scrolling.
+    override func swipe(with event: NSEvent) {
+        guard let session,
+              session.connectionMode == .agent,
+              let navigation = WindowsTrackpadGesture.navigationKey(forSwipeDeltaX: Double(event.deltaX)) else {
+            return
+        }
+        onKeyInput?(session.id, "keyDown", navigation.key, navigation.windowsVirtualKey, [])
+        onKeyInput?(session.id, "keyUp", navigation.key, navigation.windowsVirtualKey, [])
+    }
+
+    /// Rotation has no input Windows apps share a meaning for, so it is consumed rather than passed on to
+    /// the Mac window.
+    override func rotate(with event: NSEvent) {}
+
     override func mouseDragged(with event: NSEvent) {
-        send("move", event)
+        guard let press = captionPress else {
+            send("move", event)
+            return
+        }
+
+        let start = press.mouseDown.locationInWindow
+        let current = event.locationInWindow
+        guard hypot(current.x - start.x, current.y - start.y) >= Self.captionDragThreshold else {
+            return
+        }
+
+        // The window server runs the drag from here until the button is released, with the usual macOS
+        // snapping and Space behavior, and the matching mouse-up never reaches this view.
+        captionPress = nil
+        VeilLog.window.notice("Caption drag from \(String(describing: press.region), privacy: .public)")
+        guard let window else {
+            return
+        }
+        MirroredWindowDrag.begin(window)
+        window.performDrag(with: event)
+        // The guest window follows once, where the drag ended. If the drag is still running here, the first
+        // move after the button is released does it instead (`windowDidMove`).
+        if !MirroredWindowDrag.isMouseButtonDown() {
+            MirroredWindowDrag.end(window)
+            window.delegate?.windowDidMove?(Notification(name: NSWindow.didMoveNotification, object: window))
+        }
+    }
+
+    private func captionRegion(for event: NSEvent) -> WindowsCaptionRegion {
+        guard let session,
+              !session.window.isPopup,
+              session.connectionMode == .agent,
+              let guestPoint = guestPoint(for: event, session: session) else {
+            return .content
+        }
+
+        let windowWidth = session.latestFrame?.width ?? session.window.bounds.width
+        let region = WindowsCaptionRegion.classify(guestX: guestPoint.x, guestY: guestPoint.y, windowWidth: windowWidth)
+        if region != .content {
+            let point = convert(event.locationInWindow, from: nil)
+            VeilLog.window.notice(
+                """
+                Caption press \(String(describing: region), privacy: .public) clicks=\(event.clickCount) \
+                view=\(Int(point.x)),\(Int(point.y)) in \(Int(self.bounds.width))x\(Int(self.bounds.height)) \
+                guest=\(guestPoint.x),\(guestPoint.y) source=\(session.latestFrame?.width ?? -1)x\(session.latestFrame?.height ?? -1) \
+                bounds=\(session.window.bounds.width)x\(session.window.bounds.height) \
+                window=\(Int(self.window?.frame.width ?? 0))x\(Int(self.window?.frame.height ?? 0))
+                """
+            )
+        }
+        return region
+    }
+
+    /// Follows the macOS "Double-click a window's title bar to" setting, which a Mac titlebar would.
+    private func performCaptionDoubleClick() {
+        switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+        case "Minimize":
+            window?.performMiniaturize(nil)
+        case "None":
+            break
+        default:
+            window?.performZoom(nil)
+        }
+    }
+
+    /// The right Command key pressed on its own, which switches Korean/English in Windows only.
+    private var rightCommandAlone = false
+
+    override func flagsChanged(with event: NSEvent) {
+        // kVK_RightCommand. Its device-dependent flag tells a press from a release.
+        if event.keyCode == 54 {
+            let isDown = event.modifierFlags.rawValue & UInt(NX_DEVICERCMDKEYMASK) != 0
+            if isDown {
+                rightCommandAlone = true
+            } else if rightCommandAlone, keysPassThrough?() == true, let session {
+                rightCommandAlone = false
+                WindowsHangulKey.press(windowId: session.id, send: onKeyInput)
+                return
+            }
+        } else {
+            rightCommandAlone = false
+        }
+        super.flagsChanged(with: event)
     }
 
     override func keyDown(with event: NSEvent) {
         didCommitTextForCurrentKeyPress = false
+        rightCommandAlone = false
+
+        // Like UTM and Parallels: the key goes to Windows by position and the Windows IME composes, which it
+        // shows inline in the app itself. Its Korean/English state follows the macOS input source
+        // (`input.ime.set`). Composing on the Mac and correcting the guest's text afterwards swapped and
+        // duplicated syllables.
+        if keysPassThrough?() == true, sendPhysicalKey("keyDown", event) {
+            return
+        }
 
         // Text-producing keys go to the macOS input context first so an IME can compose them. The
         // context calls back into setMarkedText/insertText below. Keys whose guest meaning is the key
@@ -666,6 +1526,9 @@ private final class InputCaptureNSView: NSView {
     }
 
     override func keyUp(with event: NSEvent) {
+        if keysPassThrough?() == true, !hasMarkedText(), sendPhysicalKey("keyUp", event) {
+            return
+        }
         // A key that produced committed text, or one still feeding an open composition, has already
         // been accounted for. Sending a key-up here would post an unmatched WM_KEYUP to the guest.
         if didCommitTextForCurrentKeyPress || hasMarkedText() {
@@ -684,7 +1547,10 @@ private final class InputCaptureNSView: NSView {
             return super.performKeyEquivalent(with: event)
         }
 
+        // With sharing off the shortcut falls through to a plain Ctrl+V, so Windows pastes its own clipboard
+        // and nothing on the Mac pasteboard is read.
         if isPasteShortcut(event),
+           ClipboardSharingPreferences.isSharingEnabled(),
            let session,
            session.connectionMode == .agent,
            let input = keyboardMapper.input(
@@ -692,8 +1558,11 @@ private final class InputCaptureNSView: NSView {
                 keyCode: event.keyCode,
                 modifiers: macKeyboardModifiers(from: event)
            ),
-           let pasteboardText = NSPasteboard.general.string(forType: .string) {
-            onPasteShortcut?(session.id, input.key, input.windowsVirtualKey, input.modifiers, pasteboardText)
+           let content = HostPasteboardContent.read(
+                from: .general,
+                includeFiles: ClipboardSharingPreferences.isFilePasteEnabled()
+           ) {
+            onPasteShortcut?(session.id, input.key, input.windowsVirtualKey, input.modifiers, content)
             return true
         }
 
@@ -708,9 +1577,17 @@ private final class InputCaptureNSView: NSView {
     private func send(_ inputEvent: String, _ event: NSEvent) {
         guard let session,
               session.connectionMode == .agent,
-              bounds.width > 0,
-              bounds.height > 0 else {
+              let guestPoint = guestPoint(for: event, session: session) else {
             return
+        }
+
+        onMouseInput?(session.id, inputEvent, guestPoint.x, guestPoint.y)
+    }
+
+    private func guestPoint(for event: NSEvent, session: WindowMirrorSession) -> WindowFramePoint? {
+        guard bounds.width > 0,
+              bounds.height > 0 else {
+            return nil
         }
 
         let point = convert(event.locationInWindow, from: nil)
@@ -721,16 +1598,16 @@ private final class InputCaptureNSView: NSView {
             viewHeight: Double(bounds.height),
             sourceWidth: sourceWidth,
             sourceHeight: sourceHeight,
-            fitsSourceIntoView: session.latestFrame != nil
+            fitsSourceIntoView: session.latestFrame != nil,
+            // Matches WindowsAppFrameSurface, which draws the frame unscaled from the top-left.
+            anchoredPointsPerPixel: session.latestFrame.map {
+                WindowFrameViewport.pointsPerPixel(forWindowsScale: $0.scale)
+            }
         )
-        guard let guestPoint = viewport.guestPoint(
+        return viewport.guestPoint(
             forViewX: Double(point.x),
             viewYFromBottom: Double(point.y)
-        ) else {
-            return
-        }
-
-        onMouseInput?(session.id, inputEvent, guestPoint.x, guestPoint.y)
+        )
     }
 
     private func sendKey(_ inputEvent: String, _ event: NSEvent) -> Bool {
@@ -754,11 +1631,35 @@ private final class InputCaptureNSView: NSView {
                 return true
             }
             didCommitTextForCurrentKeyPress = true
-            onTextInput?(session.id, text)
+            onTextInput?(session.id, text, 0)
             return true
         case .unsupported:
             return false
         }
+    }
+
+    /// Sends a key by its position, or returns false for a key with no Windows equivalent (Caps Lock, which
+    /// switches the Mac input source, and the modifiers, which travel with each key).
+    private func sendPhysicalKey(_ inputEvent: String, _ event: NSEvent) -> Bool {
+        guard let session,
+              session.connectionMode == .agent,
+              let virtualKey = MacPhysicalKeyMap.windowsVirtualKey(forMacKeyCode: event.keyCode),
+              let name = MacPhysicalKeyMap.keyName(forMacKeyCode: event.keyCode) else {
+            return false
+        }
+        let modifiers = macKeyboardModifiers(from: event)
+        var windowsModifiers: [String] = []
+        if modifiers.contains(.command) || modifiers.contains(.control) {
+            windowsModifiers.append("ctrl")
+        }
+        if modifiers.contains(.shift) {
+            windowsModifiers.append("shift")
+        }
+        if modifiers.contains(.option) {
+            windowsModifiers.append("alt")
+        }
+        onKeyInput?(session.id, inputEvent, name, virtualKey, windowsModifiers)
+        return true
     }
 
     private func sendCommittedText(_ text: String) {
@@ -772,7 +1673,15 @@ private final class InputCaptureNSView: NSView {
             onKeyInput?(session.id, "keyDown", input.key, input.windowsVirtualKey, input.modifiers)
             onKeyInput?(session.id, "keyUp", input.key, input.windowsVirtualKey, input.modifiers)
         case .committedText(let committed):
-            onTextInput?(session.id, committed)
+            if var composition = guestComposition {
+                let replacement = composition.commit(committed)
+                guestComposition = composition
+                if let replacement {
+                    onTextInput?(session.id, replacement.text, replacement.replaceLength)
+                }
+            } else {
+                onTextInput?(session.id, committed, 0)
+            }
         case .unsupported:
             break
         }
@@ -847,6 +1756,11 @@ extension InputCaptureNSView: @preconcurrency NSTextInputClient {
     }
 
     func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        if markedText.isEmpty {
+            // A composition starts: decide once whether the guest shows it or the overlay does.
+            guestComposition = textCompositionSupported?() == true ? GuestTextComposition() : nil
+        }
+
         switch string {
         case let attributed as NSAttributedString:
             markedText = attributed.string
@@ -856,11 +1770,46 @@ extension InputCaptureNSView: @preconcurrency NSTextInputClient {
             markedText = ""
         }
 
+        if var composition = guestComposition {
+            let replacement = composition.update(to: markedText)
+            guestComposition = composition
+            sendGuestReplacement(replacement)
+        }
         needsDisplay = true
     }
 
     func unmarkText() {
+        // macOS asks for the composition to be accepted as it is, and the guest already shows it.
         markedText = ""
+        guestComposition?.abandon()
+        needsDisplay = true
+    }
+
+    private func sendGuestReplacement(_ replacement: GuestTextReplacement?) {
+        guard let replacement,
+              let session,
+              session.connectionMode == .agent else {
+            return
+        }
+        onTextInput?(session.id, replacement.text, replacement.replaceLength)
+    }
+
+    /// A click moves the guest's caret, so an open composition ends there: it stays in the guest as typed,
+    /// and the input method starts over instead of correcting text at the new caret.
+    func endCompositionForPointer() {
+        guard hasMarkedText() else {
+            return
+        }
+        let shownInGuest = guestComposition != nil
+        inputContext?.discardMarkedText()
+        if !markedText.isEmpty {
+            if !shownInGuest {
+                // The overlay was the only place it existed; keep what the user typed.
+                sendCommittedText(markedText)
+            }
+            markedText = ""
+        }
+        guestComposition?.abandon()
         needsDisplay = true
     }
 
@@ -908,4 +1857,37 @@ extension InputCaptureNSView: @preconcurrency NSTextInputClient {
         NSNotFound
     }
 
+}
+
+/// Mirrored windows the user is dragging by their Windows caption.
+@MainActor
+enum MirroredWindowDrag {
+    private static var dragging: Set<ObjectIdentifier> = []
+
+    static func begin(_ window: NSWindow) {
+        dragging.insert(ObjectIdentifier(window))
+    }
+
+    static func end(_ window: NSWindow) {
+        dragging.remove(ObjectIdentifier(window))
+    }
+
+    static func isDragging(_ window: NSWindow) -> Bool {
+        dragging.contains(ObjectIdentifier(window))
+    }
+
+    static func isMouseButtonDown() -> Bool {
+        NSEvent.pressedMouseButtons & 1 != 0
+    }
+}
+
+/// The Windows Hangul key (VK_HANGUL), which switches the Windows IME between Korean and English.
+@MainActor
+enum WindowsHangulKey {
+    static let virtualKey = 0x15
+
+    static func press(windowId: String, send: ((String, String, String, Int, [String]) -> Void)?) {
+        send?(windowId, "keyDown", "hangul", virtualKey, [])
+        send?(windowId, "keyUp", "hangul", virtualKey, [])
+    }
 }

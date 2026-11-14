@@ -20,6 +20,26 @@ struct VeilHostClientTests {
         #expect(health.os == "windows-arm64")
     }
 
+    @Test("bounds how long single-response requests wait for the agent")
+    func boundsSingleResponseRequests() async throws {
+        let transport = TimeoutRecordingTransport()
+        let client = VeilHostClient(transport: transport)
+
+        _ = try? await client.loadHealth()
+        _ = try? await client.focusWindow(windowId: "hwnd:00000001")
+        _ = try? await client.resizeWindow(windowId: "hwnd:00000001", width: 800, height: 600)
+        _ = try? await client.resizeDisplay(width: 1280, height: 800)
+        _ = try? await client.requestSystemShutdown()
+
+        #expect(transport.replyTimeouts == [
+            VeilHostClient.requestReplyTimeoutSeconds,
+            VeilHostClient.requestReplyTimeoutSeconds,
+            VeilHostClient.requestReplyTimeoutSeconds,
+            VeilHostClient.displayResizeReplyTimeoutSeconds,
+            VeilHostClient.requestReplyTimeoutSeconds
+        ])
+    }
+
     @Test("requests Windows notification listener consent")
     func requestsWindowsNotificationListenerConsent() async throws {
         let transport = RecordingTransport(responses: [
@@ -232,6 +252,30 @@ struct VeilHostClientTests {
         #expect(result.launch.processId == 4931)
         #expect(result.window.windowId == "hwnd:00010500")
         #expect(result.window.title == "notes.txt - Notepad")
+    }
+
+    @Test("opens a file already copied into the shared folder without sending bytes")
+    func opensSharedFolderFileWithoutSendingBytes() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"agent.health.response","requestId":"req_health","protocolVersion":1,"agentVersion":"0.1.0","os":"windows-arm64","session":{"interactive":true,"user":"veil-user"},"capabilities":{"appList":true,"appLaunch":true,"windowTracking":true,"windowCapture":false,"input":false,"clipboardText":false,"packageIdentity":false}}"#,
+            #"{"type":"app.list.response","requestId":"req_apps","apps":[{"id":"winapp_notepad","name":"Notepad","exePath":"C:\\Windows\\System32\\notepad.exe","publisher":"Microsoft","iconId":"icon_notepad"}]}"#,
+            #"{"type":"file.open.response","requestId":"req_open_shared_winapp_notepad","accepted":true,"processId":4931}"#,
+            #"{"type":"window.created","windowId":"hwnd:00010501","processId":4931,"appId":"winapp_notepad","title":"large-report.txt - Notepad","bounds":{"x":10,"y":10,"width":1280,"height":800},"state":"normal","focused":true}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let result = try await client.openSharedFile(
+            appId: "winapp_notepad",
+            fileName: "large-report.txt",
+            guestPath: #"C:\VeilShared\large-report.txt"#
+        )
+
+        #expect(transport.sentTypes == [
+            "agent.health.request",
+            "app.list.request",
+            "file.open.shared.request"
+        ])
+        #expect(result.window.windowId == "hwnd:00010501")
     }
 
     @Test("surfaces agent errors when opening a dropped file fails")
@@ -578,6 +622,53 @@ struct VeilHostClientTests {
         #expect(response.bounds?.height == 900)
     }
 
+    @Test("sends a guest desktop display resize request")
+    func sendsDisplayResizeRequest() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"display.resize.response","requestId":"req_display_resize_1920x1080","accepted":true,"width":1920,"height":1080}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let response = try await client.resizeDisplay(width: 1920, height: 1080)
+
+        #expect(transport.sentTypes == ["display.resize.request"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(response.accepted)
+        #expect(response.width == 1920)
+        #expect(response.height == 1080)
+    }
+
+    @Test("sends display.scale.request and reads back the scale Windows reports")
+    func clientSendsScaleRequest() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"display.scale.response","requestId":"req_display_scale_200","accepted":true,"scalePercent":125}"#
+        ])
+        let client = VeilHostClient(transport: transport)
+
+        let response = try await client.setDisplayScale(scalePercent: 200)
+
+        #expect(transport.sentTypes == ["display.scale.request"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(response.scalePercent == 125)
+    }
+
+    @Test("asks the agent to shut Windows down, also through the fallback service")
+    func sendsSystemShutdownRequest() async throws {
+        let transport = RecordingTransport(responses: [
+            #"{"type":"system.shutdown.response","requestId":"req_system_shutdown_1","accepted":true}"#
+        ])
+        let service = FallbackHostDashboardService(
+            primary: VeilHostClient(transport: transport),
+            fallback: DemoHostDashboardService()
+        )
+
+        let response = try await service.requestSystemShutdown()
+
+        #expect(transport.sentTypes == ["system.shutdown.request"])
+        #expect(transport.expectedReplyCounts == [1])
+        #expect(response.accepted)
+    }
+
     @Test("fallback dashboard service forwards window resize to its primary agent")
     func fallbackDashboardServiceForwardsWindowResize() async throws {
         let transport = RecordingTransport(responses: [
@@ -684,6 +775,19 @@ private final class RecordingTransport: HostTransport, @unchecked Sendable {
         let replyStrings = Array(responses.prefix(expectedReplies))
         responses.removeFirst(replyStrings.count)
         return replyStrings.map { Data($0.utf8) }
+    }
+}
+
+private final class TimeoutRecordingTransport: HostTransport, @unchecked Sendable {
+    private(set) var replyTimeouts: [TimeInterval?] = []
+
+    func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {
+        try await send(message, expectedReplies: expectedReplies, replyTimeout: nil)
+    }
+
+    func send(_ message: Data, expectedReplies: Int, replyTimeout: TimeInterval?) async throws -> [Data] {
+        replyTimeouts.append(replyTimeout)
+        return []
     }
 }
 

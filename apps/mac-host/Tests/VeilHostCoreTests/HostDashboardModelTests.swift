@@ -27,6 +27,23 @@ struct HostDashboardModelTests {
         #expect(model.canRequestSelectedAppLaunch)
     }
 
+    @Test("shuts Windows down through the agent only when it reports the capability")
+    @MainActor
+    func systemShutdownFollowsCapability() async {
+        let older = FakeDashboardService()
+        let olderModel = HostDashboardModel(service: older)
+        await olderModel.load()
+        #expect(await olderModel.requestSystemShutdown() == false)
+        #expect(older.shutdownRequests == 0)
+
+        let current = FakeDashboardService()
+        current.health.capabilities.systemShutdown = true
+        let currentModel = HostDashboardModel(service: current)
+        await currentModel.load()
+        #expect(await currentModel.requestSystemShutdown())
+        #expect(current.shutdownRequests == 1)
+    }
+
     @Test("loads agent overview into dashboard state")
     @MainActor
     func loadsAgentOverview() async throws {
@@ -44,6 +61,7 @@ struct HostDashboardModelTests {
         #expect(model.statusText == "Connected to Windows agent 0.1.0")
         #expect(model.connectionMode == .agent)
         #expect(model.hasLiveAgentConnection)
+        #expect(model.agentDiagnostic?.status == .connected)
         #expect(model.guestAgentInstallEvidence?.kind == .guestAgent)
         #expect(model.guestAgentInstallEvidence?.isInstalled == true)
         #expect(model.errorMessage == nil)
@@ -255,7 +273,7 @@ struct HostDashboardModelTests {
 
         #expect(report.status == .connected)
         #expect(model.latestAgentWait == report)
-        #expect(model.agentDiagnostic == nil)
+        #expect(model.agentDiagnostic?.status == .connected)
         #expect(model.hasLiveAgentConnection)
         #expect(service.loadCount == 1)
     }
@@ -330,6 +348,59 @@ struct HostDashboardModelTests {
         #expect(service.resizedWindowRequests.map { $0.height } == [900])
     }
 
+    @Test("grows the guest display before a mirrored window outgrows it")
+    @MainActor
+    func growsGuestDisplayBeforeMirroredWindowOutgrowsIt() async throws {
+        var health = AgentHealthResponse.captureReady
+        health.capabilities.windowResize = true
+        health.capabilities.displayResize = true
+        let service = FakeDashboardService(health: health)
+        let model = HostDashboardModel(service: service)
+        await model.launchNotepad()
+
+        _ = await model.resizeMirrorSession(
+            windowId: "hwnd:0003029A",
+            width: 1963,
+            height: 1177,
+            macScreenWidth: 2048,
+            macScreenHeight: 1280
+        )
+        _ = await model.resizeMirrorSession(
+            windowId: "hwnd:0003029A",
+            width: 1182,
+            height: 708,
+            macScreenWidth: 2048,
+            macScreenHeight: 1280
+        )
+
+        #expect(service.resizedDisplayRequests.map { $0.width } == [2048])
+        #expect(service.resizedDisplayRequests.map { $0.height } == [1280])
+        #expect(model.guestDisplaySize == GuestDisplaySize(width: 2048, height: 1280))
+        #expect(service.resizedWindowRequests.map { $0.width } == [1963, 1182])
+    }
+
+    @Test("publishes per-frame bookkeeping to observers in batches, not per frame")
+    @MainActor
+    func batchesFrameChurnNotifications() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        await model.launchNotepad()
+        let revisionBeforeFrames = model.mirrorSessionsRevision
+
+        model.receiveWindowFrame(.notepadFirstFrame)
+        model.receiveWindowFrame(.notepadFirstFrame)
+
+        // Readers see the new frame at once; observers are only told once the batch interval passes.
+        #expect(model.mirrorSessions.first?.frameTiming?.receivedFrameCount == 2)
+        #expect(model.mirrorSessionsRevision == revisionBeforeFrames)
+        // Polled rather than slept for a fixed time: on a loaded CI runner the publish task can run late.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while model.mirrorSessionsRevision == revisionBeforeFrames, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(model.mirrorSessionsRevision == revisionBeforeFrames + 1)
+    }
+
     @Test("stores the latest frame on the matching mirror session")
     @MainActor
     func storesLatestFrameOnMatchingMirrorSession() async throws {
@@ -348,6 +419,49 @@ struct HostDashboardModelTests {
         #expect(session.latestFrame?.encodedData.hasPrefix("iVBOR") == true)
         #expect(session.frameTiming?.receivedFrameCount == 1)
         #expect(session.frameTiming?.latestFrameIntervalMilliseconds == nil)
+    }
+
+    @Test("repeated window discovery refreshes metadata without erasing the live frame")
+    @MainActor
+    func repeatedWindowDiscoveryPreservesLiveFrameState() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        let receivedAt = Date(timeIntervalSince1970: 1_000)
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: receivedAt)
+        let duplicate = try JSONEncoder.veilProtocol.encode(WindowCreatedEvent.notepad)
+
+        let result = try await model.receiveProtocolMessage(duplicate)
+
+        #expect(result == .handledWindowCreated(windowId: "hwnd:0003029A"))
+        let session = try #require(model.mirrorSessions.first)
+        #expect(session.captureState == .streaming)
+        #expect(session.latestFrame == .notepadFirstFrame)
+        #expect(session.frameTiming?.firstFrameReceivedAt == receivedAt)
+        #expect(session.frameTiming?.receivedFrameCount == 1)
+        #expect(session.frameStreamRestartCount == 0)
+        // Reconnect discovery still reattaches the guest stream, but it must not destroy the host's
+        // usable picture while that acknowledgement and next key frame are in flight.
+        #expect(service.frameSubscriptions == ["hwnd:0003029A", "hwnd:0003029A"])
+    }
+
+    @Test("repeated discovery does not resume a deliberately paused window")
+    @MainActor
+    func repeatedWindowDiscoveryKeepsPausedStreamPaused() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        await model.launchNotepad()
+        #expect(await model.pauseFrameStream(windowId: "hwnd:0003029A"))
+        let duplicate = try JSONEncoder.veilProtocol.encode(WindowCreatedEvent.notepad)
+
+        let result = try await model.receiveProtocolMessage(duplicate)
+
+        #expect(result == .handledWindowCreated(windowId: "hwnd:0003029A"))
+        #expect(model.isFrameStreamPaused(windowId: "hwnd:0003029A"))
+        #expect(service.frameSubscriptions == ["hwnd:0003029A"])
+        #expect(service.frameUnsubscriptions == ["hwnd:0003029A"])
     }
 
     @Test("records frame timing and cadence for mirrored windows")
@@ -478,6 +592,63 @@ struct HostDashboardModelTests {
         #expect(session.frameStreamRequestedAt == restartedAt)
         #expect(session.frameStreamRestartCount == 1)
         #expect(session.latestFrameStreamRestartedAt == restartedAt)
+    }
+
+    @Test("drops a mirror session the guest reports as untracked instead of escalating recovery")
+    @MainActor
+    func dropsMirrorSessionTheGuestReportsAsUntracked() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+
+        _ = try #require(await model.launchNotepad())
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        // The window disappears after launch, not during the initial subscription.
+        service.frameSubscriptionError = VeilHostError.agentError(
+            code: "window_not_tracked",
+            message: "No tracked window exists for id hwnd:0003029A."
+        )
+
+        let didRestart = await model.restartFrameSubscription(
+            windowId: "hwnd:0003029A",
+            restartedAt: Date(timeIntervalSince1970: 1_001)
+        )
+
+        #expect(!didRestart)
+        #expect(model.mirrorSessions.isEmpty)
+        #expect(model.activeWindows.isEmpty)
+        #expect(model.errorMessage == nil)
+        #expect(model.phase != .failed)
+    }
+
+    @Test("input to a window the guest no longer tracks drops the session without a lost-connection phase")
+    @MainActor
+    func inputToUntrackedWindowDropsSessionWithoutFailedPhase() async throws {
+        let service = FakeDashboardService(
+            inputError: VeilHostError.agentError(
+                code: "window_not_tracked",
+                message: "No tracked window exists for id hwnd:0003029A."
+            ),
+            health: .inputReady
+        )
+        let model = HostDashboardModel(service: service)
+
+        _ = try #require(await model.launchNotepad())
+
+        await model.sendMouseInput(
+            windowId: "hwnd:0003029A",
+            event: "leftDown",
+            x: 20,
+            y: 30
+        )
+
+        #expect(model.mirrorSessions.isEmpty)
+        #expect(model.phase != .failed)
+
+        _ = try #require(await model.launchNotepad())
+        let typed = await model.sendTextInput(windowId: "hwnd:0003029A", text: "안녕")
+        #expect(!typed)
+        #expect(model.mirrorSessions.isEmpty)
+        #expect(model.phase != .failed)
     }
 
     @Test("maintenance restarts timed out first frame streams")
@@ -704,6 +875,103 @@ struct HostDashboardModelTests {
         #expect(result.restartedFrameWindowIds == [])
         #expect(service.closedWindowIds == ["hwnd:0003029A"])
         #expect(model.mirrorSessions.map(\.id) == ["hwnd:00010500"])
+    }
+
+    @Test("maintenance that runs by itself never closes or focuses a stale window")
+    @MainActor
+    func automaticMaintenanceDoesNotReopen() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        service.launchWindows = [.notepad, .secondNotepad]
+        let model = HostDashboardModel(service: service)
+
+        // The same history that makes the next maintenance pass reopen the window when a person asks.
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        await model.restartFrameSubscription(windowId: "hwnd:0003029A", restartedAt: Date(timeIntervalSince1970: 1_001))
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_002))
+        await model.restartFrameSubscription(windowId: "hwnd:0003029A", restartedAt: Date(timeIntervalSince1970: 1_003))
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_004))
+        await model.recoverFrameCapture(windowId: "hwnd:0003029A", recoveredAt: Date(timeIntervalSince1970: 1_005))
+        model.receiveWindowFrame(.notepadSecondFrame, receivedAt: Date(timeIntervalSince1970: 1_006))
+
+        // The history above includes one recovery the person asked for, which focused the window.
+        let focusedBefore = service.focusedWindowIds
+        let result = await model.maintainStaleFrameStreams(
+            generatedAt: Date(timeIntervalSince1970: 1_012),
+            reopensWindows: false
+        )
+
+        // Closing the window could discard unsaved work, and focusing it brings it in front of whatever
+        // the person just opened. Only its frame subscription is restarted.
+        #expect(result.reopenedWindows.isEmpty)
+        #expect(service.closedWindowIds.isEmpty)
+        #expect(result.recoveredFrameWindowIds.isEmpty)
+        #expect(service.focusedWindowIds == focusedBefore)
+        #expect(result.restartedFrameWindowIds == ["hwnd:0003029A"])
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:0003029A"])
+    }
+
+    @Test("the agent starts the tools update once Windows has mounted the disc")
+    @MainActor
+    func agentStartsToolsUpdateAfterTheDiscMounts() async throws {
+        var health = AgentHealthResponse.captureReady
+        health.capabilities.toolsUpdate = true
+        let service = FakeDashboardService(health: health)
+        // Windows has not mounted the disc at the first request.
+        service.toolsUpdateResults = [
+            .failure(VeilHostError.agentError(code: "tools_media_missing", message: "No disc.")),
+            .success(ToolsUpdateResponse(requestId: "req_tools_update", accepted: true, entryPoint: #"H:\Veil Guest Agent\U.cmd"#)),
+        ]
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        let entryPoint = await model.startToolsUpdateThroughAgent(retryDelay: .milliseconds(1))
+
+        #expect(model.agentStartsToolsUpdate)
+        #expect(entryPoint == #"H:\Veil Guest Agent\U.cmd"#)
+        #expect(service.toolsUpdateRequests == 2)
+    }
+
+    @Test("without the capability, or without a disc, the agent is not what starts the update")
+    @MainActor
+    func toolsUpdateFallsBackWhenTheAgentCannot() async throws {
+        let older = FakeDashboardService(health: .captureReady)
+        let olderModel = HostDashboardModel(service: older)
+        await olderModel.load()
+
+        #expect(await olderModel.startToolsUpdateThroughAgent(retryDelay: .milliseconds(1)) == nil)
+        // An agent that does not know the message is never sent it.
+        #expect(older.toolsUpdateRequests == 0)
+
+        var health = AgentHealthResponse.captureReady
+        health.capabilities.toolsUpdate = true
+        let noDisc = FakeDashboardService(health: health)
+        let noDiscModel = HostDashboardModel(service: noDisc)
+        await noDiscModel.load()
+
+        #expect(await noDiscModel.startToolsUpdateThroughAgent(attempts: 3, retryDelay: .milliseconds(1)) == nil)
+        #expect(noDisc.toolsUpdateRequests == 3)
+    }
+
+    @Test("a guest that answers the window list gets a Mac window for an app Veil never opened")
+    @MainActor
+    func adoptsWindowAfterWindowListResponse() async throws {
+        // The health still describes an agent without the capability, as it does when a new agent's first
+        // windows arrive before the host has asked it for its health.
+        let model = HostDashboardModel(service: FakeDashboardService(health: .captureReady))
+        await model.load()
+        let created = Data("""
+        {"type":"window.created","windowId":"hwnd:000103A4","processId":7,"appId":"winapp_paint",
+         "title":"제목 없음 - 그림판","bounds":{"x":59,"y":9,"width":1180,"height":700},
+         "state":"normal","focused":false}
+        """.utf8)
+
+        #expect(try await model.receiveProtocolMessage(created) == .ignored)
+
+        let list = Data(#"{"type":"window.list.response","requestId":"events","windowIds":["hwnd:000103A4"]}"#.utf8)
+        #expect(try await model.receiveProtocolMessage(list) == .ignored)
+        #expect(try await model.receiveProtocolMessage(created) == .handledWindowCreated(windowId: "hwnd:000103A4"))
+        #expect(model.mirrorSessions.map(\.id) == ["hwnd:000103A4"])
     }
 
     @Test("routes a protocol frame message into the matching mirror session")
@@ -1029,6 +1297,81 @@ struct HostDashboardModelTests {
         #expect(model.phase == .connected)
     }
 
+    @Test("sends input for a window run as administrator through the hardware, not the agent")
+    @MainActor
+    func routesElevatedWindowInputThroughHardware() async throws {
+        final class Recorder: GuestHardwareInputSending {
+            var isReady = true
+            var events: [HardwareInputEvent] = []
+            func send(_ events: [HardwareInputEvent]) { self.events += events }
+        }
+        let service = FakeDashboardService(health: .inputReady)
+        let model = HostDashboardModel(service: service)
+        let recorder = Recorder()
+        model.hardwareInput = recorder
+        await model.launchNotepad()
+        func layout(elevated: Bool) -> WindowLayoutEvent {
+            WindowLayoutEvent(
+                sequence: 1,
+                display: GuestPixelRect(x: 0, y: 0, width: 1920, height: 1080),
+                windows: [
+                    .init(
+                        windowId: "hwnd:0003029A",
+                        frame: GuestPixelRect(x: 400, y: 300, width: 800, height: 600),
+                        zOrder: 0,
+                        isForeground: true,
+                        isShown: true,
+                        fullyVisible: true,
+                        elevated: elevated
+                    )
+                ]
+            )
+        }
+        defer { GuestWindowLayoutStore.shared.reset() }
+
+        GuestWindowLayoutStore.shared.reset()
+        GuestWindowLayoutStore.shared.apply(layout(elevated: true))
+        await model.sendMouseInput(windowId: "hwnd:0003029A", event: "leftDown", x: 240, y: 130)
+        #expect(service.mouseInputs.isEmpty)
+        #expect(recorder.events.last == .pointer(x: 640, y: 430, buttons: 1))
+
+        GuestWindowLayoutStore.shared.reset()
+        GuestWindowLayoutStore.shared.apply(layout(elevated: true))
+        await model.sendKeyInput(windowId: "hwnd:0003029A", event: "keyDown", key: "enter", windowsVirtualKey: 13)
+        #expect(recorder.events.last == .key(keysym: 0xFF0D, isDown: true))
+
+        // Without a hardware connection the input is dropped; the agent's would be discarded silently.
+        recorder.isReady = false
+        let before = recorder.events.count
+        GuestWindowLayoutStore.shared.reset()
+        GuestWindowLayoutStore.shared.apply(layout(elevated: true))
+        await model.sendMouseInput(windowId: "hwnd:0003029A", event: "leftUp", x: 240, y: 130)
+        #expect(recorder.events.count == before)
+        #expect(service.mouseInputs.isEmpty)
+        #expect(model.phase == .connected)
+
+        // An ordinary window still goes to the agent.
+        GuestWindowLayoutStore.shared.reset()
+        GuestWindowLayoutStore.shared.apply(layout(elevated: false))
+        await model.sendMouseInput(windowId: "hwnd:0003029A", event: "move", x: 1, y: 1)
+        #expect(service.mouseInputs.count == 1)
+    }
+
+    @Test("hands the agent-reported cursor position to the tablet sync")
+    @MainActor
+    func handsReportedCursorPositionToTabletSync() async throws {
+        let service = FakeDashboardService(health: .inputReady)
+        service.reportedPointer = GuestPointerPosition(x: 16384, y: 8192)
+        let model = HostDashboardModel(service: service)
+        var moved: [GuestPointerPosition] = []
+        model.onGuestPointerMoved = { moved.append($0) }
+
+        await model.launchNotepad()
+        await model.sendMouseInput(windowId: "hwnd:0003029A", event: "move", x: 240, y: 130)
+
+        #expect(moved == [GuestPointerPosition(x: 16384, y: 8192)])
+    }
+
     @Test("ignores mouse input for windows without a mirror session")
     @MainActor
     func ignoresMouseInputForUnknownWindows() async throws {
@@ -1101,6 +1444,26 @@ struct HostDashboardModelTests {
         #expect(windowStatus.unchangedHeartbeatCount == 1)
         #expect(windowStatus.receivedFrameCount == 1)
         #expect(windowStatus.frameStreamRecommendedAction == "none")
+    }
+
+    @Test("a restarted stream that stays alive for a minute is forgiven its restarts")
+    @MainActor
+    func recoveredStreamResetsRestartLadder() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        let restartedAt = Date(timeIntervalSince1970: 3_000)
+
+        await model.launchNotepad()
+        #expect(await model.restartFrameSubscription(windowId: "hwnd:0003029A", restartedAt: restartedAt))
+        #expect(await model.restartFrameSubscription(windowId: "hwnd:0003029A", restartedAt: restartedAt))
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: restartedAt.addingTimeInterval(1))
+        model.receiveWindowFrameUnchanged(.notepadHeartbeat(sequence: 1), receivedAt: restartedAt.addingTimeInterval(30))
+        // Half a minute of health is not yet enough; a stream that keeps failing must still escalate.
+        #expect(model.mirrorSessions.first?.frameStreamRestartCount == 2)
+
+        model.receiveWindowFrameUnchanged(.notepadHeartbeat(sequence: 1), receivedAt: restartedAt.addingTimeInterval(61))
+
+        #expect(model.mirrorSessions.first?.frameStreamRestartCount == 0)
     }
 
     @Test("ignores an unchanged-frame heartbeat before the first real frame")
@@ -2151,6 +2514,24 @@ struct HostDashboardModelTests {
         #expect(service.openedFiles.first?.contentBase64 == "aGVsbG8=")
     }
 
+    @Test("opens a shared-folder file through the guest path contract")
+    @MainActor
+    func opensSharedFolderFileInTheTargetApp() async throws {
+        let service = FakeDashboardService(apps: [.notepad])
+        let model = HostDashboardModel(service: service)
+
+        let result = await model.openSharedFile(
+            appId: "winapp_notepad",
+            fileName: "large-report.txt",
+            guestPath: #"C:\VeilShared\large-report.txt"#
+        )
+
+        #expect(result?.window.appId == "winapp_notepad")
+        #expect(model.phase == .connected)
+        #expect(service.openedSharedFiles.count == 1)
+        #expect(service.openedSharedFiles.first?.guestPath == #"C:\VeilShared\large-report.txt"#)
+    }
+
     @Test("surfaces an error when opening a dropped file fails")
     @MainActor
     func surfacesErrorWhenOpeningADroppedFileFails() async throws {
@@ -2303,6 +2684,48 @@ struct HostDashboardModelTests {
         #expect(report.localRuntime.installEvidence?.detail.contains("0.1.0") == true)
     }
 
+    @Test("a Windows on disk without the agent is not sent to display recovery for a stale preview")
+    @MainActor
+    func localRuntimeWaitsForAgentWhenWindowsBootManagerIsRegistered() {
+        let model = HostDashboardModel(service: FakeDashboardService())
+        let snapshot = VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            virtualDiskPath: "/Users/test/Virtual Machines/Windows 11 Arm.img",
+            latestConsoleLaunch: VMConsoleLaunchEvidence(
+                provider: "QEMU/HVF",
+                pid: 94195,
+                processLogPath: "/tmp/qemu.log",
+                monitorSocketPath: "/tmp/qemu.sock",
+                qmpSocketPath: "/tmp/qemu.qmp.sock",
+                vncHost: "127.0.0.1",
+                vncPort: 5900,
+                consoleScreenshotPath: "/tmp/qemu-console.png",
+                consoleVisualState: .unknown,
+                consoleVisualStateAt: Date(timeIntervalSince1970: 1_000),
+                previewStatus: .stale,
+                startedAt: Date(timeIntervalSince1970: 1_000)
+            ),
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .windowsBootManager,
+                isInstalled: true,
+                title: "Windows installed",
+                detail: "Windows Setup registered Windows Boot Manager on this disk."
+            ),
+            bootReady: true,
+            detail: "Windows is running."
+        )
+
+        let status = model.localRuntimeStatus(snapshot: snapshot)
+
+        #expect(status.consolePreviewStatus == .stale)
+        #expect(status.recommendedAction == "wait-for-guest-agent")
+        #expect(status.recommendedRecoveryCommand == nil)
+    }
+
     @Test("local runtime reports display recovery when running console preview is stale")
     @MainActor
     func localRuntimeReportsDisplayRecoveryForStalePreview() {
@@ -2323,6 +2746,8 @@ struct HostDashboardModelTests {
                 vncHost: "127.0.0.1",
                 vncPort: 5900,
                 consoleScreenshotPath: "/tmp/qemu-console.png",
+                consoleVisualState: .unknown,
+                consoleVisualStateAt: Date(timeIntervalSince1970: 1_000),
                 previewStatus: .stale,
                 startedAt: Date(timeIntervalSince1970: 1_000)
             ),
@@ -2345,7 +2770,7 @@ struct HostDashboardModelTests {
         #expect(status.consolePreviewStatus == .stale)
         #expect(status.recommendedAction == "recover-runtime-display")
         #expect(status.recommendedDisplayCommand == "veil-vmctl qemu-display-smoke --json")
-        #expect(status.recommendedRecoveryCommand == "veil-vmctl qemu-capture --json")
+        #expect(status.recommendedRecoveryCommand == "veil-vmctl qemu-display-smoke --json")
         #expect(status.reason.contains("embedded console preview is stale"))
 
         let report = model.runtimeStatusReport(localRuntime: status)
@@ -2353,10 +2778,144 @@ struct HostDashboardModelTests {
         #expect(report.releaseGate.isPassing == false)
         #expect(report.releaseGate.recommendedAction == "windowsSetup")
         #expect(report.releaseGate.steps.first { $0.id == "windowsSetup" }?.isPassing == false)
-        #expect(report.releaseGate.steps.first { $0.id == "windowsSetup" }?.nextActionCommand == "veil-vmctl qemu-capture --json")
+        #expect(report.releaseGate.steps.first { $0.id == "windowsSetup" }?.nextActionCommand == "veil-vmctl qemu-display-smoke --json")
         #expect(report.primaryNextAction.id == "windowsSetup")
         #expect(report.primaryNextAction.actionId == "runtime.recoverDisplay")
-        #expect(report.primaryNextAction.command == "veil-vmctl qemu-capture --json")
+        #expect(report.primaryNextAction.command == "veil-vmctl qemu-display-smoke --json")
+    }
+
+    @Test("local runtime waits through a recent blank boot console")
+    @MainActor
+    func localRuntimeWaitsThroughRecentBlankBootConsole() {
+        let model = HostDashboardModel(service: FakeDashboardService())
+        let now = Date()
+        let snapshot = VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            virtualDiskPath: "/Users/test/Virtual Machines/Windows 11 Arm.img",
+            latestConsoleLaunch: VMConsoleLaunchEvidence(
+                provider: "QEMU/HVF",
+                pid: 51258,
+                processLogPath: "/tmp/qemu.log",
+                monitorSocketPath: "/tmp/qemu.sock",
+                qmpSocketPath: "/tmp/qemu.qmp.sock",
+                vncHost: "127.0.0.1",
+                vncPort: 5900,
+                consoleScreenshotPath: "/tmp/qemu-console.png",
+                consoleScreenshotRefreshedAt: now,
+                consoleVisualState: .blank,
+                consoleVisualStateAt: now,
+                previewStatus: .stale,
+                startedAt: now.addingTimeInterval(-5)
+            ),
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .guestAgent,
+                isInstalled: true,
+                title: "Guest agent installed",
+                detail: "The guest agent is installed; live health is still pending."
+            ),
+            bootReady: true,
+            windowsInstalled: true,
+            detail: "Windows is running."
+        )
+
+        let status = model.localRuntimeStatus(snapshot: snapshot)
+
+        #expect(status.recommendedAction == "wait-for-guest-agent")
+        #expect(status.recommendedDisplayCommand == "veil-vmctl qemu-display-smoke --json --wait-seconds 30")
+        #expect(status.recommendedRecoveryCommand == nil)
+        #expect(status.reason.contains("still booting"))
+    }
+
+    @Test("local runtime waits when a newly started console has no classification yet")
+    @MainActor
+    func localRuntimeWaitsThroughUnclassifiedBootConsole() {
+        let model = HostDashboardModel(service: FakeDashboardService())
+        let now = Date()
+        let snapshot = VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            virtualDiskPath: "/Users/test/Virtual Machines/Windows 11 Arm.img",
+            latestConsoleLaunch: VMConsoleLaunchEvidence(
+                provider: "QEMU/HVF",
+                pid: 51258,
+                processLogPath: "/tmp/qemu.log",
+                monitorSocketPath: "/tmp/qemu.sock",
+                qmpSocketPath: "/tmp/qemu.qmp.sock",
+                vncHost: "127.0.0.1",
+                vncPort: 5900,
+                consoleScreenshotPath: "/tmp/qemu-console.png",
+                previewStatus: .fresh,
+                startedAt: now.addingTimeInterval(-5)
+            ),
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .guestAgent,
+                isInstalled: true,
+                title: "Guest agent installed",
+                detail: "The guest agent is installed; live health is still pending."
+            ),
+            bootReady: true,
+            windowsInstalled: true,
+            detail: "Windows is running."
+        )
+
+        let status = model.localRuntimeStatus(snapshot: snapshot)
+
+        #expect(status.recommendedAction == "wait-for-guest-agent")
+        #expect(status.recommendedRecoveryCommand == nil)
+        #expect(status.reason.contains("not observed a usable embedded console"))
+    }
+
+    @Test("local runtime calls out a boot stall after the boot grace")
+    @MainActor
+    func localRuntimeReportsBootStallAfterGrace() {
+        let model = HostDashboardModel(service: FakeDashboardService())
+        let now = Date()
+        let snapshot = VMRuntimeSnapshot(
+            state: .running,
+            virtualizationAvailable: true,
+            architecture: "arm64",
+            minimumOSSupported: true,
+            profileName: "Windows 11 Arm",
+            virtualDiskPath: "/Users/test/Virtual Machines/Windows 11 Arm.img",
+            latestConsoleLaunch: VMConsoleLaunchEvidence(
+                provider: "QEMU/HVF",
+                pid: 51258,
+                processLogPath: "/tmp/qemu.log",
+                monitorSocketPath: "/tmp/qemu.sock",
+                qmpSocketPath: "/tmp/qemu.qmp.sock",
+                vncHost: "127.0.0.1",
+                vncPort: 5900,
+                consoleScreenshotPath: "/tmp/qemu-console.png",
+                consoleScreenshotRefreshedAt: now.addingTimeInterval(-240),
+                consoleVisualState: .blank,
+                consoleVisualStateAt: now.addingTimeInterval(-240),
+                previewStatus: .stale,
+                startedAt: now.addingTimeInterval(-240)
+            ),
+            installEvidence: VMInstallEvidenceSummary(
+                kind: .guestAgent,
+                isInstalled: true,
+                title: "Guest agent installed",
+                detail: "The guest agent is installed; live health is still pending."
+            ),
+            bootReady: true,
+            windowsInstalled: true,
+            detail: "Windows is running."
+        )
+
+        let status = model.localRuntimeStatus(snapshot: snapshot)
+
+        #expect(status.recommendedAction == "recover-runtime-display")
+        #expect(status.recommendedRecoveryCommand == "veil-vmctl qemu-capture --json")
+        #expect(status.recommendedPowerDownCommand == "veil-vmctl app-runtime-action --json --action stop-runtime")
+        #expect(status.reason.contains("more than 180 seconds"))
     }
 
     @Test("live guest agent bypasses stale console preview but still requires a mirrored host window")
@@ -2521,7 +3080,7 @@ struct HostDashboardModelTests {
         #expect(model.health?.agentVersion == "0.1.0")
         #expect(model.hasLiveAgentConnection)
         #expect(model.connectionDetail == nil)
-        #expect(model.agentDiagnostic == nil)
+        #expect(model.agentDiagnostic?.status == .connected)
         #expect(primary.loadCount == 2)
     }
 
@@ -3129,6 +3688,62 @@ struct MultiDocumentWindowAdoptionTests {
         #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(event, openWindowCountForApp: 0))
     }
 
+    @Test("adopts a window of an unopened app from a guest that reports the whole desktop")
+    func adoptsDesktopWindowOfUnopenedApp() {
+        let event = Self.window(windowId: "hwnd:00ff", appId: "proc_0123456789abcdef", title: "문서")
+
+        // The guest reports only windows with a taskbar button. An app opened from inside Windows gets its
+        // Mac window instead of being left on a desktop the Mac never shows.
+        #expect(HostDashboardModel.shouldAdoptAdditionalWindow(
+            event,
+            openWindowCountForApp: 0,
+            guestReportsDesktopWindows: true
+        ))
+        // The per-app bound and the title and size checks still hold.
+        #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(
+            event,
+            openWindowCountForApp: HostDashboardModel.maximumAdoptedWindowsPerApp,
+            guestReportsDesktopWindows: true
+        ))
+        #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(
+            Self.window(windowId: "hwnd:00fe", appId: "proc_0123456789abcdef", title: " "),
+            openWindowCountForApp: 0,
+            guestReportsDesktopWindows: true
+        ))
+    }
+
+    @Test("a popup still needs its app's window, even from a guest that reports the whole desktop")
+    func refusesPopupOfUnopenedApp() {
+        var popup = Self.window(windowId: "hwnd:00ff", appId: "winapp_paint", title: "Popup Host")
+        popup.popup = true
+
+        #expect(!HostDashboardModel.shouldAdoptAdditionalWindow(
+            popup,
+            openWindowCountForApp: 0,
+            guestReportsDesktopWindows: true
+        ))
+        #expect(HostDashboardModel.shouldAdoptAdditionalWindow(
+            popup,
+            openWindowCountForApp: 1,
+            guestReportsDesktopWindows: true
+        ))
+    }
+
+    @Test("a window that cannot be resized decodes, and an event without the field is resizable")
+    func decodesResizableFlag() throws {
+        let fixed = try JSONDecoder().decode(WindowCreatedEvent.self, from: Data("""
+        {"type":"window.created","windowId":"hwnd:1","processId":7,"appId":"start_a","title":"문자표",
+         "bounds":{"x":0,"y":0,"width":477,"height":430},"state":"normal","focused":true,"resizable":false}
+        """.utf8))
+        let ordinary = try JSONDecoder().decode(WindowCreatedEvent.self, from: Data("""
+        {"type":"window.created","windowId":"hwnd:2","processId":7,"appId":"start_a","title":"메모장",
+         "bounds":{"x":0,"y":0,"width":800,"height":600},"state":"normal","focused":true}
+        """.utf8))
+
+        #expect(!fixed.isResizable)
+        #expect(ordinary.isResizable)
+    }
+
     @Test("counts windows per app rather than in total")
     func countsWindowsPerAppRatherThanInTotal() async {
         let model = await Self.modelWithNotepadOpen()
@@ -3300,32 +3915,273 @@ struct IdleQuietPolicyTests {
     }
 }
 
+@Suite("Frame recovery ordering")
+@MainActor
+struct FrameRecoveryOrderingTests {
+    private static let windowId = "hwnd:0003029A"
+    private static let recoveredAt = Date(timeIntervalSince1970: 2_000)
+
+    @Test("heartbeats and later deltas cannot hide a rejected frame", arguments: [false, true])
+    func rejectedFrameRequiresActualRecovery(mismatchedSize: Bool) async throws {
+        let (model, _) = try await preparedModel(action: "restart")
+        #expect(model.receiveWindowFrameTile(Self.tile(isKeyFrame: true), receivedAt: Self.recoveredAt))
+        let previousTiming = try #require(model.mirrorSessions.first?.frameTiming)
+        var broken = Self.tile(isKeyFrame: false)
+        if mismatchedSize {
+            broken.surfaceWidth = 2
+            broken.rect.width = 2
+        } else {
+            broken.payload = Data("broken PNG".utf8)
+        }
+        #expect(!model.receiveWindowFrameTile(broken, receivedAt: Self.recoveredAt.addingTimeInterval(1)))
+        #expect(!model.receiveWindowFrameTile(Self.tile(isKeyFrame: false), receivedAt: Self.recoveredAt.addingTimeInterval(2)))
+        #expect(!model.receiveWindowFrameUnchanged(
+            WindowFrameUnchangedEvent(windowId: Self.windowId, sequence: 3, capturedAt: "2026-09-08T00:00:00Z"),
+            receivedAt: Self.recoveredAt.addingTimeInterval(60)
+        ))
+        let stalled = try #require(model.mirrorSessions.first)
+        #expect(stalled.frameTiming == previousTiming)
+        #expect(stalled.awaitingKeyFrameReason != nil)
+        #expect(model.compositedFrameImage(for: Self.windowId) == nil)
+        #expect(WindowFrameStreamAssessment.assess(
+            session: stalled, generatedAt: Self.recoveredAt.addingTimeInterval(60)
+        ).status == .stale)
+
+        #expect(model.receiveWindowFrameTile(Self.tile(isKeyFrame: true), receivedAt: Self.recoveredAt.addingTimeInterval(61)))
+        #expect(model.mirrorSessions.first?.awaitingKeyFrameReason == nil)
+        #expect(model.receiveWindowFrameUnchanged(
+            WindowFrameUnchangedEvent(windowId: Self.windowId, sequence: 4, capturedAt: "2026-09-08T00:00:00Z"),
+            receivedAt: Self.recoveredAt.addingTimeInterval(62)
+        ))
+        #expect(WindowFrameStreamAssessment.assess(
+            session: try #require(model.mirrorSessions.first), generatedAt: Self.recoveredAt.addingTimeInterval(62)
+        ).status == .fresh)
+    }
+
+    @Test("restarts a stream after a sequence gap instead of waiting for a large change")
+    func sequenceGapRequestsScopedStreamRestart() async throws {
+        let (model, service) = try await preparedModel(action: "restart")
+        #expect(model.receiveWindowFrameTile(Self.tile(isKeyFrame: true), receivedAt: Self.recoveredAt))
+
+        var skipped = Self.tile(isKeyFrame: false)
+        skipped.sequence = 3
+        #expect(!model.receiveWindowFrameTile(skipped, receivedAt: Self.recoveredAt.addingTimeInterval(1)))
+        #expect(model.requiresFrameStreamRestartAfterTileDrop(windowId: Self.windowId))
+
+        #expect(await model.restartFrameSubscription(windowId: Self.windowId, restartedAt: Self.recoveredAt.addingTimeInterval(2)))
+        #expect(!model.requiresFrameStreamRestartAfterTileDrop(windowId: Self.windowId))
+        #expect(service.frameSubscriptions == [Self.windowId, Self.windowId])
+    }
+
+    @Test("coalesces concurrent frame restarts for one window")
+    func coalescesConcurrentFrameRestarts() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(service: service)
+        _ = try #require(await model.launchNotepad())
+
+        var delayedFirstUnsubscribe = true
+        var firstUnsubscribeEntered = false
+        var releaseFirstUnsubscribe: CheckedContinuation<Void, Never>?
+        service.beforeFrameUnsubscription = {
+            if delayedFirstUnsubscribe {
+                delayedFirstUnsubscribe = false
+                firstUnsubscribeEntered = true
+                await withCheckedContinuation { continuation in
+                    releaseFirstUnsubscribe = continuation
+                }
+            }
+        }
+
+        let first = Task { @MainActor in
+            await model.restartFrameSubscription(windowId: Self.windowId)
+        }
+        while !firstUnsubscribeEntered {
+            await Task.yield()
+        }
+
+        let second = await model.restartFrameSubscription(windowId: Self.windowId)
+        releaseFirstUnsubscribe?.resume()
+        let firstResult = await first.value
+
+        #expect(firstResult)
+        #expect(!second)
+        #expect(service.frameUnsubscriptions == [Self.windowId])
+        #expect(service.frameSubscriptions == [Self.windowId, Self.windowId])
+    }
+
+    @Test("a frame delivered before the subscription reply remains usable", arguments: ["restart", "recover", "resume"], ["json", "binary"])
+    func retainsEarlyFrame(action: String, delivery: String) async throws {
+        let (model, service) = try await preparedModel(action: action)
+        service.beforeFrameSubscription = { [weak model] in
+            guard let model else { return }
+            if delivery == "json" {
+                model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Self.recoveredAt)
+            } else {
+                #expect(model.receiveWindowFrameTile(Self.tile(isKeyFrame: true), receivedAt: Self.recoveredAt))
+            }
+        }
+
+        #expect(await perform(action, model: model))
+
+        let session = try #require(model.mirrorSessions.first)
+        #expect(session.captureState == .streaming)
+        #expect(session.latestFrame?.sequence == 1)
+        #expect(session.frameTiming?.receivedFrameCount == 1)
+        #expect(session.frameTiming?.latestFrameReceivedAt == Self.recoveredAt)
+        if delivery == "binary" { #expect(model.compositedFrameImage(for: Self.windowId) != nil) }
+        #expect(model.receiveWindowFrameUnchanged(
+            WindowFrameUnchangedEvent(windowId: Self.windowId, sequence: 2, capturedAt: "2026-09-08T00:00:00Z"),
+            receivedAt: Self.recoveredAt.addingTimeInterval(20)
+        ))
+        let assessment = WindowFrameStreamAssessment.assess(
+            session: try #require(model.mirrorSessions.first),
+            generatedAt: Self.recoveredAt.addingTimeInterval(20.25)
+        )
+        #expect(assessment.status == .fresh)
+        #expect(assessment.recommendedAction == "none")
+    }
+
+    @Test("a new subscription cannot composite deltas onto the previous stream", arguments: ["restart", "recover", "resume"])
+    func invalidatesPreviousSurface(action: String) async throws {
+        let (model, service) = try await preparedModel(action: action)
+        #expect(model.receiveWindowFrameTile(Self.tile(isKeyFrame: true)))
+        service.beforeFrameSubscription = { [weak model] in
+            guard let model else { return }
+            #expect(model.compositedFrameImage(for: Self.windowId) == nil)
+            #expect(!model.receiveWindowFrameTile(Self.tile(isKeyFrame: false)))
+        }
+
+        #expect(await perform(action, model: model))
+        let session = try #require(model.mirrorSessions.first)
+        #expect(session.latestFrame == nil)
+        #expect(session.compositedFrameGeneration == 0)
+        #expect(session.awaitingKeyFrameReason == "noSurface")
+        #expect(model.compositedFrameImage(for: Self.windowId) == nil)
+    }
+
+    @Test("closing a window while unsubscribe waits prevents resubscription", arguments: ["restart", "recover"])
+    func doesNotResubscribeClosedWindow(action: String) async throws {
+        let (model, service) = try await preparedModel(action: action)
+        service.beforeFrameUnsubscription = { [weak model] in
+            _ = try await model?.receiveProtocolMessage(Data(WindowClosedEvent.notepadClosedJSON.utf8))
+        }
+        #expect(!(await perform(action, model: model)))
+        #expect(service.frameSubscriptions == [Self.windowId])
+        #expect(model.mirrorSessions.isEmpty)
+    }
+
+    @Test("cancellation while unsubscribe waits prevents resubscription", arguments: ["restart", "recover"])
+    func stopsCancelledRecovery(action: String) async throws {
+        let (model, service) = try await preparedModel(action: action)
+        service.beforeFrameUnsubscription = { withUnsafeCurrentTask { $0?.cancel() } }
+        let recovery = Task { await perform(action, model: model) }
+        #expect(!(await recovery.value))
+        #expect(service.frameSubscriptions == [Self.windowId])
+    }
+
+    @Test("an untracked window reported during capture recovery is removed")
+    func removesUntrackedRecoveryWindow() async throws {
+        let (model, service) = try await preparedModel(action: "recover")
+        service.frameSubscriptionError = VeilHostError.agentError(code: "window_not_tracked", message: "Window closed.")
+        #expect(!(await perform("recover", model: model)))
+        #expect(model.mirrorSessions.isEmpty)
+        #expect(model.activeWindows.isEmpty)
+        #expect(model.errorMessage == nil)
+        #expect(model.phase == .connected)
+    }
+
+    private func preparedModel(action: String) async throws -> (HostDashboardModel, FakeDashboardService) {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(
+            service: service,
+            restoreIntentStore: FrameRecoveryIntentStore(),
+            pendingLaunchIntentStore: FrameRecoveryPendingStore()
+        )
+        _ = try #require(await model.launchNotepad())
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        if action == "resume" { #expect(await model.pauseFrameStream(windowId: Self.windowId)) }
+        return (model, service)
+    }
+
+    private func perform(_ action: String, model: HostDashboardModel) async -> Bool {
+        switch action {
+        case "restart": await model.restartFrameSubscription(windowId: Self.windowId, restartedAt: Self.recoveredAt)
+        case "recover": await model.recoverFrameCapture(windowId: Self.windowId, recoveredAt: Self.recoveredAt)
+        default: await model.resumeFrameStream(windowId: Self.windowId, resumedAt: Self.recoveredAt)
+        }
+    }
+
+    private static func tile(isKeyFrame: Bool) -> WindowFrameTile {
+        WindowFrameTile(
+            windowId: windowId, sequence: 1, surfaceWidth: 1, surfaceHeight: 1, scale: 1,
+            isKeyFrame: isKeyFrame, rect: WindowFrameTileRect(x: 0, y: 0, width: 1, height: 1),
+            payload: Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=")!
+        )
+    }
+}
+
+private actor FrameRecoveryIntentStore: WindowRestoreIntentStore {
+    var value: WindowRestoreIntent?
+    func load() -> WindowRestoreIntent? { value }
+    func save(_ intent: WindowRestoreIntent) { value = intent }
+}
+
+private actor FrameRecoveryPendingStore: PendingLaunchIntentStore {
+    var value: PendingLaunchIntent?
+    func load() -> PendingLaunchIntent? { value }
+    func save(_ intent: PendingLaunchIntent) { value = intent }
+}
+
 @MainActor
 private final class FakeDashboardService: HostDashboardService {
+    /// What each `tools.update.request` gets, in order. An empty list refuses, as an agent with no disc does.
+    var toolsUpdateResults: [Result<ToolsUpdateResponse, any Error>] = []
+    private(set) var toolsUpdateRequests = 0
+
+    func startToolsUpdate(_ request: ToolsUpdateRequest) async throws -> ToolsUpdateResponse {
+        toolsUpdateRequests += 1
+        guard !toolsUpdateResults.isEmpty else {
+            throw VeilHostError.agentError(code: "tools_media_missing", message: "No disc.")
+        }
+        return try toolsUpdateResults.removeFirst().get()
+    }
+
     var error: (any Error)?
+    var inputError: (any Error)?
+    var frameSubscriptionError: (any Error)?
     var health: AgentHealthResponse
     var apps: [WindowsApp]
     var closeAccepted: Bool
     var agentWaitReport: AgentConnectionWaitReport?
     var launchWindows: [WindowCreatedEvent] = []
     var launchDelay: Duration?
+    var beforeFrameSubscription: (() async throws -> Void)?
+    var beforeFrameUnsubscription: (() async throws -> Void)?
+    private(set) var shutdownRequests = 0
     private(set) var loadCount = 0
     private(set) var launchCount = 0
     private(set) var restoreCount = 0
     private(set) var launchedAppIds: [String] = []
     private(set) var openedFiles: [(appId: String, fileName: String, contentBase64: String)] = []
+    private(set) var openedSharedFiles: [(appId: String, fileName: String, guestPath: String)] = []
     private(set) var focusedWindowIds: [String] = []
     private(set) var closedWindowIds: [String] = []
     private(set) var resizedWindowRequests: [(windowId: String, width: Int, height: Int)] = []
+    private(set) var resizedDisplayRequests: [(width: Int, height: Int)] = []
     private(set) var mouseInputs: [InputMouseEvent] = []
+    var reportedPointer: GuestPointerPosition?
     private(set) var keyInputs: [InputKeyEvent] = []
     private(set) var textInputs: [InputTextEvent] = []
     private(set) var clipboardTexts: [ClipboardTextSet] = []
+    private(set) var clipboardImages: [ClipboardImageSet] = []
+    private(set) var clipboardFiles: [ClipboardFilesSet] = []
     private(set) var frameSubscriptions: [String] = []
     private(set) var frameUnsubscriptions: [String] = []
 
     init(
         error: (any Error)? = nil,
+        inputError: (any Error)? = nil,
+        frameSubscriptionError: (any Error)? = nil,
         health: AgentHealthResponse = .fixture,
         apps: [WindowsApp] = [.notepad],
         closeAccepted: Bool = true,
@@ -3333,11 +4189,18 @@ private final class FakeDashboardService: HostDashboardService {
         launchDelay: Duration? = nil
     ) {
         self.error = error
+        self.inputError = inputError
+        self.frameSubscriptionError = frameSubscriptionError
         self.health = health
         self.apps = apps
         self.closeAccepted = closeAccepted
         self.agentWaitReport = agentWaitReport
         self.launchDelay = launchDelay
+    }
+
+    func requestSystemShutdown() async throws -> SystemShutdownResponse {
+        shutdownRequests += 1
+        return SystemShutdownResponse(requestId: "req_system_shutdown_1", accepted: true)
     }
 
     func loadOverview() async throws -> HostOverview {
@@ -3405,6 +4268,20 @@ private final class FakeDashboardService: HostDashboardService {
         )
     }
 
+    func openSharedFile(appId: String, fileName: String, guestPath: String) async throws -> WindowsAppLaunchResult {
+        if let error {
+            throw error
+        }
+
+        openedSharedFiles.append((appId, fileName, guestPath))
+        return WindowsAppLaunchResult(
+            health: health,
+            apps: apps,
+            launch: .fixture,
+            window: .fixture(appId: appId)
+        )
+    }
+
     func focusWindow(windowId: String) async throws -> WindowFocusResponse {
         if let error {
             throw error
@@ -3433,6 +4310,11 @@ private final class FakeDashboardService: HostDashboardService {
         )
     }
 
+    func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse {
+        resizedDisplayRequests.append((width, height))
+        return DisplayResizeResponse(requestId: "req_resize_display", accepted: true, width: width, height: height)
+    }
+
     func resizeWindow(windowId: String, width: Int, height: Int) async throws -> WindowResizeResponse {
         if let error {
             throw error
@@ -3448,6 +4330,9 @@ private final class FakeDashboardService: HostDashboardService {
     }
 
     func sendMouseInput(_ input: InputMouseEvent) async throws {
+        if let inputError {
+            throw inputError
+        }
         if let error {
             throw error
         }
@@ -3455,7 +4340,15 @@ private final class FakeDashboardService: HostDashboardService {
         mouseInputs.append(input)
     }
 
+    func sendMouseInputReportingPointer(_ input: InputMouseEvent) async throws -> GuestPointerPosition? {
+        try await sendMouseInput(input)
+        return reportedPointer
+    }
+
     func sendKeyInput(_ input: InputKeyEvent) async throws {
+        if let inputError {
+            throw inputError
+        }
         if let error {
             throw error
         }
@@ -3464,6 +4357,9 @@ private final class FakeDashboardService: HostDashboardService {
     }
 
     func sendTextInput(_ input: InputTextEvent) async throws {
+        if let inputError {
+            throw inputError
+        }
         if let error {
             throw error
         }
@@ -3479,7 +4375,27 @@ private final class FakeDashboardService: HostDashboardService {
         clipboardTexts.append(clipboard)
     }
 
+    func sendClipboardImage(_ clipboard: ClipboardImageSet) async throws {
+        if let error {
+            throw error
+        }
+
+        clipboardImages.append(clipboard)
+    }
+
+    func sendClipboardFiles(_ clipboard: ClipboardFilesSet) async throws {
+        if let error {
+            throw error
+        }
+
+        clipboardFiles.append(clipboard)
+    }
+
     func subscribeWindowFrames(windowId: String) async throws {
+        try await beforeFrameSubscription?()
+        if let frameSubscriptionError {
+            throw frameSubscriptionError
+        }
         if let error {
             throw error
         }
@@ -3488,6 +4404,7 @@ private final class FakeDashboardService: HostDashboardService {
     }
 
     func unsubscribeWindowFrames(windowId: String) async throws {
+        try await beforeFrameUnsubscription?()
         if let error {
             throw error
         }
@@ -3609,6 +4526,13 @@ private extension AgentHealthResponse {
                 clipboardText: true
             )
         )
+    }
+
+    static var imageClipboardReady: AgentHealthResponse {
+        var response = clipboardReady
+        response.capabilities.clipboardImage = true
+        response.capabilities.clipboardFiles = true
+        return response
     }
 
     static var clipboardReadyWithSparsePackageStatus: AgentHealthResponse {
@@ -4351,6 +5275,37 @@ struct HiddenWindowFrameStreamTests {
         #expect(second == false)
     }
 
+    @Test("serializes a rapid minimize and restore so the visible window is not left paused")
+    func serializesRapidMinimizeAndRestore() async throws {
+        let service = FakeDashboardService(health: .captureReady)
+        let model = HostDashboardModel(
+            service: service,
+            restoreIntentStore: FrameRecoveryIntentStore(),
+            pendingLaunchIntentStore: FrameRecoveryPendingStore()
+        )
+        await model.load()
+        await model.launchNotepad()
+        model.receiveWindowFrame(.notepadFirstFrame, receivedAt: Date(timeIntervalSince1970: 1_000))
+        let windowID = "hwnd:0003029A"
+        service.beforeFrameUnsubscription = {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        let pause = Task { @MainActor in
+            await model.pauseFrameStream(windowId: windowID)
+        }
+        try await Task.sleep(nanoseconds: 10_000_000)
+        let resume = Task { @MainActor in
+            await model.resumeFrameStream(windowId: windowID)
+        }
+
+        #expect(await pause.value)
+        #expect(await resume.value)
+        #expect(model.isFrameStreamPaused(windowId: windowID) == false)
+        #expect(service.frameUnsubscriptions == [windowID])
+        #expect(service.frameSubscriptions == [windowID, windowID])
+    }
+
     @Test("refuses to resume a window that was never paused")
     func doesNotResumeUnpausedWindow() async {
         let model = await modelWithStreamingNotepad()
@@ -4757,5 +5712,178 @@ struct GuestEventRateLimitingTests {
         }
 
         #expect(accepted == 360)
+    }
+}
+
+@Suite("Clipboard images and files")
+@MainActor
+struct ClipboardImageAndFilesModelTests {
+    /// The 2×2 PNG in `harness/protocol-fixtures/clipboard.image.set.*.json`.
+    private static let png = Data(
+        base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR4nGP4z8DwH4QZYAwAR8oH+WdZbrcAAAAASUVORK5CYII="
+    )!
+
+    private func guestImage(sequence: Int) throws -> ClipboardImageSet {
+        try ClipboardImagePayload(png: Self.png).message(
+            requestId: "evt_clipboard_\(sequence)",
+            origin: "guest",
+            sequence: sequence
+        )
+    }
+
+    @Test("sends a host image with the shared clipboard sequence")
+    func sendsHostImage() async throws {
+        let service = FakeDashboardService(health: .imageClipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        #expect(await model.sendHostClipboardText("first") == .sent)
+        #expect(await model.sendHostClipboardImage(png: Self.png) == .sent)
+
+        let image = try #require(service.clipboardImages.first)
+        #expect(image.sequence == 2)
+        #expect(image.origin == "host")
+        #expect(image.width == 2 && image.height == 2)
+        #expect(try ClipboardImagePayload(message: image).png == Self.png)
+    }
+
+    @Test("refuses to paste an image an older agent cannot receive")
+    func refusesImageWithoutCapability() async {
+        let service = FakeDashboardService(health: .clipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        // `.skipped` would let the paste shortcut through and paste Windows' own stale clipboard.
+        guard case .failed = await model.sendHostClipboardImage(png: Self.png) else {
+            Issue.record("Expected an image paste without the capability to fail.")
+            return
+        }
+        #expect(service.clipboardImages.isEmpty)
+    }
+
+    @Test("refuses an image above the byte bound without sending it")
+    func refusesOversizedImage() async {
+        let service = FakeDashboardService(health: .imageClipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        var oversized = Self.png
+        oversized.append(Data(count: ClipboardImagePayload.maximumByteCount))
+        guard case .failed = await model.sendHostClipboardImage(png: oversized) else {
+            Issue.record("Expected an oversized image to fail.")
+            return
+        }
+        #expect(service.clipboardImages.isEmpty)
+        #expect(model.clipboardSequence == 0)
+    }
+
+    @Test("text and image share one guest sequence space")
+    func sharesGuestSequence() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+
+        #expect(model.receiveClipboardImage(try guestImage(sequence: 9)))
+        #expect(model.latestGuestClipboardImage?.png == Self.png)
+        #expect(!model.receiveClipboardText(
+            ClipboardTextSet(requestId: "evt_clipboard_8", origin: "guest", sequence: 8, text: "older")
+        ))
+        #expect(!model.receiveClipboardImage(try guestImage(sequence: 9)))
+    }
+
+    @Test("rejects a guest image whose hash does not match its bytes")
+    func rejectsTamperedImage() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+
+        var image = try guestImage(sequence: 1)
+        image.sha256 = String(repeating: "0", count: 64)
+        #expect(!model.receiveClipboardImage(image))
+        #expect(model.latestGuestClipboardImage == nil)
+        // A rejected message must not advance the sequence, or a guest could block later real updates.
+        #expect(model.lastGuestClipboardSequence == 0)
+    }
+
+    @Test("consumes a guest image event from the event stream")
+    func consumesGuestImageEvent() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+        let message = try JSONEncoder.veilProtocol.encode(guestImage(sequence: 3))
+        var results: [HostProtocolMessageResult] = []
+
+        await model.consumeProtocolMessages(from: StaticHostEventSource(messages: [message, message])) { result in
+            results.append(result)
+        }
+
+        #expect(results == [.handledClipboardImage(sequence: 3), .ignored])
+    }
+
+    @Test("names shared-folder files to an agent that can place them")
+    func sendsClipboardFiles() async throws {
+        let service = FakeDashboardService(health: .imageClipboardReady)
+        let model = HostDashboardModel(service: service)
+        await model.load()
+
+        let outcome = await model.sendHostClipboardFiles(
+            shareName: "VeilShared",
+            relativePaths: [#"Veil Clipboard\20261105-140102-1A2B3C\report.pdf"#]
+        )
+
+        #expect(outcome == .sent)
+        let files = try #require(service.clipboardFiles.first)
+        #expect(files.origin == "host")
+        #expect(files.relativePaths == [#"Veil Clipboard\20261105-140102-1A2B3C\report.pdf"#])
+    }
+}
+
+@Suite("Clipboard files from Windows in the model")
+@MainActor
+struct ClipboardGuestFilesModelTests {
+    private func guestFiles(sequence: Int, name: String = "budget.xlsx") -> ClipboardFilesSet {
+        ClipboardFilesSet(
+            requestId: "evt_clipboard_\(sequence)",
+            origin: "guest",
+            sequence: sequence,
+            shareName: "VeilShared",
+            relativePaths: ["Veil Clipboard from Windows\\20261111-050102-4D5E6F\\\(name)"]
+        )
+    }
+
+    @Test("consumes a guest file copy from the event stream once")
+    func consumesGuestFiles() async throws {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+        let message = try JSONEncoder.veilProtocol.encode(guestFiles(sequence: 4))
+        var results: [HostProtocolMessageResult] = []
+
+        await model.consumeProtocolMessages(from: StaticHostEventSource(messages: [message, message])) { result in
+            results.append(result)
+        }
+
+        #expect(results == [.handledClipboardFiles(sequence: 4), .ignored])
+        #expect(model.latestGuestClipboardFiles?.fileNames == ["budget.xlsx"])
+    }
+
+    @Test("shares the guest sequence space with text and does not advance on a rejected copy")
+    func sharesSequence() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+
+        #expect(!model.receiveClipboardFiles(guestFiles(sequence: 2, name: "a\u{202E}txt.exe")))
+        #expect(model.lastGuestClipboardSequence == 0)
+        #expect(model.receiveClipboardText(ClipboardTextSet(requestId: "evt_clipboard_5", origin: "guest", sequence: 5, text: "x")))
+        #expect(!model.receiveClipboardFiles(guestFiles(sequence: 4)))
+        #expect(model.latestGuestClipboardFiles == nil)
+        #expect(model.receiveClipboardFiles(guestFiles(sequence: 6)))
+        #expect(model.lastGuestClipboardSequence == 6)
+    }
+
+    @Test("ignores a host-origin file copy arriving from the guest")
+    func ignoresHostOrigin() async {
+        let model = HostDashboardModel(service: FakeDashboardService(health: .imageClipboardReady))
+        await model.load()
+        var message = guestFiles(sequence: 3)
+        message.origin = "host"
+
+        #expect(!model.receiveClipboardFiles(message))
     }
 }

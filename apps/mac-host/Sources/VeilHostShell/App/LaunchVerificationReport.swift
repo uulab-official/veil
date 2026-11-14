@@ -43,6 +43,8 @@ struct MainWindowLaunchReport: Encodable, Equatable {
             && mainWindowCount == 1
             && visibleMainWindowCount == 1
             && duplicateMainWindowCount == 0
+            && isAppActive
+            && isMainWindowKey
             && frame.width >= Double(MainWindowLayout.minimumSupportedSize.width)
             && frame.height >= Double(MainWindowLayout.minimumSupportedSize.height)
             && minWidth >= Double(MainWindowLayout.minimumSupportedSize.width)

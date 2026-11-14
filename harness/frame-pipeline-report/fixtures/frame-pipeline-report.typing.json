@@ -21,7 +21,8 @@
         "noSurface": 0,
         "surfaceSizeChanged": 0,
         "undecodablePayload": 0,
-        "payloadRectMismatch": 0
+        "payloadRectMismatch": 0,
+        "sequenceGap": 0
       },
       "wireBytes": 486320,
       "keyFrameWireBytes": 402180,

@@ -122,6 +122,53 @@ struct VMProfileStoreTests {
         #expect(try resolvedBookmarkPath(try #require(updatedProfile.installerMediaBookmarkData)) == canonicalPath(replacementInstallerURL))
     }
 
+    @Test("local runtime rejects resource mutations while Windows is active")
+    func resourceMutationsRequireStoppedRuntime() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(homeDirectory: directory)
+        profile.installerMediaPath = installerURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+
+        let bootRunner = FakeVMRuntimeBooter(startState: .running, currentState: .running)
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            bootRunner: bootRunner,
+            qemuLaunchRecordStore: JSONQEMULaunchRecordStore(
+                directory: directory.appendingPathComponent("QEMU Launch", isDirectory: true)
+            )
+        )
+
+        await #expect(throws: VMRuntimeError.resourceMutationRequiresStoppedRuntime) {
+            try await service.updateProfilePaths(
+                installerMediaPath: directory.appendingPathComponent("replacement.iso").path,
+                driverMediaPath: nil,
+                virtualDiskPath: diskURL.path
+            )
+        }
+        await #expect(throws: VMRuntimeError.resourceMutationRequiresStoppedRuntime) {
+            try await service.prepareDefaultVM()
+        }
+        await #expect(throws: VMRuntimeError.resourceMutationRequiresStoppedRuntime) {
+            try await service.createDefaultVirtualDisk()
+        }
+
+        let unchanged = try #require(await store.load())
+        #expect(unchanged.installerMediaPath == installerURL.path)
+        #expect(unchanged.virtualDiskPath == diskURL.path)
+    }
+
     @Test("export diagnostics redacts the current user's home directory from serialized paths")
     func exportDiagnosticsRedactsHomeDirectoryFromSerializedPaths() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -795,6 +842,140 @@ struct VMProfileStoreTests {
         #expect(snapshot.latestConsoleLaunch?.previewStatus == .fresh)
     }
 
+    @Test("local runtime treats an observed blank console as stale despite a fresh screenshot")
+    func localRuntimeTreatsObservedBlankConsoleAsStale() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let driverURL = directory.appendingPathComponent("virtio-win.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("drivers".utf8).write(to: driverURL)
+        try Data(repeating: 0, count: 2 * 1_024 * 1_024).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
+
+        let qemuLaunchDirectory = directory.appendingPathComponent("QEMU Launch", isDirectory: true)
+        try FileManager.default.createDirectory(at: qemuLaunchDirectory, withIntermediateDirectories: true)
+        let processLogURL = qemuLaunchDirectory.appendingPathComponent("qemu-launch.log")
+        let consoleScreenshotURL = qemuLaunchDirectory.appendingPathComponent("qemu-console.png")
+        let monitorSocketURL = directory.appendingPathComponent("vq-test.sock")
+        try Data("qemu log".utf8).write(to: processLogURL)
+        try Data("fresh but blank".utf8).write(to: consoleScreenshotURL)
+        try Data("socket".utf8).write(to: monitorSocketURL)
+        let capturedAt = Date(timeIntervalSince1970: 1_782_839_120)
+
+        let launchRecord = QEMULaunchRecord(
+            pid: 1234,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: ["-display", "none"],
+            processLogPath: processLogURL.path,
+            monitorSocketPath: monitorSocketURL.path,
+            consoleScreenshotPath: consoleScreenshotURL.path,
+            consoleScreenshotRefreshedAt: capturedAt,
+            consoleVisualState: .blank,
+            consoleVisualStateAt: capturedAt,
+            startedAt: Date(timeIntervalSince1970: 1_782_838_800)
+        )
+        let launchEncoder = JSONEncoder()
+        launchEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        launchEncoder.dateEncodingStrategy = .iso8601
+        try launchEncoder.encode(launchRecord)
+            .write(to: qemuLaunchDirectory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.driverMediaPath = driverURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            qemuLaunchRecordStore: JSONQEMULaunchRecordStore(directory: qemuLaunchDirectory)
+        )
+
+        let snapshot = try await service.loadSnapshot()
+
+        #expect(snapshot.latestConsoleLaunch?.consoleScreenshotRefreshedAt == capturedAt)
+        #expect(snapshot.latestConsoleLaunch?.previewStatus == .stale)
+    }
+
+    @Test("local runtime rejects a screenshot refreshed after its desktop classification")
+    func localRuntimeRejectsScreenshotNewerThanDesktopClassification() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let installerURL = directory.appendingPathComponent("Windows.iso")
+        let driverURL = directory.appendingPathComponent("virtio-win.iso")
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installer".utf8).write(to: installerURL)
+        try Data("drivers".utf8).write(to: driverURL)
+        try Data(repeating: 0, count: 2 * 1_024 * 1_024).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        try Data("<unattend />".utf8).write(to: sharedFolderURL.appendingPathComponent("Autounattend.xml"))
+        try Data("auto install media".utf8).write(to: sharedFolderURL.appendingPathComponent("VeilAutoInstall.iso"))
+
+        let qemuLaunchDirectory = directory.appendingPathComponent("QEMU Launch", isDirectory: true)
+        try FileManager.default.createDirectory(at: qemuLaunchDirectory, withIntermediateDirectories: true)
+        let processLogURL = qemuLaunchDirectory.appendingPathComponent("qemu-launch.log")
+        let consoleScreenshotURL = qemuLaunchDirectory.appendingPathComponent("qemu-console.png")
+        let monitorSocketURL = directory.appendingPathComponent("vq-test.sock")
+        try Data("qemu log".utf8).write(to: processLogURL)
+        try Data("new unclassified capture".utf8).write(to: consoleScreenshotURL)
+        try Data("socket".utf8).write(to: monitorSocketURL)
+        let classifiedAt = Date(timeIntervalSince1970: 1_782_838_900)
+        let capturedAt = Date(timeIntervalSince1970: 1_782_839_120)
+
+        let launchRecord = QEMULaunchRecord(
+            pid: 1234,
+            executablePath: "/opt/homebrew/bin/qemu-system-aarch64",
+            arguments: ["-display", "none"],
+            processLogPath: processLogURL.path,
+            monitorSocketPath: monitorSocketURL.path,
+            vncHost: "127.0.0.1",
+            vncPort: 5900,
+            consoleScreenshotPath: consoleScreenshotURL.path,
+            consoleScreenshotRefreshedAt: capturedAt,
+            consoleVisualState: .desktop,
+            consoleVisualStateAt: classifiedAt,
+            startedAt: Date(timeIntervalSince1970: 1_782_838_800)
+        )
+        let launchEncoder = JSONEncoder()
+        launchEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        launchEncoder.dateEncodingStrategy = .iso8601
+        try launchEncoder.encode(launchRecord)
+            .write(to: qemuLaunchDirectory.appendingPathComponent("qemu-launch-latest.json"), options: .atomic)
+
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.installerMediaPath = installerURL.path
+        profile.driverMediaPath = driverURL.path
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+
+        let service = LocalVMRuntimeService(
+            profileStore: store,
+            qemuLaunchRecordStore: JSONQEMULaunchRecordStore(directory: qemuLaunchDirectory),
+            consoleScreenshotRefresher: { _, imageURL in
+                try? Data("unclassified monitor refresh".utf8).write(to: imageURL)
+            }
+        )
+
+        let snapshot = try await service.loadSnapshot()
+
+        #expect(snapshot.latestConsoleLaunch?.consoleScreenshotRefreshedAt == capturedAt)
+        #expect(snapshot.latestConsoleLaunch?.consoleVisualStateAt == classifiedAt)
+        #expect(snapshot.latestConsoleLaunch?.previewStatus == .stale)
+        #expect(try String(contentsOf: consoleScreenshotURL, encoding: .utf8) == "new unclassified capture")
+    }
+
     @Test("local runtime reports running when latest QEMU launch pid is alive")
     func localRuntimeReportsRunningWhenLatestQEMULaunchPIDIsAlive() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -899,7 +1080,7 @@ struct VMProfileStoreTests {
         #expect(snapshot.windowsInstalled)
         #expect(snapshot.installEvidence.kind == .guestAgent)
         #expect(snapshot.installEvidence.isInstalled)
-        #expect(snapshot.installEvidence.title == "Guest agent connected")
+        #expect(snapshot.installEvidence.title == "Guest agent installed")
         #expect(snapshot.installEvidence.detail.contains("0.1.0"))
     }
 
@@ -1551,6 +1732,9 @@ struct VMProfileStoreTests {
         #expect(startScript.contains(#"$ListenHost = "0.0.0.0""#))
         #expect(startScript.contains(#"$ProbeHost = "127.0.0.1""#))
         #expect(startCommand.contains("Start-VeilAgent.ps1"))
+        // Unattended first logon must get the installer's exit code, never a hidden `pause`.
+        #expect(installCommand.contains("if not defined VEIL_UNATTENDED pause"))
+        #expect(installCommand.contains("exit /b %VEIL_EXIT_CODE%"))
         #expect(diagnosticsCommand.contains("Collect-VeilAgentDiagnostics.ps1"))
         #expect(diagnosticsCommand.contains("-ExecutionPolicy Bypass"))
         #expect(repairCommand.contains("Repair-VeilAgentConnectivity.ps1"))
@@ -2019,6 +2203,73 @@ struct VMProfileStoreTests {
         #expect(bootRunner.startCount == 1)
         #expect(bootRunner.startedProfile?.installerMediaPath == nil)
         #expect(bootRunner.startedProfile?.virtualDiskPath == diskURL.path)
+    }
+
+    @Test("a cold start moves an installed Windows with viogpudo onto virtio-gpu alone")
+    func coldStartBootsOnVirtioGPUAfterDriverReport() async throws {
+        let (service, store, bootRunner) = try await Self.installedRuntime(currentState: nil)
+
+        try await service.recordVirtioGPUDriverInstalled(true)
+        #expect(try await store.load()?.bootsOnVirtioGPU == nil)
+
+        _ = try await service.start()
+
+        #expect(bootRunner.startedProfile?.bootsOnVirtioGPU == true)
+        #expect(try await store.load()?.bootsOnVirtioGPU == true)
+
+        // A later report that the driver is gone takes effect at the following cold start.
+        try await service.recordVirtioGPUDriverInstalled(false)
+        #expect(try await store.load()?.bootsOnVirtioGPU == true)
+        bootRunner.currentState = .stopped
+        _ = try await service.start()
+        #expect(bootRunner.startedProfile?.bootsOnVirtioGPU == false)
+    }
+
+    @Test("a start that finds Windows running keeps the display devices QEMU already has")
+    func runningStartKeepsDisplayDevices() async throws {
+        let (service, store, _) = try await Self.installedRuntime(currentState: .running)
+
+        try await service.recordVirtioGPUDriverInstalled(true)
+        _ = try await service.start()
+
+        #expect(try await store.load()?.bootsOnVirtioGPU == nil)
+        #expect(try await store.load()?.attachesMemoryBalloon == nil)
+    }
+
+    @Test("a cold start attaches the memory balloon; a suspended session keeps its devices")
+    func coldStartAttachesMemoryBalloon() async throws {
+        let (service, store, bootRunner) = try await Self.installedRuntime(currentState: nil)
+
+        _ = try await service.start()
+
+        #expect(bootRunner.startedProfile?.attachesMemoryBalloon == true)
+        #expect(try await store.load()?.attachesMemoryBalloon == true)
+
+        let (suspendedService, suspendedStore, _) = try await Self.installedRuntime(currentState: .suspended)
+        _ = try await suspendedService.start()
+        #expect(try await suspendedStore.load()?.attachesMemoryBalloon == nil)
+    }
+
+    private static func installedRuntime(
+        currentState: VMRuntimeState?
+    ) async throws -> (LocalVMRuntimeService, JSONVMProfileStore, FakeVMRuntimeBooter) {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let diskURL = directory.appendingPathComponent("Windows.img")
+        let sharedFolderURL = directory.appendingPathComponent("Veil Shared", isDirectory: true)
+        try Data("installed disk".utf8).write(to: diskURL)
+        try FileManager.default.createDirectory(at: sharedFolderURL, withIntermediateDirectories: true)
+        let store = JSONVMProfileStore(directory: directory)
+        var profile = VMProfile.defaultWindows11Arm(createdAt: Date(timeIntervalSince1970: 1_782_752_400))
+        profile.windowsInstalled = true
+        profile.guestAgentVersion = "0.1.0"
+        profile.installerMediaPath = nil
+        profile.virtualDiskPath = diskURL.path
+        profile.sharedFolderPath = sharedFolderURL.path
+        try await store.save(profile)
+        let bootRunner = FakeVMRuntimeBooter(startState: .running, currentState: currentState)
+        return (LocalVMRuntimeService(profileStore: store, bootRunner: bootRunner), store, bootRunner)
     }
 
     @Test("local runtime starts with paths resolved from security scoped bookmarks")

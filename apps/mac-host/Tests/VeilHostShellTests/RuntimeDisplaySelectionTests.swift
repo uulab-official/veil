@@ -91,14 +91,34 @@ struct WindowsDisplayAspectRatioPolicyTests {
 }
 
 struct RuntimeWorkspacePresentationPolicyTests {
-    @Test("installed Windows defaults to the app launcher even when a desktop display exists")
+    @Test("installed Windows with a live app connection defaults to the app launcher")
     func installedWindowsDefaultsToLauncher() {
         #expect(
             RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
                 windowsInstalled: true,
                 runtimeState: .running,
-                hasDesktopDisplay: true
+                hasDesktopDisplay: true,
+                hasLiveAppConnection: true
             ) == false
+        )
+    }
+
+    @Test("installed Windows without the app connection shows its desktop, like a Parallels VM window")
+    func installedWindowsWithoutConnectionShowsDesktop() {
+        #expect(
+            RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
+                windowsInstalled: true,
+                runtimeState: .running,
+                hasDesktopDisplay: true,
+                hasLiveAppConnection: false
+            )
+        )
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.defaultShowsFullDesktop(
+                windowsInstalled: true,
+                runtimeState: .stopped,
+                hasDesktopDisplay: false
+            )
         )
     }
 
@@ -119,6 +139,96 @@ struct RuntimeWorkspacePresentationPolicyTests {
             RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
                 windowsInstalled: true,
                 hasFirstAppFrame: true
+            )
+        )
+    }
+
+    @Test("a desktop Veil chose gives way to apps only while the app connection is up")
+    func returnsToAppsWhenTheConnectionIsBack() {
+        // Windows that kept their frames through a dropped connection: no first frame will arrive, so the
+        // connection coming back is what returns to apps.
+        #expect(
+            RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: true,
+                hasFirstAppFrame: true,
+                hasLiveAppConnection: true
+            )
+        )
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: true,
+                hasFirstAppFrame: true,
+                hasLiveAppConnection: false
+            )
+        )
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: true,
+                hasFirstAppFrame: false,
+                hasLiveAppConnection: true
+            )
+        )
+    }
+
+    @Test("with no Windows app open, the app connection alone leaves the desktop Veil chose")
+    func noAppWindowsReturnToApps() {
+        #expect(
+            RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: true,
+                hasFirstAppFrame: false,
+                hasAppWindows: false,
+                hasLiveAppConnection: true
+            )
+        )
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: true,
+                hasFirstAppFrame: false,
+                hasAppWindows: false,
+                hasLiveAppConnection: false
+            )
+        )
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: false,
+                hasFirstAppFrame: false,
+                hasAppWindows: false,
+                hasLiveAppConnection: true
+            )
+        )
+    }
+
+    @Test("a dropped app connection leaves open app windows on screen instead of showing the desktop")
+    func droppedConnectionKeepsAppWindows() {
+        #expect(
+            RuntimeWorkspacePresentationPolicy.keepsAppWindows(
+                showsApps: true,
+                windowsInstalled: true,
+                hasAppWindows: true
+            )
+        )
+        // Nothing is open, so the desktop is the only thing there is to show.
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.keepsAppWindows(
+                showsApps: true,
+                windowsInstalled: true,
+                hasAppWindows: false
+            )
+        )
+        // The desktop is already showing.
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.keepsAppWindows(
+                showsApps: false,
+                windowsInstalled: true,
+                hasAppWindows: true
+            )
+        )
+        // Windows Setup has no apps to keep.
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.keepsAppWindows(
+                showsApps: true,
+                windowsInstalled: false,
+                hasAppWindows: true
             )
         )
     }

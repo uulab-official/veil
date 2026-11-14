@@ -16,6 +16,13 @@ try {
     Write-Host "InstallRoot=$InstallRoot"
     Write-Host "Port=$Port"
 
+    # The specialize pass installed viogpudo while QEMU still attaches ramfb for setup, so this first
+    # session has two monitors; keep the one Veil shows. Best effort: it never stops the agent install.
+    $DriversScript = Join-Path $PSScriptRoot "Install-VeilVirtIODrivers.ps1"
+    if (Test-Path $DriversScript) {
+        & $DriversScript -DriverFolders @() -SingleBootDisplay
+    }
+
     $AgentRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
     $Installer = Join-Path $AgentRoot "Install Veil Agent.cmd"
     if (-not (Test-Path $Installer)) {
@@ -23,13 +30,18 @@ try {
     }
 
     Write-Host "Running $Installer"
+    # The installer leaves VeilAgent.exe running. Start-Process -Wait waits for every descendant,
+    # so it would never return and the first-logon command would hang; wait for the installer only.
+    $env:VEIL_UNATTENDED = "1"
     $Process = Start-Process `
         -FilePath $Installer `
         -ArgumentList @("-InstallRoot", "`"$InstallRoot`"", "-Port", "$Port") `
         -WorkingDirectory $AgentRoot `
         -WindowStyle Minimized `
-        -Wait `
         -PassThru
+    # Reading Handle keeps it open so ExitCode is still available after the process exits.
+    $null = $Process.Handle
+    $Process.WaitForExit()
 
     Write-Host "Installer exited with code $($Process.ExitCode)."
     if ($Process.ExitCode -ne 0) {

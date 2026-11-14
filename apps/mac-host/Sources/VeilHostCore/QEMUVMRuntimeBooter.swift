@@ -13,8 +13,17 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
     public var qmpSocketPath: String?
     public var vncHost: String?
     public var vncPort: Int?
+    /// QEMU's display server on a Unix socket only this user can open, instead of a loopback TCP port
+    /// every account on the Mac can reach. Set for launches since 2026-11-14; older records carry
+    /// `vncHost`/`vncPort`.
+    public var vncSocketPath: String?
     public var consoleScreenshotPath: String?
     public var consoleScreenshotRefreshedAt: Date?
+    /// The most recent live VNC observation, when `qemu-display-smoke` has validated the running
+    /// console. A screenshot timestamp alone is not enough: a successfully captured all-black frame
+    /// is still a broken console for the purposes of app launch recovery.
+    public var consoleVisualState: QEMUConsoleVisualState?
+    public var consoleVisualStateAt: Date?
     public var startedAt: Date
 
     public init(
@@ -30,8 +39,11 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         qmpSocketPath: String? = nil,
         vncHost: String? = nil,
         vncPort: Int? = nil,
+        vncSocketPath: String? = nil,
         consoleScreenshotPath: String? = nil,
         consoleScreenshotRefreshedAt: Date? = nil,
+        consoleVisualState: QEMUConsoleVisualState? = nil,
+        consoleVisualStateAt: Date? = nil,
         startedAt: Date
     ) {
         self.kind = kind
@@ -46,8 +58,11 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         self.qmpSocketPath = qmpSocketPath
         self.vncHost = vncHost
         self.vncPort = vncPort
+        self.vncSocketPath = vncSocketPath
         self.consoleScreenshotPath = consoleScreenshotPath
         self.consoleScreenshotRefreshedAt = consoleScreenshotRefreshedAt
+        self.consoleVisualState = consoleVisualState
+        self.consoleVisualStateAt = consoleVisualStateAt
         self.startedAt = startedAt
     }
 }
@@ -76,16 +91,21 @@ public struct QEMURunningProcess: Codable, Equatable, Sendable {
 }
 
 public struct JSONQEMULaunchRecordStore: QEMULaunchRecordStore {
-    private let directory: URL
+    private let fixedDirectory: URL?
     private let fileName: String
 
+    /// A nil directory follows the selected library machine's diagnostics folder.
     public init(
-        directory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
-            .appendingPathComponent("QEMU Launch", isDirectory: true),
+        directory: URL? = nil,
         fileName: String = "qemu-launch-latest.json"
     ) {
-        self.directory = directory
+        self.fixedDirectory = directory
         self.fileName = fileName
+    }
+
+    private var directory: URL {
+        fixedDirectory ?? QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+            .appendingPathComponent("QEMU Launch", isDirectory: true)
     }
 
     public func loadLatest() async throws -> QEMULaunchRecord? {
@@ -102,51 +122,58 @@ public struct JSONQEMULaunchRecordStore: QEMULaunchRecordStore {
 public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     public static let shared = QEMUVMRuntimeBooter()
 
-    private let diagnosticsDirectory: URL
+    private let fixedDiagnosticsDirectory: URL?
     private let planBuilder: @Sendable (VMProfile) throws -> QEMUWindowsBootPlan
     private let tpmEmulatorRunner: @Sendable (QEMUWindowsBootPlan) throws -> Void
     private let processRunner: @Sendable (Process) throws -> Void
     private let frontmostRunner: @Sendable () -> Void
     private let bootKeySender: @Sendable (URL) -> Bool
     private let consoleScreenshotCapturer: @Sendable (URL, URL) -> Void
-    private let vncPortAllocator: @Sendable () -> Int?
     private let displayMode: QEMUWindowsBootDisplayMode
     private let suspensionController: QEMUVMSuspensionController
     private let suspensionRecordStore: any VMSuspensionRecordStore
     private let qmpControl: any QEMUQMPControlling
+    private let agentAccessTokenFileURL: URL
     private var process: Process?
     private var monitorSocketURL: URL?
     private var qmpSocketURL: URL?
 
     public init(
-        diagnosticsDirectory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory(),
+        diagnosticsDirectory: URL? = nil,
         planBuilder: @escaping @Sendable (VMProfile) throws -> QEMUWindowsBootPlan = QEMUVMRuntimeBooter.makePlan(for:),
         tpmEmulatorRunner: @escaping @Sendable (QEMUWindowsBootPlan) throws -> Void = QEMUVMRuntimeBooter.startTPMEmulatorIfNeeded,
         processRunner: @escaping @Sendable (Process) throws -> Void = { try $0.run() },
         frontmostRunner: @escaping @Sendable () -> Void = QEMUVMRuntimeBooter.bringQEMUToFrontIfAllowed,
         bootKeySender: @escaping @Sendable (URL) -> Bool = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
         consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
-        vncPortAllocator: @escaping @Sendable () -> Int? = QEMUVMRuntimeBooter.allocateLoopbackVNCPort,
         displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa,
         suspensionController: QEMUVMSuspensionController = QEMUVMSuspensionController(),
         suspensionRecordStore: (any VMSuspensionRecordStore)? = nil,
-        qmpControl: any QEMUQMPControlling = QEMUQMPClient()
+        qmpControl: any QEMUQMPControlling = QEMUQMPClient(),
+        agentAccessTokenFileURL: URL = GuestAgentAccessToken.defaultFileURL
     ) {
-        self.diagnosticsDirectory = diagnosticsDirectory
+        self.fixedDiagnosticsDirectory = diagnosticsDirectory
+        self.agentAccessTokenFileURL = agentAccessTokenFileURL
         self.planBuilder = planBuilder
         self.tpmEmulatorRunner = tpmEmulatorRunner
         self.processRunner = processRunner
         self.frontmostRunner = frontmostRunner
         self.bootKeySender = bootKeySender
         self.consoleScreenshotCapturer = consoleScreenshotCapturer
-        self.vncPortAllocator = vncPortAllocator
         self.displayMode = displayMode
         self.suspensionController = suspensionController
         self.qmpControl = qmpControl
         self.suspensionRecordStore = suspensionRecordStore
             ?? JSONVMSuspensionRecordStore(
-                directory: diagnosticsDirectory.appendingPathComponent("QEMU Suspend", isDirectory: true)
+                directory: diagnosticsDirectory?.appendingPathComponent("QEMU Suspend", isDirectory: true)
             )
+    }
+
+    /// Without an explicit directory, records go to the selected library machine's folder. Veil
+    /// runs one machine at a time and refuses to switch while one runs, so this cannot change
+    /// under a live process.
+    private var diagnosticsDirectory: URL {
+        fixedDiagnosticsDirectory ?? Self.defaultDiagnosticsDirectory()
     }
 
     public var supportsNativeDisplayWindow: Bool {
@@ -212,11 +239,9 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         let logHandle = try FileHandle(forWritingTo: logURL)
         let monitorSocketURL = Self.monitorSocketURL()
         let qmpSocketURL = Self.qmpSocketURL()
-        let vncPort = displayMode == .vncLoopback ? vncPortAllocator() : nil
-        if displayMode == .vncLoopback, vncPort == nil {
-            throw VMRuntimeError.qemuDisplayPortUnavailable
-        }
-        let vncDisplay = vncPort.map { max($0 - 5_900, 0) }
+        // A Unix socket rather than a loopback port: any account on the Mac can open 127.0.0.1, and the
+        // display connection carries the keyboard and mouse.
+        let vncSocketURL = displayMode == .vncLoopback ? Self.vncSocketURL() : nil
         try tpmEmulatorRunner(plan)
 
         let process = Process()
@@ -228,12 +253,24 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             qmpSocketPath: qmpSocketURL.path,
             bootDiskFirst: !shouldSendInstallerBootKey,
             displayMode: displayMode,
-            vncDisplay: vncDisplay,
+            vncSocketPath: vncSocketURL?.path,
             incomingMemoryStatePath: incomingMemoryStatePath
         )
+        if !isResuming, let tokenArguments = agentAccessTokenArguments() {
+            // A cold boot only: Windows reads SMBIOS as it starts, and a resumed Windows keeps the tables
+            // it booted with.
+            process.arguments = (process.arguments ?? []) + tokenArguments
+        }
         process.standardOutput = logHandle
         process.standardError = logHandle
         try processRunner(process)
+        if await Self.exitedAtLaunch(process) {
+            try? logHandle.close()
+            let detail = Self.launchFailureDetail(logURL: logURL)
+            VeilLog.runtime.error("QEMU exited right after launch with status \(process.terminationStatus, privacy: .public).")
+            throw VMRuntimeError.qemuExitedAtLaunch(status: process.terminationStatus, detail: detail)
+        }
+        Self.restrictToOwner([monitorSocketURL, qmpSocketURL, vncSocketURL].compactMap { $0 })
         self.process = process
         self.monitorSocketURL = monitorSocketURL
         self.qmpSocketURL = qmpSocketURL
@@ -244,7 +281,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             processLogURL: logURL,
             monitorSocketURL: monitorSocketURL,
             qmpSocketURL: qmpSocketURL,
-            vncPort: vncPort,
+            vncSocketURL: vncSocketURL,
             consoleScreenshotURL: consoleScreenshotURL,
             directory: launchDirectory,
             stamp: stamp
@@ -259,10 +296,59 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             frontmostRunner()
         }
         if shouldSendInstallerBootKey {
-            scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL)
+            scheduleWindowsInstallerBootKeySend(monitorSocketURL: monitorSocketURL, qmpSocketURL: qmpSocketURL)
         }
         scheduleConsoleScreenshotCapture(monitorSocketURL: monitorSocketURL, imageURL: consoleScreenshotURL)
         return .running
+    }
+
+    /// The arguments that hand Windows the agent token, or nil when it could not be stored; Windows then
+    /// starts without one and its agent accepts connections as before.
+    private func agentAccessTokenArguments() -> [String]? {
+        do {
+            _ = try GuestAgentAccessToken.loadOrCreate(fileURL: agentAccessTokenFileURL)
+            return GuestAgentAccessToken.smbiosArguments(fileURL: agentAccessTokenFileURL)
+        } catch {
+            VeilLog.runtime.error("Could not store the Windows agent token: \(String(describing: error))")
+            return nil
+        }
+    }
+
+    /// How long a fresh QEMU is watched for exiting at once. QEMU checks its arguments and opens the disk,
+    /// firmware, and sockets before the guest runs, and quits within a few hundred milliseconds when one
+    /// fails; reporting the machine as running then left the app waiting on a Windows that never started,
+    /// with the reason only in a log file.
+    static let earlyExitWindow: Duration = .milliseconds(800)
+
+    /// Whether a process started by `processRunner` exited within `earlyExitWindow`. A process that never
+    /// started (a test's runner) has no process id and is not watched.
+    static func exitedAtLaunch(_ process: Process, window: Duration = earlyExitWindow) async -> Bool {
+        guard process.processIdentifier > 0 else {
+            return false
+        }
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: window)
+        while clock.now < deadline {
+            if !process.isRunning {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return !process.isRunning
+    }
+
+    /// The last lines QEMU wrote, which name what it refused.
+    static func launchFailureDetail(logURL: URL, maximumCharacters: Int = 600) -> String {
+        guard let data = try? Data(contentsOf: logURL),
+              let text = String(data: data, encoding: .utf8) else {
+            return ""
+        }
+        let lines = text
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let joined = lines.suffix(3).joined(separator: " ")
+        return joined.count > maximumCharacters ? String(joined.suffix(maximumCharacters)) : joined
     }
 
     /// Removes a saved memory-state stream and its record.
@@ -445,6 +531,15 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         )
     }
 
+    public func updateGuestToolsFromRemovableMedia() async throws -> QEMUKeySendRecord {
+        try await sendAttachedMediaCommand(
+            startButtonTapNormalizedX: QEMUGuestToolsUpdateKeySequence.startButtonTapNormalizedX,
+            startButtonTapNormalizedY: QEMUGuestToolsUpdateKeySequence.startButtonTapNormalizedY,
+            steps: QEMUGuestToolsUpdateKeySequence.steps,
+            stepsAfterRunOpened: QEMUGuestToolsUpdateKeySequence.stepsAfterRunOpened
+        )
+    }
+
     public func prepareSparsePackageFromAttachedMedia() async throws -> QEMUKeySendRecord {
         try await sendAttachedMediaCommand(
             startButtonTapNormalizedX: QEMUSparsePackagePreparationKeySequence.startButtonTapNormalizedX,
@@ -471,7 +566,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
                 normalizedY: startButtonTapNormalizedY
             )
             try? await Task.sleep(nanoseconds: 800_000_000)
-            commandSteps = try stepsAfterRunOpened()
+            commandSteps = try Self.runDialogCommandSteps(typing: stepsAfterRunOpened())
         } catch {
             commandSteps = try steps()
         }
@@ -480,6 +575,12 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             launchRecordStore: launchRecordStore
         )
         return try await sender.send(steps: commandSteps)
+    }
+
+    /// `stepsAfterRunOpened` stops at the typed command so `veil-vmctl` can check the screen before it
+    /// clicks OK. Nothing checks it here, so Return runs it; without it the command sat in the Run box.
+    static func runDialogCommandSteps(typing steps: [QEMUKeySequenceStep]) -> [QEMUKeySequenceStep] {
+        steps + [QEMUKeySequenceStep(key: "ret", delayAfterSend: 1.0)]
     }
 
     public static func makePlan(for profile: VMProfile) throws -> QEMUWindowsBootPlan {
@@ -503,7 +604,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         processLogURL: URL,
         monitorSocketURL: URL,
         qmpSocketURL: URL,
-        vncPort: Int?,
+        vncSocketURL: URL?,
         consoleScreenshotURL: URL,
         directory: URL,
         stamp: String
@@ -517,8 +618,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             processLogPath: processLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
             qmpSocketPath: qmpSocketURL.path,
-            vncHost: vncPort == nil ? nil : "127.0.0.1",
-            vncPort: vncPort,
+            vncSocketPath: vncSocketURL?.path,
             consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date()
         )
@@ -536,16 +636,10 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             .replacingOccurrences(of: ":", with: "-")
     }
 
+    /// The selected library machine's diagnostics folder: `Diagnostics/` for the original machine.
     public static func defaultDiagnosticsDirectory() -> URL {
-        let applicationSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support", isDirectory: true)
-        return applicationSupport
-            .appendingPathComponent("Veil", isDirectory: true)
-            .appendingPathComponent("Diagnostics", isDirectory: true)
+        let library = VMLibrary()
+        return library.diagnosticsDirectory(for: library.activeMachineID())
     }
 
     public static func bringQEMUToFrontIfAllowed() {
@@ -784,11 +878,17 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
     }
 
-    private func scheduleWindowsInstallerBootKeySend(monitorSocketURL: URL) {
+    private func scheduleWindowsInstallerBootKeySend(monitorSocketURL: URL, qmpSocketURL: URL) {
         let bootKeySender = self.bootKeySender
+        let qmpControl = self.qmpControl
         Task.detached {
-            for _ in 0..<12 {
+            for _ in 0..<QEMUWindowsBootPromptAutomation.defaultSendCount {
                 try? await Task.sleep(for: .seconds(1))
+                if let reply = try? await qmpControl.run(.humanMonitor("info blockstats"), socketPath: qmpSocketURL.path, idleTimeoutSeconds: 1),
+                   let blockstats = reply.textReturn,
+                   QEMUWindowsBootPromptAutomation.installerBootHasStarted(blockstats: blockstats) {
+                    return
+                }
                 _ = bootKeySender(monitorSocketURL)
             }
         }
@@ -815,6 +915,22 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private static func qmpSocketURL() -> URL {
         URL(fileURLWithPath: "/tmp")
             .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).qmp.sock")
+    }
+
+    static func vncSocketURL() -> URL {
+        URL(fileURLWithPath: "/tmp")
+            .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).vnc.sock")
+    }
+
+    /// QEMU creates its sockets with the process umask, which can leave them open to other accounts.
+    /// Connecting to a Unix socket needs write permission on it, so owner-only read and write keeps every
+    /// other account out. QEMU has created them by the time the early-exit watch ends.
+    static func restrictToOwner(_ sockets: [URL]) {
+        for socket in sockets where FileManager.default.fileExists(atPath: socket.path) {
+            if chmod(socket.path, 0o600) != 0 {
+                VeilLog.runtime.error("Could not restrict a QEMU socket to this user: \(String(cString: strerror(errno)), privacy: .public)")
+            }
+        }
     }
 
     public static func allocateLoopbackVNCPort() -> Int? {

@@ -57,7 +57,8 @@ Prerequisites, all user-provided:
 - **Secure Boot firmware**: a matching `edk2-aarch64-secure-code.fd` and `edk2-arm-secure-vars.fd` pair in
   Veil's local firmware cache. Windows 11 Setup refuses to proceed without Secure Boot, and Homebrew QEMU
   ships only the non-secure half. `qemu-doctor` names exactly which half is missing.
-- Optionally a `virtio-win.iso` driver ISO, which is what gets networking working during Windows setup.
+- Optionally a `virtio-win.iso` driver ISO, which is what gets networking working during Windows setup. The
+  app downloads Fedora's virtio-win ISO itself during one-click setup; `veil-vmctl prepare` still takes `--drivers`.
 
 ```bash
 cd apps/mac-host
@@ -266,7 +267,7 @@ Exercise the local install lifecycle with explicit, guarded commands:
 
 The installer validates Veil's bundle identifier and signature and refuses to replace an existing app unless `--replace` is explicit. The uninstaller moves only the verified app bundle to Trash; it preserves profiles, Windows media, VM disks, diagnostics, and shared folders so reinstalling restores the local setup.
 
-`build_and_run.sh` produces an ad-hoc signed development bundle and must not be distributed. Direct downloads use `script/release_macos.sh`, which requires a Developer ID Application identity and `notarytool` Keychain profile, signs with hardened runtime, submits for notarization, staples the ticket, and runs Gatekeeper assessment. See `docs/checklists/2026-08-03-notarized-macos-release.md`; the release remains blocked until a credentialed run returns `Accepted` and a separate clean Mac opens the downloaded archive.
+`build_and_run.sh` produces an ad-hoc signed development bundle and must not be distributed. GitHub releases come from `.github/workflows/release.yml`: push a `v*` tag (or run the workflow with a version) and it runs the test gate, builds `Veil.app` with the bundled Windows engine and Secure Boot firmware, and publishes `Veil-<version>.zip`, `SOURCES.md`, the engine source archive, and `SHA256SUMS.txt`. Without signing secrets the app is ad-hoc signed (`release_macos.sh --unsigned`) and users open it once from the Finder context menu; with the secrets listed in the workflow it is Developer ID signed and notarized. `.github/workflows/ci.yml` runs the same gate on every push to `main` and pull request, and the Windows agent tests on Windows. Credentialed direct downloads use `script/release_macos.sh`, which requires a Developer ID Application identity and `notarytool` Keychain profile, signs with hardened runtime, submits for notarization, staples the ticket, and runs Gatekeeper assessment. See `docs/checklists/2026-08-03-notarized-macos-release.md`; the release remains blocked until a credentialed run returns `Accepted` and a separate clean Mac opens the downloaded archive.
 
 If no external agent is listening at `VEIL_AGENT_URL` or `ws://127.0.0.1:18444`, the shell falls back to an internal demo agent so the Windows Apps launcher can still show Notepad, Calculator, and Paint as separate macOS window targets. The header and Agent view label this as Demo mode and show the endpoint that could not be reached. Protocol and agent errors are still surfaced instead of being hidden by the demo fallback. Run `harness/fake-agent` when you want to test the real WebSocket harness path.
 

@@ -11,6 +11,13 @@ Frame payloads: separate stream or base64 only for early harness spikes
 
 The protocol must remain testable without a real VM. Every stable message should have a fixture in `harness/protocol-fixtures`.
 
+Who may connect:
+
+- QEMU forwards the agent's port to `127.0.0.1` on the Mac, where a page open in any web browser can try to open a WebSocket to it.
+- The agent answers a handshake that carries an `Origin` header with `403 Forbidden`. A browser sends that header with every WebSocket handshake and a page cannot remove it ([RFC 6455, section 10.2](https://www.rfc-editor.org/rfc/rfc6455#section-10.2)). A host must not send one; `URLSessionWebSocketTask` and Node's `WebSocket` do not.
+- When the virtual machine carries an agent token, the agent answers a handshake without it with `401 Unauthorized`. The host keeps one random token per Mac user in `~/Library/Application Support/Veil/Agent Access/agent-token.smbios` (folder 0700, file 0600), which holds the SMBIOS OEM string `org.uulab.veil.agent-token=<64 hex digits>`. QEMU reads that file on a cold boot through `-smbios type=11,path=<file>`, so the token never appears in its arguments, and the host sends the token in the `X-Veil-Agent-Token` header of every handshake, control and frame channel alike. The agent reads the OEM strings once through `GetSystemFirmwareTable('RSMB')` and compares in constant time. A machine started without the string, by an older host or before Windows restarted, has no token, and the agent then accepts handshakes as before. A resumed session keeps the tables Windows booted with.
+- With the token, another user account on the Mac cannot connect. A program run by the same Mac user can read the token file, as it can read everything else of that user's.
+
 Executable protocol helpers live in `packages/protocol`. Harness tools should import that package instead of duplicating message type strings or structured error shapes.
 
 ## Envelope
@@ -29,6 +36,16 @@ Rules:
 - `requestId` is required for request/response messages.
 - Events do not require `requestId`.
 - Unknown message types must return a structured error.
+
+Control-event stream:
+
+- The host keeps a separate long-lived WebSocket for guest lifecycle, clipboard, notification, and JSON
+  frame events. Request/response sockets remain short-lived so a large frame cannot become the reply to an
+  input operation.
+- The host bounds the undelivered control-event queue at 1,024 messages. If that queue overflows, the host
+  ends the event stream with a reconnectable transport error instead of silently dropping a `window.closed`,
+  clipboard, or notification event. Reconnection lets the normal liveness and discovery paths repair the
+  remaining state; the binary frame channel has its own per-HWND overflow recovery.
 
 ## Health
 
@@ -63,8 +80,22 @@ Response:
     "input": true,
     "clipboardText": true,
     "windowResize": true,
+    "displayResize": true,
+    "displayScale": true,
+    "virtioGpuDisplay": true,
+    "systemShutdown": true,
+    "windowLayout": true,
     "binaryFrameChannel": true,
     "sharedFolder": true,
+    "clipboardImage": true,
+    "clipboardFiles": true,
+    "timeSync": true,
+    "appearanceSync": true,
+    "textComposition": true,
+    "imeMode": true,
+    "hostFolder": true,
+    "desktopWindows": true,
+    "toolsUpdate": true,
     "packageIdentity": false
   },
   "sharedFolder": {
@@ -99,9 +130,45 @@ Response:
 }
 ```
 
+`agentVersion` is the agent's informational version. A bundle built for the Mac app carries a build
+id after `+`, such as `0.1.0+3f9c2a1b7d04`; the same string is written to
+`app\veil-agent-version.txt` in the bundle. The host treats a connected agent whose `agentVersion`
+differs from the bundled one as outdated tools and offers to update them; an agent from before build
+ids reports plain `0.1.0` and is outdated too. When the app carries no stamped bundle (a development
+build made without the .NET SDK), Veil never calls the tools outdated.
+
 `capabilities.windowResize` is optional for backwards compatibility. The host only enables the
 mirrored-window resize affordance when it is explicitly `true`; an absent value means the connected
 agent predates `window.resize.request`.
+
+`capabilities.displayResize` is also optional. When `true`, the agent can apply a requested Windows
+desktop monitor mode through the Win32 display API. Veil uses it only as a fallback after QEMU's
+RFB `ExtendedDesktopSize` request is rejected or forwarded to the guest (QEMU result code 4); an absent
+or false value keeps the confirmed guest framebuffer aspect-fit without stretching.
+
+`capabilities.displayScale` is optional. `true` means the agent accepts `display.scale.request` and can
+set Windows' display scale (Settings > System > Display > Scale). An absent or false value means the agent
+predates it, and the host keeps the guest display at one pixel per Mac point. See Display Scale.
+
+`capabilities.virtioGpuDisplay` is optional. `true` means Windows has the virtio-win VirtIO GPU DOD
+display driver (`viogpudo`) installed for the VM's `virtio-gpu-pci` device, so the next cold boot can
+attach `virtio-gpu-pci` alone instead of `ramfb` plus `virtio-gpu-pci`. `false` means it is not
+installed, and an absent value means the agent predates the field; both keep the `ramfb` display.
+The host applies a changed value only at the next cold boot, never to a suspended session, because
+the device list is part of the machine a saved memory state belongs to. See
+[docs/install-flow.md](install-flow.md) for why the two displays cannot stay attached together.
+
+`capabilities.systemShutdown` is optional. `true` means the agent accepts `system.shutdown.request`;
+an absent value means it predates the message, and the host uses the ACPI power button instead.
+
+`capabilities.windowLayout` is optional. `true` means the agent sends `window.layout` events. When the value
+is absent, the host receives every window's pixels through `window.frame` as before.
+
+`capabilities.desktopWindows` is optional. `true` means the agent reports every app window on the desktop
+and answers `window.list.request` (see "Desktop windows" and "Window List").
+
+`capabilities.toolsUpdate` is optional. `true` means the agent accepts `tools.update.request` and can start
+the update from the tools disc itself (see "Tools Update").
 
 `capabilities.packageIdentity` is `true` only when the Windows agent is running
 with Windows package identity. The agent reads this from Windows' app model
@@ -140,6 +207,48 @@ the share is missing. Those are different problems with different fixes.
 Reading `sharedFolder` from health is deliberately side-effect free. Health is
 polled, so it must never create a folder or publish a share; `shared.folder.request`
 is the message that prepares anything. See [Shared Folder](#shared-folder).
+
+`processor` is optional and diagnostic. It carries running totals of processor time, so two health
+answers a few seconds apart give the agent's share of the guest's processors and how busy Windows was,
+with nothing run inside Windows:
+
+```json
+"processor": {
+  "processorCount": 4,
+  "uptimeSeconds": 86400.125,
+  "agentSeconds": 512.406,
+  "idleSeconds": 300112.75,
+  "busySeconds": 45487.75
+}
+```
+
+`agentSeconds` is the agent process's own time. `idleSeconds` and `busySeconds` are for all of Windows,
+summed over its processors, from [GetSystemTimes](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-getsystemtimes).
+
+`frameCapture` is optional and diagnostic. It reports how long each step of a mirrored frame capture
+took in the guest, so the host can see where frame time goes without reading guest logs:
+
+```json
+"frameCapture": {
+  "strategy": "auto",
+  "phases": {
+    "capture": { "meanMilliseconds": 4.1, "maxMilliseconds": 31.0, "count": 812 },
+    "copy": { "meanMilliseconds": 1.2, "maxMilliseconds": 6.4, "count": 812 },
+    "diff": { "meanMilliseconds": 0.9, "maxMilliseconds": 3.3, "count": 812 },
+    "encode": { "meanMilliseconds": 2.0, "maxMilliseconds": 9.8, "count": 344 },
+    "changedTotal": { "meanMilliseconds": 8.3, "maxMilliseconds": 40.2, "count": 344 },
+    "unchangedTotal": { "meanMilliseconds": 6.2, "maxMilliseconds": 35.1, "count": 468 }
+  },
+  "methods": { "screen": 790, "printWindow": 22 }
+}
+```
+
+Means are exponentially weighted (factor 0.1), so they follow the current workload. `methods` counts
+captures by method: `duplication` reads the desktop DWM already composed through DXGI Desktop
+Duplication, `screen` copies the screen with GDI, `printWindow` asks the app to render itself. `strategy` is the method in force; see [Frame Capture Strategy](#frame-capture-strategy).
+Hosts must not depend on the phase names, which may change with the capture code. Two more optional
+strings help diagnose Desktop Duplication: `lastDuplicationFailure` (when and why it last fell back, such as
+`DuplicateOutput 0x80070005`) and `duplicationMode` (the duplicated output's size and refresh rate).
 
 ## App List
 
@@ -183,6 +292,23 @@ Response:
       "publisher": "Microsoft",
       "iconId": "icon_paint",
       "iconPngBase64": null
+    },
+    {
+      "id": "start_3f1c0a9e5b7d2c48",
+      "name": "Remote Desktop Connection",
+      "exePath": "C:\\Windows\\System32\\mstsc.exe",
+      "publisher": "Microsoft Corporation",
+      "iconId": "icon_start_3f1c0a9e5b7d2c48",
+      "iconPngBase64": "iVBORw0KGgoAAAANSUhEUgAAAIAAAACA...(base64 PNG)",
+      "folder": "Accessories"
+    },
+    {
+      "id": "start_a42e7f0c19d3b665",
+      "name": "Terminal",
+      "exePath": "shell:AppsFolder\\Microsoft.WindowsTerminal_8wekyb3d8bbwe!App",
+      "publisher": "Microsoft Corporation",
+      "iconId": "icon_start_a42e7f0c19d3b665",
+      "iconPngBase64": "iVBORw0KGgoAAAANSUhEUgAAAIAAAACA...(base64 PNG)"
     }
   ]
 }
@@ -198,6 +324,51 @@ the guest, since they never change at runtime; expect this field on every
 `app.list.response`, not on a separate per-app request. Packaged apps whose
 primary executable is only a launcher stub (e.g. Calculator) resolve the icon
 from the app's alternate executable names before falling back to no icon.
+
+### Start menu apps
+
+The list holds every app in the Windows Start menu, not only the built-in
+apps. This lets the Mac offer a Windows Start menu of its own.
+
+- The built-in apps come first, with their `winapp_` ids: Notepad, Calculator,
+  Paint, and File Explorer. File Explorer's Start menu shortcut names a shell
+  folder, not a program, so Start menu discovery cannot list it.
+- Start menu apps follow, sorted by name. Their ids start with `start_`.
+- Shortcut apps come from the `.lnk` files under the all-users and per-user
+  Start menu `Programs` folders. Only shortcuts to an existing `.exe` count.
+  Uninstallers, readmes, help files, and website links are left out. A
+  shortcut that repeats another's target and arguments is listed once.
+- Packaged (Store and inbox) apps come from the package manager. Their
+  `exePath` is `shell:AppsFolder\<AppUserModelID>`, since they have no
+  executable to start.
+- An app that is already a built-in app (same AppUserModelID or same
+  executable) is not listed again.
+- `folder` is the Start menu folder the shortcut sits in, relative to
+  `Programs`, with `/` between nested folders (for example `Accessories` or
+  `Windows Tools`). It is omitted for built-in apps, packaged apps, and
+  shortcuts directly in `Programs`. Hosts can use it to group apps.
+- A `start_` id is the first 16 hex digits of the SHA-256 of the lowercased
+  shortcut target and arguments, or of the AppUserModelID. It stays the same
+  across agent restarts, so a Mac launcher made for it keeps working.
+- Discovery takes seconds, so the guest runs it in the background and keeps the
+  result. It refreshes at most every 5 minutes. `app.list.response` waits at
+  most about 2 seconds for the first discovery. If that runs out, the reply has
+  only the built-in apps. Ask again later for the rest.
+- Start menu icons are 128 px, not 256 px. Many apps share one reply, and the
+  host refuses messages over 32 MiB.
+
+### Running apps
+
+An app that has a window open but is neither built-in nor in the Start menu is
+listed too, after the Start menu apps. Examples are File Explorer and a program
+started from its folder.
+
+- Its id starts with `proc_`: the first 16 hex digits of the SHA-256 of the
+  lowercased program path, or of the AppUserModelID for a packaged app.
+- Its name is the program's file description, as Task Manager shows it.
+- It carries `"running": true`. Hosts leave such apps out of a Start menu,
+  since Windows does not list them there either.
+- It stays listed, and can be launched by id, until the agent restarts.
 
 ## App Launch
 
@@ -239,6 +410,15 @@ Rules:
   so its later discovery stream cannot surface them as duplicate macOS mirrors.
 - `app.launch.response.processId` must match the subsequent `window.created.processId`.
 - `window.created.appId` identifies the launched app; the launch/window acceptance contract is not Notepad-specific.
+- A `start_` app launches like a built-in one and its windows are reported the
+  same way. A shortcut app starts its target with the shortcut's arguments and
+  start folder. A packaged app is activated by AppUserModelID. Its windows are
+  matched by that id, because a UWP app's window belongs to
+  `ApplicationFrameHost.exe`, not to the app's own process.
+- After an agent restart, a `start_` launch waits up to 10 seconds for the
+  first discovery before answering `app_not_found`.
+- `file.open.request` and `file.open.shared.request` accept only the built-in
+  apps. A Start menu app is not known to take a file path as its argument.
 
 ## File Open (Drag and Drop)
 
@@ -304,6 +484,110 @@ Rules:
   name it *displays* with `/` using `:` on disk, so an everyday name like `2026/08/12 report.txt` would
   otherwise be rejected for a reason invisible on the user's own machine.
 
+### Shared-folder file open
+
+`file.open.shared.request` opens a file that the host has already copied into the live guest-served share:
+
+```json
+{
+  "type": "file.open.shared.request",
+  "requestId": "req_open_shared_007",
+  "appId": "winapp_notepad",
+  "fileName": "large-report.txt",
+  "guestPath": "C:\\VeilShared\\large-report.txt"
+}
+```
+
+This is the large-file companion to `file.open.request`. It carries no file bytes on the control channel,
+so the 50 MB drag-and-drop limit does not apply. The guest independently requires an absolute path below
+the fixed `C:\\VeilShared` root and requires its final component to equal `fileName`; traversal, a different
+share, and a mismatched name return `invalid_shared_file_path`. A missing file returns
+`shared_file_missing`. Successful requests use the same `file.open.response` followed by `window.created`
+contract as an ordinary drop.
+
+## Mac Integration URLs
+
+These are not guest messages. They are how other Mac software asks the host to act, and the host turns them
+into the guest messages above. Veil registers the `veil` URL scheme (`CFBundleURLTypes` in the app's
+Info.plist).
+
+| URL | Effect |
+| --- | --- |
+| `veil://open-app?id=<appId>` | Opens the Windows app as a Mac window, starting or resuming Windows first. Same path as the launcher list's one-click open, ending in `app.launch.request`. |
+| `veil://launcher-request?id=<uuid>` | Runs a request a Windows app launcher wrote (below). |
+
+Rules:
+
+- `id` for `open-app` must be 1–128 ASCII letters, digits, `_`, `-` or `.`, and must name an app in the
+  latest `app.list.response` (or the built-in catalog of inbox apps while the guest is not connected).
+  Anything else is ignored before it reaches the guest.
+- The scheme is reachable from any app and from web pages, so **no URL names a host file**. A URL can only
+  ask for what a user could do from Veil's own menus. There is deliberately no `open-file?path=` form.
+- Unknown hosts and malformed URLs are ignored and logged under the `integration` category.
+
+### Windows app launchers
+
+The first time a Windows app opens as a Mac window through the guest agent, Veil writes a small launcher for
+it to `~/Applications/Veil Apps/<App Name>.app`. That folder is indexed by Spotlight and listed in Launchpad,
+and a launcher can be kept in the Dock like any app. Each launcher is generated on the user's Mac:
+
+- its program is a copy of `Veil.app/Contents/Helpers/veil-app-launcher`;
+- its icon is the `iconPngBase64` the guest reported, with Veil's badge (Veil's own icon when there is none),
+  so no Microsoft icon is stored in this repository or shipped in Veil;
+- it is signed ad hoc (`codesign --sign -`) and registered with Launch Services;
+- its Info.plist carries `VeilWindowsAppID`, `VeilWindowsAppName` and `VeilLauncherFingerprint`, and its
+  bundle identifier is `org.uulab.veil.winapp.<appId>`. Veil only replaces or removes bundles with these
+  keys, so an app the user put in the folder is never touched. The fingerprint covers the app id and name,
+  the icon, the launcher program and Veil's version; a launcher is rebuilt only when it changes.
+
+Launchers for apps Veil knows declare document types with `LSHandlerRank` `Alternate`, so Finder lists them
+under **Open With** without making them the default app: Notepad for `public.plain-text`,
+`public.comma-separated-values-text`, `public.json` and `public.xml`; Paint for PNG, JPEG, BMP, GIF and TIFF.
+Other apps get a launcher without document types.
+
+Opening a launcher with no files sends `veil://open-app?id=<appId>`. Opening Mac files with it writes a
+request instead:
+
+```json
+{
+  "version": 1,
+  "appId": "winapp_notepad",
+  "filePaths": ["/Users/me/Desktop/report.txt"],
+  "createdAt": "2026-11-11T09:30:00Z"
+}
+```
+
+to `~/Library/Application Support/Veil/Launcher Requests/<uuid>.json` (folder `0700`, file `0600`), and
+sends `veil://launcher-request?id=<uuid>`. Only a local process that can already read the user's files can
+write that folder, which is what keeps file paths out of the URL. The host:
+
+- deletes the request as it reads it, so the same URL cannot be replayed;
+- refuses requests older than 120 seconds, an unknown `version`, an invalid `appId`, or a relative path;
+- refuses more than eight files, the same limit as one drag and drop;
+- starts or resumes Windows and waits for the guest agent when needed;
+- sends each file exactly as if it had been dropped on the app's window: the same 50 MB limit, Windows-safe
+  name rewriting and `file.open.request`, so the guest's own checks still apply. Refusals are shown in Veil's
+  main window.
+
+Veil makes or refreshes a launcher whenever a Windows app window is shown on the Mac. Each attempt, and every
+reason for not making one (`skipped-disabled`, `skipped-no-launcher-program`, `skipped-not-agent`,
+`skipped-not-in-app-list`, `failed` with the error), is written to
+`~/Library/Application Support/Veil/Diagnostics/windows-app-launchers.json` and logged at notice level under the
+`integration` category.
+
+Launcher creation can be turned off with
+`defaults write org.uulab.veil.host-shell VeilCreatesWindowsAppLaunchers -bool NO`; deleting
+`~/Applications/Veil Apps` removes the launchers, and they come back the next time an app opens unless the
+setting is off.
+
+## Window Geometry
+
+Window `bounds`, frame surfaces, `input.mouse` coordinates, and `window.resize.request` sizes all describe
+a window's visible frame (`DWMWA_EXTENDED_FRAME_BOUNDS`), not the outer rectangle `GetWindowRect`
+returns. On Windows 10 and 11 the outer rectangle includes invisible resize borders, about 7 px at 100%
+on the left, right, and bottom, that show whatever is behind the window; mirroring them put slivers of
+other windows along a mirrored window's edges. The agent adds those borders back when it resizes.
+
 ## Window Created
 
 Event:
@@ -330,11 +614,81 @@ Rules:
 
 - `window.created` can arrive as part of a host launch response or as an async guest lifecycle event.
 - Several apps can be mirrored at once, each as its own macOS window, cascaded so a new window does not land exactly on top of an existing one. One macOS window per HWND is the invariant: frame events, window updates, and reconnect races all re-present the same session repeatedly and must never duplicate a window.
-- Multiple windows of the **same** app are mirrored too, which is how a second document window appears. Since a second window of one app can only arrive from the async discovery stream, the host distinguishes two kinds of window it did not launch:
-  - A window whose `appId` **already has a tracked window** in this session is adopted. The user opened the app, so the app opening another document window is it doing what they asked.
-  - A window whose `appId` was **never opened** in this session is ignored. That is a leftover process or something Windows started on its own, and an unrequested window appearing on screen is worse than a missing one. The guest enumerates every tracked process after a reconnect, so this rule is what keeps discovery from materializing windows nobody asked for.
+- Multiple windows of the **same** app are mirrored too, which is how a second document window appears.
+- With `capabilities.desktopWindows`, the guest announces **every app window on the desktop**, whoever opened it: an app started from inside Windows, a window another app opened, or one that was open before the host connected. Each gets a Mac window, as each has a taskbar button in Windows. See "Desktop windows" below.
+- Without that capability the guest only announces windows of apps that already have a tracked window, and the host keeps the older rule for a window it did not launch:
+  - A window whose `appId` **already has a tracked window** in this session is adopted.
+  - A window whose `appId` was **never opened** in this session is ignored.
 - An adopted window must have a non-empty title and non-zero bounds; an untitled or zero-sized top-level window is far more likely a tooltip, splash, or transient shell window than a document. The number of windows adopted per app is bounded, which limits guest-driven creation the host does not control rather than expressing a preference about how many windows a user may have.
 - The host tracks explicit-launch HWNDs, persists its restore targets per app, and subscribes to frame capture when the connected agent advertises `windowCapture`. Restore issues one launch per app rather than replaying a window count, because a launch for an app that already owns a window reuses that HWND.
+
+Popups carry two optional fields:
+
+```json
+{
+  "type": "window.created",
+  "windowId": "hwnd:000F0300",
+  "processId": 4912,
+  "appId": "winapp_paint",
+  "title": "Popup Host",
+  "bounds": { "x": 140, "y": 120, "width": 942, "height": 84 },
+  "state": "normal",
+  "focused": false,
+  "popup": true,
+  "ownerWindowId": "hwnd:000F0254"
+}
+```
+
+- `popup: true` marks a window that another window owns and that has no title bar, such as Paint's text formatting bar, a menu, or a tooltip. Owned windows with a title bar, like a Save As dialog, and unowned windows that draw their own title bar, like Paint's main window, are not popups. Ordinary windows omit both fields.
+- `ownerWindowId` names the owning window when Windows reports one.
+- The host shows a popup as a borderless, transparent overlay at the same offset from its owner's top-left as in Windows, attached so it moves with the owner and never taking key focus from it. Popup windows are often larger than what they draw, and capture records the transparent part as black, so the host clears black that reaches the frame's edge and keeps black content enclosed by the popup.
+
+Fixture: `harness/protocol-fixtures/window.created.popup.json`.
+
+A window the user cannot resize carries one more optional field:
+
+- `resizable: false` marks a window without a sizing border, such as Character Map or most dialogs. The host shows it at the guest's size and does not let the Mac window be resized. Resizable windows omit the field.
+
+### Desktop windows
+
+A guest with `capabilities.desktopWindows` reports every app window, not only the windows of apps the host launched.
+
+- **Which windows count.** The rule is the taskbar's: a visible, titled, top-level window that is not cloaked or minimized, and is either marked `WS_EX_APPWINDOW` or is unowned, not a tool window, and able to take focus. The Windows shell's own windows are left out: the desktop, the taskbar, Start, Search, the notification center, Task View, and the touch keyboard. So are the agent's own windows.
+- **Which app.** A window is reported under the built-in or Start menu app it belongs to, matched by AppUserModelID, then by program path, then by program name. A window that matches none is reported under a `proc_` app made from its program (see "Running apps" under App List).
+- **When.** The guest scans every 2 seconds. It skips the scan while an `app.launch.request` or a file open is waiting for its window, so that window is reported once, by the launch.
+- **After the first window.** Once an app has a tracked window, its dialogs and popups are reported as before.
+- **Minimized windows** are reported when they are restored.
+
+## Window List
+
+A host that has just connected asks for the windows that are already open:
+
+```json
+{
+  "type": "window.list.request",
+  "requestId": "req_040"
+}
+```
+
+The guest answers on the same connection with a `window.list.response`, followed by one `window.created` for every tracked window:
+
+```json
+{
+  "type": "window.list.response",
+  "requestId": "req_040",
+  "windowIds": ["hwnd:0003029A", "hwnd:000F0254"]
+}
+```
+
+Rules:
+
+- The guest first tracks the app windows nothing has reported yet (see "Desktop windows"), so the reply is complete without waiting for the next scan.
+- Each `window.created` carries the window's current title and bounds, not the ones it had when it was first reported.
+- Windows come before the popups they own.
+- The host sends the request on a connection of its own, never on its event connection: the guest stops sending events to a connection once that connection has sent a request. The host handles the `window.created` answers the way it handles the events. A window the host already shows is updated, not duplicated.
+- An agent without `capabilities.desktopWindows` answers with an `unknown_message_type` error, which the host ignores.
+
+Fixtures: `harness/protocol-fixtures/window.list.request.json`, `harness/protocol-fixtures/window.list.response.json`.
 
 ## Window Updated
 
@@ -362,6 +716,125 @@ Rules:
 
 - `window.updated` must refer to a tracked HWND.
 - The host updates title, bounds, state, and focus metadata without resetting the current frame stream or timing evidence.
+
+## Window Layout
+
+Event (agent → host), sent when the agent advertises `capabilities.windowLayout`:
+
+```json
+{
+  "type": "window.layout",
+  "sequence": 412,
+  "display": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+  "secureDesktop": false,
+  "windows": [
+    {
+      "windowId": "hwnd:000F0254",
+      "ownerWindowId": null,
+      "frame": { "x": 120, "y": 80, "width": 1299, "height": 840 },
+      "zOrder": 0,
+      "isForeground": true,
+      "isShown": true,
+      "fullyVisible": true
+    }
+  ]
+}
+```
+
+Fields:
+
+- `display` is the guest's virtual screen.
+- `secureDesktop` is true while Windows' secure desktop has the display: a User Account Control prompt, the lock or sign-in screen, or the Ctrl+Alt+Del screen. Optional; a host treats a missing value as false.
+- `windows` lists every tracked window, topmost first.
+- Each window has:
+  - `frame`: its visible frame in display pixels (see Window Geometry).
+  - `zOrder`: its rank among tracked windows, 0 at the top.
+  - `isShown`: false while the window is hidden, minimized, or cloaked.
+  - `fullyVisible`: true when the framebuffer shows the whole window. That means it is shown, it lies inside `display`, and no shown window of another process above it overlaps it. Windows of the same process above it, such as its menus and dialogs, do not count, since their pixels are what belongs there; another tracked window of that process with no owner, such as a second File Explorer window, does. Neither do windows that draw nothing over it: one pixel across, as the helper windows some programs keep, or layered with zero opacity.
+  - `elevated`: true when the window's program runs at a higher integrity level than the agent, as an installer does once its User Account Control prompt is approved. Left out otherwise. A program whose token the agent cannot read counts as higher.
+  - `visibleRegion`: for a window that is not `fullyVisible`, the parts of it the display does show: rectangles in display pixels that do not overlap, being the frame's part on the display less every window above that covers it and the 64 pixels around each such window, where its shadow darkens the window behind. Left out for a `fullyVisible` window. Empty when nothing shows, or when the shape would take more than 12 rectangles. Optional; a host treats a missing value as nothing to crop.
+
+Rules:
+
+- **Purpose:** this lets the host take a window's pixels from the guest display it already receives and crop each window into its Mac window, instead of having the agent capture, encode, and send frames. The design is in `docs/superpowers/specs/2026-11-10-coherence-framebuffer-design.md`.
+- **When it is sent:**
+  - The agent sends a layout only when it differs from the previous one.
+  - It checks every 8 ms while windows are tracked and something changed within the last second, about every 33 ms while windows are tracked and nothing has (on Windows' own timer tick, so up to 47 ms), and every 250 ms otherwise.
+  - When the last tracked window goes away it sends one layout with no windows.
+  - While `secureDesktop` is true it sends layouts with no window tracked as well, and one more when it ends: a prompt can come up before the app asking for it has a window.
+  - A host that connects while windows are tracked receives the current layout first, before any other event.
+- **`sequence`:** counts up per agent process. The host ignores a layout older than one it has applied.
+- **Choosing a source per window:**
+  - The host may crop a `fullyVisible` window from the framebuffer and slow its frame stream (`window.crop.set`).
+  - A window with a `visibleRegion` may be cropped in those rectangles, with its `window.frame` picture filling the rest. Its stream may be slowed the same way: the covered parts sit behind the same windows on the Mac.
+  - A window whose `visibleRegion` is empty is hidden behind others; the host shows its `window.frame` picture and may slow its stream too.
+  - Any other window that is not `fullyVisible` keeps its `window.frame` stream at full pace.
+- **Secure desktop:**
+  - The secure desktop belongs to no tracked window and takes the whole display, so while `secureDesktop` is true no window is `fullyVisible` and the host crops nothing from the framebuffer.
+  - Input the agent injects does not reach it. The host shows the guest display itself and sends pointer and key events through the virtual hardware (QEMU's display connection) until `secureDesktop` is false again.
+  - The agent captures no window frames meanwhile and keeps sending `window.frame.unchanged`, so a prompt left unanswered does not look like a stalled stream.
+  - The agent reads the state by opening the input desktop ([OpenInputDesktop](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-openinputdesktop)): a refusal, or a desktop other than `Default`, counts as secure. Not yet checked on the live Windows 11 Arm guest.
+- **Windows above the agent:**
+  - Windows drops input a lower-integrity program injects into a higher one's windows, and [SendInput](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-sendinput) does not report it. The agent runs without administrator rights, so `input.mouse`, `input.key`, and `input.text` for an `elevated` window would be discarded silently.
+  - The host sends such a window's input through the virtual hardware instead (QEMU's display connection), aimed at the window's `frame` plus the point's offset, with keys by their place on a US keyboard.
+  - A press or wheel turn at a point another tracked window covers in Windows is not sent, since it would land on that window; the host sends `window.focus.request` instead. Text a US keyboard cannot type is not sent.
+  - Not yet checked on the live Windows 11 Arm guest: that the agent can read an elevated program's integrity level, and that input sent this way reaches such a window.
+- **Read-only:** the message moves no window. Positioning and z-order requests stay with `window.resize.request` and `window.focus.request`.
+
+Fixture: `harness/protocol-fixtures/window.layout.json`.
+
+## Window Crop Set
+
+Request (host → agent), sent when the agent advertises `capabilities.windowLayout`:
+
+```json
+{
+  "type": "window.crop.set",
+  "requestId": "req_window_crop_1A2B3C4D",
+  "windowIds": ["hwnd:000F0254"],
+  "hidesDesktop": true
+}
+```
+
+Rules:
+
+- **Meaning:** `windowIds` lists the windows the host currently shows by cropping the guest framebuffer. Each request replaces the previous list, and an empty list means none.
+- **Effect:** the agent keeps their frame streams but captures them about once a second instead of up to 120 times. The host still reads each window's size and scale from those frames, while the pixels the user sees come from the framebuffer.
+- **Validation:** the agent ignores ids it does not track.
+- **`hidesDesktop`:** optional. `true` while the host shows apps as their own Mac windows (Coherence).
+  - While set, the agent hides the Windows taskbar (`Shell_TrayWnd`, `Shell_SecondaryTrayWnd`). The taskbar is part of the desktop Coherence hides, and it covered app windows near the bottom of the display.
+  - The taskbar is only hidden, so the work area and the user's taskbar settings are unchanged.
+  - It shows again when a request omits the flag or sends `false` (the desktop view), when the list lapses, or when the agent exits.
+- **Expiry:** the host repeats the list every two seconds. The agent lets a list lapse after six, so windows are not left slowed if the host goes away.
+- **Reply:** the agent answers with `operation.ack`, or with `error` code `invalid_message` when `windowIds` is missing.
+
+Fixture: `harness/protocol-fixtures/window.crop.set.json`.
+
+## Window Move
+
+Request (host → agent), sent when the agent advertises `capabilities.windowLayout`:
+
+```json
+{
+  "type": "window.move.request",
+  "requestId": "req_window_move_1A2B3C4D",
+  "windowId": "hwnd:000F0254",
+  "x": 240,
+  "y": 96
+}
+```
+
+Rules:
+
+- **Coordinates:** `x` and `y` place the window's visible frame (see Window Geometry) in guest display pixels, the coordinates `window.layout` reports. Both must be between -16384 and 16384.
+- **Effect:** the agent moves the window with `SetWindowPos` without resizing, activating, or reordering it, and adds back the invisible borders itself.
+- **Purpose:** the host sends this after a mirrored Mac window moves or is resized, so each Windows window sits where its Mac window is. Windows that overlap on the Mac then overlap the same way in the guest, and the one on top stays cropped from the framebuffer. The design is in `docs/superpowers/specs/2026-11-10-coherence-framebuffer-design.md`, stage 3.
+- **Reply:** `operation.ack`. Errors:
+  - `invalid_message` for a missing id or an out-of-range coordinate;
+  - `window_not_tracked` for an id the agent does not track;
+  - `window_move_failed` when Windows refused.
+
+Fixture: `harness/protocol-fixtures/window.move.request.json`.
 
 ## Window Frame
 
@@ -424,7 +897,7 @@ frame, so an agent caught mid-upgrade degrades to full frames rather than failin
 ```text
 offset  size  field                                 VFR1  VFR2
 0       4     magic ("VFR1" or "VFR2")                y     y
-4       1     payload format (1 = png)                y     y
+4       1     payload format (1 = png, 2 = bgra-deflate)  y     y
 -       1     flags (bit 0 = key frame)               -     y
 -       2     window id byte count (uint16)           y     y
 -       n     window id, UTF-8                        y     y
@@ -451,6 +924,11 @@ Rules:
   origin must flip.
 - The payload covers exactly the declared rectangle. A payload whose real dimensions disagree must be
   rejected, not scaled to fit, because scaling silently distorts the window.
+- Payload format 1 is a PNG. Format 2, `bgra-deflate`, is the rectangle's pixels as 32-bit BGRA rows, top
+  to bottom with no padding, compressed with raw deflate (RFC 1951); the alpha byte is ignored. It costs
+  the guest a fraction of a PNG encode, which matters at 60 tiles a second, and is sent only for windows a
+  host subscribed to with `"tileFormat": "bgra-deflate"`. A payload that does not inflate to exactly
+  `width * height * 4` bytes is rejected like a mis-sized PNG.
 - A **key frame's rectangle must cover the whole surface.** The host has nothing to composite onto until
   one arrives, so a partial key frame would leave undefined pixels with no way to detect it.
 - The guest sends a key frame on the first capture of a stream, on any surface size change, and when the
@@ -459,8 +937,27 @@ Rules:
 - A tile that arrives before a key frame, or after a surface size change that has not been re-keyed, must
   be dropped and a key frame awaited. Compositing onto a mismatched or absent surface produces a
   plausible-looking but wrong window, which is much harder to diagnose than a window that visibly waits.
+- A delta must have the next sequence number for that window. If a sequence is skipped or repeated, the
+  host must discard that window's compositor base and wait for a key frame; applying a later delta would
+  preserve the missing pixels as if they were current. Key frames reset the sequence base and may use any
+  monotonically increasing stream sequence. A binary-channel host should restart only that window's
+  subscription immediately, because a guest that keeps producing small dirty regions may never naturally
+  emit the key frame needed to repair a missing delta.
 - A dropped tile is **not** a received frame. Frame timing and the latency budget must not advance for an
   update that did not reach the screen, or a stalled surface would look healthy.
+- Rejecting a decoded tile's image payload invalidates that window's compositor base. Further deltas
+  cannot repair unknown missing pixels; a valid full-surface key frame is required. While awaiting that
+  key frame, unchanged heartbeats do not advance host liveness, allowing stale-stream recovery to run.
+  Other windows retain their independent surfaces and liveness.
+- A valid JSON full-surface image can also restore a rejected binary stream's base. Its payload must
+  decode and match the declared dimensions before clearing the recovery reason or advancing liveness;
+  metadata alone is not recovery evidence.
+- If a host cannot keep up with the binary channel and its bounded receive buffer overflows, it must not
+  silently continue with a missing incremental tile. The host should reset that window's subscription so
+  the guest's next stream begins with a fresh key frame; other mirrored windows remain independent.
+- A host must coalesce concurrent recovery requests for the same window. An unsubscribe/subscribe pair has
+  one owner per HWND; a second recovery request should wait for or yield to that owner rather than allowing
+  an older completion to retire a newer stream.
 - Legacy JSON `window.frame` subscribers always receive a self-contained full-surface frame. Tiles are
   only meaningful to a client that composites them. The guest pays for that extra full-surface encode only
   while a control-channel subscriber actually exists.
@@ -553,8 +1050,17 @@ Rules:
 
 - `windowId` must reference a tracked `window.created` event.
 - `format` is `png` for the first stream control implementation.
-- These requests do not require a success response. Invalid requests may still return structured errors.
+- `tileFormat` is optional. `bgra-deflate` asks for format 2 tiles on the binary frame channel for this
+  window; omitted or unknown values keep PNG tiles, and agents that predate it ignore the field.
+- Legacy agents do not require a success response. Agents advertising
+  `operationAcks` return a matching positive acknowledgement after applying the
+  stream-control operation, or a structured error (see Operation Acknowledgements).
 - The macOS host subscribes after launching a capture-capable app window and unsubscribes before closing the mirrored window.
+- Frames travel independently from request replies and may reach the host before
+  it observes the subscription acknowledgement. The host resets frame readiness
+  and discards the previous compositor surface **before** sending a new subscribe.
+  A reply must never clear a newer frame. Binary delivery needs a fresh key frame;
+  it cannot use a previous subscription's retained pixels as the base for a delta.
 - Host-side app-runtime status records frame stream recovery evidence per HWND:
   `frameStreamRequestedAt`, `frameStreamWaitingAgeMilliseconds`,
   `frameStreamRestartCount`, `latestFrameStreamRestartedAt`, and
@@ -727,6 +1233,232 @@ Rules:
   During the gesture the mirror remains aspect-correct; after the guest applies the size, its capture buffer
   changes and the next key frame resynchronizes the host compositor.
 
+## Desktop Display Resize Fallback
+
+Host request:
+
+```json
+{
+  "type": "display.resize.request",
+  "requestId": "req_display_resize_1920x1080",
+  "width": 1920,
+  "height": 1080
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "display.resize.response",
+  "requestId": "req_display_resize_1920x1080",
+  "accepted": true,
+  "width": 1920,
+  "height": 1080
+}
+```
+
+Rules:
+
+- Dimensions are physical desktop pixels, bounded to 640...3840 per axis and 8,294,400 total pixels.
+- The guest calls `ChangeDisplaySettingsEx` for the active Windows desktop mode. A false response includes
+  a short `reason` and does not change the host's current framebuffer geometry.
+- When the active display adapter is the VirtIO GPU DOD driver and the size is not one of its listed modes,
+  the guest sets the driver's custom mode through the driver's own `D3DKMTEscape` request (the one
+  virtio-win's `viogpures.exe` uses) and calls `ChangeDisplaySettingsEx` again, stepping through a listed
+  mode when Windows is already on the custom one. The driver pads the scanout width up to a multiple of 16,
+  so the host requests 16-aligned widths.
+- The RFB display path invokes this fallback after a QEMU `ExtendedDesktopSize` rejection, and after QEMU
+  answers result code 4 ("request forwarded"): QEMU passed the size to `virtio-gpu`, and the VirtIO GPU
+  driver lists it as a mode but does not switch to it on its own. A later successful RFB desktop-size response becomes authoritative
+  and returns the display to normal dynamic mode.
+
+## Display Scale
+
+Request (host → agent), sent when the agent advertises `capabilities.displayScale`:
+
+```json
+{
+  "type": "display.scale.request",
+  "requestId": "req_display_scale_200",
+  "scalePercent": 200
+}
+```
+
+To give the display back the scale the Windows user chose, the host sends `restoresUserScale` instead:
+
+```json
+{
+  "type": "display.scale.request",
+  "requestId": "req_display_scale_user",
+  "restoresUserScale": true
+}
+```
+
+Response (agent → host):
+
+```json
+{
+  "type": "display.scale.response",
+  "requestId": "req_display_scale_200",
+  "accepted": true,
+  "scalePercent": 200
+}
+```
+
+Rules:
+
+- **Purpose:** text is sharp on a Retina Mac only when Windows draws two pixels per Mac point. The host
+  makes the guest display twice the Mac screen's size in points and asks Windows for 200%, so a window's
+  logical size, which sizes its Mac window in points, stays the same while it gets four times the pixels.
+  The design is in `docs/checklists/2026-11-11-retina-guest-scale.md`.
+- **Scope:** the primary display only, which is the one the host receives.
+- **`scalePercent`:** one of Windows' scale steps: 100, 125, 150, 175, 200, 225, 250, 300, 350, 400, 450,
+  500. Exactly one of `scalePercent` and `restoresUserScale: true` is present; anything else is
+  `invalid_message`.
+- **The user's own scale:** before the agent first changes the scale it records the current one in
+  `%LOCALAPPDATA%\Veil\Agent\display-scale.json`. `restoresUserScale` sets that value back and deletes
+  the file. Without a record it changes nothing and answers with the current scale. The record survives an
+  agent restart, so a Veil quit while Windows ran at 200% is still undone by the next restore.
+- **Limits:** Windows offers only the steps that leave the display at least about 1024×768 logical pixels.
+  A larger step is lowered to the largest one offered, so raise the display size first and lower the scale
+  before shrinking the display.
+- **Reply:** `scalePercent` is the scale Windows reports after the change, which can differ from the
+  request. `accepted: false` comes with a `reason` and means nothing changed:
+  - `display_scale_unavailable` when Windows does not answer the scale query, such as with no WDDM display;
+  - `display_scale_refused` when Windows refused the change.
+- **Effect on apps:** Windows sends `WM_DPICHANGED` to Per-Monitor DPI aware windows, which redraw at the
+  new scale. Other apps are stretched by Windows and stay as soft as before. Logical `bounds` keep their
+  meaning, while `window.layout` frames, `window.move.request` coordinates and `window.frame` pixels are
+  display pixels and so double at 200%.
+- **API:** Windows has no documented way to set the display scale. The agent uses
+  `DisplayConfigGetDeviceInfo` and `DisplayConfigSetDeviceInfo`
+  ([docs](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-displayconfigsetdeviceinfo)),
+  which are documented, with the device info types -3 (get) and -4 (set), which are not: they are absent
+  from [`DISPLAYCONFIG_DEVICE_INFO_TYPE`](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ne-wingdi-displayconfig_device_info_type).
+  Because a future Windows may change them, the agent reads the
+  result back and reports what Windows says, and the host falls back to one pixel per point when a request
+  is refused or ends at a different scale.
+
+Fixtures: `harness/protocol-fixtures/display.scale.request.json`, `display.scale.request.restore.json`,
+`display.scale.response.json`.
+
+## Guest Shutdown
+
+Host request:
+
+```json
+{
+  "type": "system.shutdown.request",
+  "requestId": "req_system_shutdown_1"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "system.shutdown.response",
+  "requestId": "req_system_shutdown_1",
+  "accepted": true
+}
+```
+
+Rules:
+
+- The host sends this when the user stops Windows and the agent reports `capabilities.systemShutdown`.
+  Windows can leave the ACPI power button unanswered (observed on November 6, 2026 with a Korean
+  Windows 11 Arm 26300 guest), and killing QEMU instead loses unsaved work and can interrupt updates
+  Windows installs while shutting down.
+- The agent starts `shutdown.exe /s /t 0` in the user's session and answers once it has started; a
+  false response carries a short `reason`. Windows then closes apps and may install updates first, so
+  the host waits for QEMU to exit rather than for a further message.
+- The request carries no arguments, so it cannot run anything but a normal shutdown. The host already
+  controls the VM's power, so the message gives it no new authority over the guest.
+
+## Frame Capture Strategy
+
+Diagnostic host request:
+
+```json
+{
+  "type": "frame.capture.strategy.set",
+  "requestId": "req_capture_strategy_1",
+  "strategy": "screen"
+}
+```
+
+`strategy` is `auto` (the default: read a fully visible, on-top window from DXGI Desktop Duplication,
+falling back to a GDI screen copy if duplication is unavailable, and use `PrintWindow` otherwise),
+`duplication`, `screen`, or `printWindow`. The agent answers with an `operation.ack`, or an
+`error` with code `invalid_message` for any other value, and clears the `frameCapture` times in health so
+they describe only the new method.
+
+Rules:
+
+- This exists to compare capture methods on a running guest. Normal hosts never send it, and the
+  setting lasts only until the agent restarts.
+- Forcing `screen` mirrors whatever covers the window on the guest screen, which is why `auto` uses it
+  only for a fully visible window. Nothing beyond the guest's own screen is read, so it does not widen
+  what the host can see.
+
+## Operation Acknowledgements
+
+For negotiated input delivery, the host adds a fresh `requestId` to each mouse,
+key, or committed-text envelope. The guest echoes it in the acknowledgement.
+Legacy input events may still omit it; see
+`harness/protocol-fixtures/input.text.acknowledged.json` for the negotiated form.
+
+An agent may advertise `capabilities.operationAcks: true` in its health response.
+After this negotiation, `input.mouse`, `input.key`, `input.text`,
+`clipboard.text.set`, `clipboard.image.set`, `clipboard.files.set`, `window.frame.subscribe`, and
+`window.frame.unsubscribe` receive one success acknowledgement or a structured `error` reply:
+
+```json
+{
+  "type": "operation.ack",
+  "requestId": "req_clipboard_42",
+  "accepted": true
+}
+```
+
+The host must match `requestId`, require `accepted: true`, and bound its reply
+wait. A timeout, malformed reply, unrelated request ID, or negative acknowledgement
+does not prove delivery. In particular, the host must not send a paste shortcut
+after an unconfirmed clipboard write, since that could paste stale guest text.
+It must not automatically retry an uncertain input operation, which could apply
+the operation twice. The host serializes negotiated operations per window on its short-lived
+control sockets so a key-down/key-up pair cannot overtake itself, while a slow acknowledgement
+in one mirrored app does not stall input to another. Clipboard and other operations without a
+window identity use their own global ordering lane. A guest `error` retains its original code
+and message.
+
+Agents that omit the capability or advertise `false` retain the existing
+fire-and-forget path without an acknowledgement wait. This compatibility path
+is selected from health, not inferred from a negotiated agent's silence.
+
+Fixture: `harness/protocol-fixtures/operation.ack.json`.
+
+An `input.mouse` acknowledgement may also carry `pointer`, where the event left the guest cursor, in
+the 0...32767 absolute range QEMU's USB tablet uses on both axes across the guest's virtual desktop:
+
+```json
+{
+  "type": "operation.ack",
+  "requestId": "req_mouse_42",
+  "accepted": true,
+  "pointer": { "x": 16384, "y": 8192 }
+}
+```
+
+The host moves QEMU's tablet to that position without pressing buttons. The tablet keeps reporting
+the last absolute position QEMU gave it, so without this it snapped the cursor back from wherever
+the agent's injected input put it, and a drag in a mirrored window jumped to the stale position
+between events. `pointer` is optional: older agents omit it, and hosts without a QEMU tablet ignore
+it.
+
+Fixture: `harness/protocol-fixtures/operation.ack.mouse-pointer.json`.
+
 ## Input Mouse
 
 Event from host to guest:
@@ -751,7 +1483,42 @@ Allowed mouse events:
 - `move`
 - `scroll`
 
-Implementation note: the first Windows agent implementation maps these host events to HWND `PostMessage` calls with client-area coordinates.
+A `scroll` event may carry `deltaX` and `deltaY`, wheel units with 120 per notch, positive scrolling
+right and up as Windows counts them. Hosts send trackpad gestures as many small amounts, which Windows
+scrolls smoothly; an event with neither field is one notch up. Other events omit both.
+
+`modifiers` applies to `scroll` as well as to button-down events: the agent presses the listed keys
+before the wheel input and releases them after it. Hosts send a trackpad pinch as `scroll` with
+`["ctrl"]`, so Windows receives Ctrl+wheel, which Paint, Edge, Office, File Explorer and most other
+Windows apps treat as zoom. A pinch outward (magnifying) is a positive `deltaY`, as an upward wheel
+zooms in:
+
+```json
+{
+  "type": "input.mouse",
+  "windowId": "hwnd:0003029A",
+  "event": "scroll",
+  "x": 240,
+  "y": 130,
+  "modifiers": ["ctrl"],
+  "deltaY": 40
+}
+```
+
+Fixture: `harness/protocol-fixtures/input.mouse.pinch-zoom.json`.
+
+Why Ctrl+wheel and not an injected touch pinch: `CreateSyntheticPointerDevice` accepts only
+`PT_TOUCH` or `PT_PEN` (https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createsyntheticpointerdevice),
+so a precision-touchpad gesture cannot be injected; a two-contact touch pinch would reach apps as a
+touchscreen gesture, which desktop apps without touch support ignore. Ctrl+wheel
+arrives as `WM_MOUSEWHEEL` with `MK_CONTROL` set
+(https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-mousewheel), which is the zoom input
+every Windows app that zooms already handles. Agents that predate this ignore `modifiers` on
+`scroll` and simply scroll, so the change is backward compatible.
+
+Trackpad rotation has no input Windows apps share a meaning for, so hosts do not send it.
+
+Implementation note: `x` and `y` are pixels in the window's frame bitmap, measured from the top-left of the window's visible frame. The Windows agent brings the window to the foreground, moves it fully onto its monitor's work area when it fits, and delivers each event as real input with `SendInput` at the matching absolute screen position. Posting window messages to the HWND did not reach XAML and DirectComposition content such as Paint's canvas, and posted moves carried no button state, so drags could not work.
 
 Rules:
 
@@ -777,6 +1544,28 @@ The host maps macOS command shortcuts to Windows control shortcuts for app windo
 
 Implementation note: the first Windows agent implementation maps `input.key` to HWND `WM_KEYDOWN` and `WM_KEYUP` messages. Modifier entries such as `ctrl`, `shift`, and `alt` are posted around the key event.
 
+A Mac page swipe (a two- or three-finger horizontal swipe, as Safari uses for back and forward) is sent
+as a `keyDown` and `keyUp` pair of the Windows browser navigation keys, `VK_BROWSER_BACK` (166, `key`
+`browserBack`) for a swipe to the right and `VK_BROWSER_FORWARD` (167, `key` `browserForward`) for a
+swipe to the left (https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes).
+`DefWindowProc` turns these keys into `WM_APPCOMMAND` with `APPCOMMAND_BROWSER_BACKWARD` or
+`APPCOMMAND_BROWSER_FORWARD` (https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-appcommand),
+which Edge, File Explorer, Settings and other apps with history navigate by. The agent marks both as
+extended keys, as a keyboard's browser keys are.
+
+```json
+{
+  "type": "input.key",
+  "windowId": "hwnd:0003029A",
+  "event": "keyDown",
+  "key": "browserBack",
+  "windowsVirtualKey": 166,
+  "modifiers": []
+}
+```
+
+Fixture: `harness/protocol-fixtures/input.key.browser-back.json`.
+
 Rules:
 
 - `windowId` must match the HWND-shaped id from a tracked `window.created` event.
@@ -801,28 +1590,89 @@ keystroke was silently dropped, so a Korean user could not type their own langua
 Windows app.
 
 Composition rule: **macOS owns the IME.** The host composes with the user's existing macOS input
-source, shows the in-progress composition in its own overlay, and sends only the committed result
-here. There is deliberately no marked or in-progress text on the wire. The alternative -- forwarding
-raw keystrokes so the Windows IME composes -- would need a per-keystroke round trip plus a guest
-candidate window rendered over a mirrored bitmap.
+source. Forwarding raw keystrokes so the Windows IME composes would need a per-keystroke round trip plus a
+guest candidate window rendered over a mirrored bitmap.
+
+Sending only committed text left the syllable being composed off the guest until the next key committed
+it: the last Hangul syllable appeared only after Space. So an agent that reports
+`capabilities.textComposition` also shows the composition itself, as ordinary text:
+
+```json
+{
+  "type": "input.text",
+  "windowId": "hwnd:0003029A",
+  "text": "녕",
+  "replaceLength": 1
+}
+```
+
+- `replaceLength` (optional, default 0) is how many characters to delete before typing `text`. The guest
+  presses Backspace that many times and then types `text`, in one `SendInput` call, so nothing can land
+  between the two. It counts Backspace presses, not UTF-16 code units, because one Backspace deletes a
+  whole character, surrogate pair included.
+- The host keeps what it last typed for the open composition. Each change to the composition sends only
+  the difference: Backspace over the part that changed, then the new part. When the IME commits, the
+  committed text replaces the composition the same way, and the host forgets it.
+- `text` may be empty when `replaceLength` is above 0, for example when Backspace removes the last jamo.
+- An agent without `textComposition` gets committed text only, and the host draws the composition in its
+  own overlay as before.
 
 Rules:
 
 - `windowId` must match the HWND-shaped id from a tracked `window.created` event. An untracked HWND is
   rejected with `window_not_tracked` and no messages are posted, exactly like `input.key`.
-- `text` must be non-empty and at most 4096 UTF-16 code units. One message becomes one posted window
-  message per code unit on the guest, so an unbounded payload would flood the target window's queue.
+- `text` must be non-empty, unless `replaceLength` is above 0, and at most 4096 UTF-16 code units.
+  `replaceLength` must be between 0 and 4096. One message becomes a key-down and key-up
+  pair per code unit on the guest, so an unbounded payload would flood the guest's input queue.
   Oversized payloads are rejected with `text_too_long`.
 - `text` must not contain newlines, carriage returns, or tabs. Enter and Tab have guest semantics that
   a character cannot reproduce (Enter submits, Tab moves focus), so they stay on the `input.key` path
   and are rejected here with `invalid_message`.
-- The guest posts `WM_CHAR` once per UTF-16 code unit. Surrogate pairs arrive as two consecutive
-  messages, which is what Win32 edit controls expect; posting a code point above U+FFFF as a single
-  `wParam` would truncate it.
+- The guest types each UTF-16 code unit as a `KEYEVENTF_UNICODE` key event through `SendInput`.
+  Surrogate pairs arrive as two consecutive code units, which is what Windows expects; sending a code
+  point above U+FFFF as a single unit would truncate it.
 - Arrow keys, function keys, Escape, Backspace, and Command/Control chords never travel here. They
   keep the `input.key` path, and while an IME composition is open they are consumed by the macOS input
   method instead of being sent at all.
 - Failures inside the guest are reported as `input_text_failed`.
+
+## Input IME Mode
+
+Host to guest, for an agent that reports `capabilities.imeMode`:
+
+```json
+{
+  "type": "input.ime.set",
+  "requestId": "req_ime_1",
+  "mode": "native"
+}
+```
+
+On a Mac, Korean and English switch with the macOS input source (Caps Lock, Control-Space). Windows has
+its own Korean IME with its own Hangul/English state, and the two disagreed: the Mac showed English while
+Windows turned the same keys into jamo.
+
+- `mode` is `native` (Windows IME on, for example Hangul), `alphanumeric` (IME off), or `unmanaged` (stop
+  setting it).
+- The agent applies `native` and `alphanumeric` to the foreground window through that window's default IME
+  window (`WM_IME_CONTROL` with `IMC_SETOPENSTATUS` and `IMC_SETCONVERSIONMODE`), and again whenever another
+  window comes to the foreground, until `unmanaged`.
+- That reliably switches Win32 windows, but TSF apps such as the Windows 11 Notepad keep their own state and
+  only appear to follow it; reading their state back from another process was not reliable either (measured
+  on 2026-11-11). So the host uses `input.ime.set` only while Veil itself types into Windows (the Run dialog
+  of the tools update), with `alphanumeric`, and sends `unmanaged` afterwards.
+- **Korean/English with the Mac:** keys reach Windows by position (`input.key` with the virtual key for the
+  Mac key code, ANSI layout) and the Windows IME composes, as in UTM and Parallels; the composition shows
+  inline because the host crops the guest display. When the user switches the macOS input source while a
+  mirrored window is key, the host also presses the Windows Hangul key (`VK_HANGUL`) in that window, so both
+  switch together. The right Command key alone presses the Hangul key in Windows only, to realign them,
+  like the right Alt key on a Korean Windows keyboard. Caps Lock and the other modifiers are not sent.
+- Composing on the Mac and correcting the guest's text with `input.text` `replaceLength` (§ Input Text)
+  swapped and duplicated syllables. It remains only for an agent without `imeMode`.
+- The reply is `operation.ack`. An unknown `mode` is rejected with `invalid_message`. For diagnostics the ack
+  also carries `ime`: `openBefore`, `openAfter`, and `conversionAfter` as read back from the foreground
+  window's IME (null when it does not answer), and that window's `windowClass`. Apps built on TSF, such as
+  the Windows 11 Notepad, may not follow `IMC_SETOPENSTATUS`, and these fields show whether one did.
 
 ## Clipboard Text
 
@@ -846,6 +1696,231 @@ Loop prevention rule:
 - A clipboard update caused by a remote message must not be echoed back as a new local change.
 
 Implementation note: the host syncs macOS text to the Windows guest before forwarded paste shortcuts. The Windows agent also observes text clipboard changes and broadcasts `clipboard.text.set` with `origin=guest`. The macOS host accepts only increasing guest sequences and writes them to the macOS pasteboard. Host-origin updates are consumed by the agent once so they are not echoed back as guest updates.
+
+## Clipboard Image
+
+Host to guest, and guest to host with `"origin": "guest"`:
+
+```json
+{
+  "type": "clipboard.image.set",
+  "requestId": "req_clipboard_7",
+  "origin": "host",
+  "sequence": 7,
+  "format": "png",
+  "width": 2,
+  "height": 2,
+  "byteLength": 74,
+  "sha256": "d28c139bba718d60154960eaca75535a5cc5b59fe2153e998a29251e8e5f4667",
+  "pngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR4nGP4z8DwH4QZYAwAR8oH+WdZbrcAAAAASUVORK5CYII="
+}
+```
+
+An agent advertises `capabilities.clipboardImage: true`. The field is optional: an older agent decodes as
+absent and the host keeps image clipboards on the Mac instead of sending a message the agent cannot route.
+
+Rules:
+
+- `format` is always `png`. PNG is the one lossless format both pasteboards carry natively (macOS
+  `public.png`, the Windows registered `PNG` format), so neither side has to guess a colour space or quality.
+  The bytes must start with the PNG signature; anything else is rejected rather than handed to an image decoder.
+- `byteLength` is the decoded PNG size, 1...8,388,608 bytes (8 MiB), and must equal the decoded length of
+  `pngBase64`. Base64 makes the frame about 11.2 MB, so the host raises its WebSocket receive limit to
+  32 MiB; the URLSession default of 1 MiB would otherwise end the event stream on the first large copy.
+- `width` and `height` are 1...16,384 pixels and `width * height` is at most 33,554,432. A small PNG can
+  decode to an enormous bitmap, so the receiver checks the dimensions in the IHDR chunk against these fields
+  and against the bound before decoding.
+- `sha256` is the lowercase hex SHA-256 of the decoded PNG bytes. A mismatch is rejected. The hash is what
+  stops repeats: a receiver that applies a remote image remembers its hash, and its own clipboard watcher
+  treats an image with that hash as already seen instead of echoing it back. The guest also skips a
+  broadcast whose hash equals the last one it sent, because Windows bumps the clipboard sequence number
+  when an app re-sets identical content.
+- Text and image updates share one `sequence` space per origin. They are two kinds of one clipboard, so a
+  receiver that accepted guest image 9 must reject a later guest text 8.
+- When the Windows clipboard holds both text and an image (a spreadsheet range, a rich-text selection), the
+  guest sends only the text. That matches what the user most often means and keeps one copy from replacing
+  the Mac clipboard with a picture of a table. The host instead follows the order the source app listed its
+  pasteboard types in, because macOS apps list their richest representation first: Finder puts file URLs
+  before the names it also writes as text, and a browser's Copy Image puts the bitmap before the address.
+- On the guest, a host image is placed as both `PNG` and `CF_DIB`, so apps that only understand device
+  independent bitmaps (Paint, most Win32 apps) can paste it. The guest reads `PNG` first and converts
+  `CF_DIBV5`/`CF_DIB` to PNG otherwise.
+- Host-origin writes receive `operation.ack` under negotiated acknowledgements, exactly like
+  `clipboard.text.set`, and the host must not send the paste shortcut after an unconfirmed write.
+- Failures are `clipboard_image_failed` (the Windows clipboard could not be taken or written) and
+  `clipboard_image_too_large` (a bound above was exceeded). A malformed field is `invalid_message`.
+
+Fixtures: `harness/protocol-fixtures/clipboard.image.set.host.json`,
+`harness/protocol-fixtures/clipboard.image.set.guest.json`.
+
+## Clipboard Files
+
+Both directions use one message shape. Host to guest:
+
+```json
+{
+  "type": "clipboard.files.set",
+  "requestId": "req_clipboard_8",
+  "origin": "host",
+  "sequence": 8,
+  "shareName": "VeilShared",
+  "relativePaths": [
+    "Veil Clipboard\\20261105-140102-1A2B3C\\report.pdf"
+  ]
+}
+```
+
+An agent advertises `capabilities.clipboardFiles: true`.
+
+### Why files travel through the shared folder
+
+File bytes never ride this message. When the user copies files in Finder and presses ⌘V in a mirrored
+Windows window, the host copies exactly those files into a fresh batch folder inside the guest-served shared
+folder (`/Volumes/VeilShared/Veil Clipboard/<batch>/` on the Mac, `C:\VeilShared\Veil Clipboard\<batch>\` in
+Windows), then names them here. The guest places them on its clipboard as `CF_HDROP` with a copy drop effect
+and the host sends Ctrl+V, so Explorer or the target app copies them out like any local paste.
+
+The alternatives were rejected on trust-boundary grounds:
+
+- **Bytes over the control channel**, like `file.open.request`, would put gigabytes through a JSON socket
+  and the host's 50 MB drop bound exists precisely to avoid that.
+- **Sending host paths** and letting the guest read them needs a Mac folder visible to Windows. The only way
+  to get one is macOS File Sharing, which publishes on every interface (see Shared Folder), and it would
+  expose more than the copied files.
+- **Guest-chosen file URLs on the Mac pasteboard** were the reason guest-to-host files were first left out:
+  a file URL is the one clipboard payload that can make Finder act on host files. The guest-to-host
+  direction below therefore never lets the guest name a Mac path. The guest names files *inside its own
+  share*, and the host copies their bytes into a folder it creates itself before any URL reaches the
+  pasteboard. See [Guest to host](#guest-to-host).
+
+### Rules (host to guest)
+
+- The guest accepts only `origin: "host"`. A guest-origin `clipboard.files.set` sent *to* the agent is
+  rejected with `invalid_message`; guest-origin messages only ever travel from the agent to the host.
+- `shareName` must equal the share the guest publishes. The guest resolves paths against its own
+  `guestDirectoryPath`; the host never sends an absolute guest path.
+- `relativePaths` holds 1...64 entries. Each is at most 240 characters, uses `\` separators, starts
+  with `Veil Clipboard\`, and contains no empty, `.` or `..` component, no drive letter or root, no `:`
+  (alternate data streams), and no characters Windows forbids in file names. After resolution the full path
+  must still be inside `<guestDirectoryPath>\Veil Clipboard\`, must exist, must be a regular file and must
+  not be a reparse point. One bad entry rejects the whole message, so a partial paste never happens.
+- The host copies regular files only: no folders, no symbolic links, at most 64 files and 512 MiB in total.
+  It refuses the paste with a message rather than copying part of the selection. Folder copy is left out of
+  v1 because a recursive copy is where symlinks and package bundles would carry more than the user picked.
+- Each paste gets a new batch folder named `yyyyMMdd-HHmmss-<6 hex>`. The host keeps the three newest batches
+  and deletes older ones it created, and only folders matching that pattern inside `Veil Clipboard`.
+- Requires the shared folder to be mounted on the Mac. Without it the host shows why and sends no paste
+  shortcut, rather than pasting the file names as text.
+- Failures are `clipboard_files_failed` (the clipboard could not be written) and
+  `invalid_shared_file_path` (an entry failed the checks above).
+
+Fixture: `harness/protocol-fixtures/clipboard.files.set.host.json`.
+
+### Guest to host
+
+When the user copies files in Windows Explorer (or any app that places `CF_HDROP`), the agent stages a copy
+in the share and names it:
+
+```json
+{
+  "type": "clipboard.files.set",
+  "requestId": "evt_clipboard_12",
+  "origin": "guest",
+  "sequence": 12,
+  "shareName": "VeilShared",
+  "relativePaths": [
+    "Veil Clipboard from Windows\\20261111-050102-4D5E6F\\budget.xlsx"
+  ]
+}
+```
+
+The pieces, and who decides each one:
+
+1. **The guest stages.** On a clipboard change that carries `CF_HDROP`, the agent copies the listed files
+   into a fresh batch folder `C:\VeilShared\Veil Clipboard from Windows\<batch>\` and broadcasts the
+   message. It copies regular files only, 1...64 of them, at most 512 MiB in total, with no two names equal
+   ignoring case. A selection that breaks any bound (a folder, a link, too many, too large) is not sent at
+   all, so the Mac pasteboard never holds part of what the user copied. The agent keeps the three newest
+   batches and deletes older ones whose names match the batch pattern.
+2. **The host validates the names.** Every entry must be exactly
+   `Veil Clipboard from Windows\<batch>\<file name>`, all in one batch, where `<batch>` matches
+   `yyyyMMdd-HHmmss-<6 hex>` and the file name passes the Windows name rules above *and* the Mac rules
+   below. One bad entry drops the whole message.
+3. **The host copies the bytes into a folder it owns.** The destination is
+   `~/Downloads/Veil Clipboard/<host batch>/`, a folder the user can see in Finder, with a batch name the
+   host generates (the guest's batch name is not reused on the Mac). Each source is opened from the mount
+   root one component at a time with `O_NOFOLLOW`, so a symbolic link, junction or reparse point anywhere
+   on the path fails the open instead of being followed out of the share; the final open must be a
+   regular file by `fstat`. The host re-counts sizes while it reads and stops at 64 files and 512 MiB,
+   whatever the guest staged. Each file is created with `O_EXCL`, mode `0644` (never executable), and the
+   standard quarantine properties (`com.apple.quarantine`, agent "Veil"), so opening it goes through
+   Gatekeeper exactly like a downloaded file. A failure removes the partial batch.
+4. **Only then does the pasteboard change.** The host writes the copied files as file URLs, which Finder
+   pastes as a normal file copy. Nothing is opened, launched, or previewed by Veil.
+
+Why copy instead of pointing the pasteboard at `/Volumes/VeilShared/...`: the share is served by the guest.
+Between the host checking a path and Finder reading it, the guest can swap the file for a link to a host
+file, or change its bytes. Copying through `O_NOFOLLOW` descriptors into a host-owned folder closes that
+window: what lands on the pasteboard is a file the host wrote and the guest can no longer reach.
+
+Mac name rules (in addition to the Windows ones, which the guest names already satisfy):
+
+- At most 255 UTF-8 bytes, the APFS component limit.
+- No Unicode bidirectional controls (U+200E, U+200F, U+202A...U+202E, U+2066...U+2069). They are how
+  a name written `invoice` + U+202E + `fdp.app` displays as `invoiceppa.pdf`; a file whose name hides its type is refused, not renamed.
+- A leading `.` is replaced by `_`, so a copied `.zshrc` stays visible in Finder instead of becoming a
+  hidden file in Downloads.
+
+Acceptance on the host, in order:
+
+- `origin` is `guest`, `sequence` is greater than the last accepted guest clipboard sequence (text, image
+  and files share one sequence space, as for images), and the guest clipboard rate limit allows it.
+- Clipboard sharing and **Copy Files from Windows** are both on, and Veil is the active app, the same
+  rule as other guest clipboard updates. A background update is dropped, not queued.
+- The shared folder is mounted on the Mac. Without it the update is dropped and logged; nothing else reads
+  guest files.
+- The copy runs off the main thread. If a newer guest clipboard update arrives while it runs, the finished
+  copy is not written to the pasteboard, so a slow large copy never overwrites a later small one.
+- The host keeps the three newest batches in `~/Downloads/Veil Clipboard/` and deletes only folders it
+  named with the batch pattern. Finder copies the files out on paste, so the batches are staging, not the
+  user's copy.
+
+Loop prevention:
+
+- The agent never broadcasts a `CF_HDROP` whose files are inside `C:\VeilShared\Veil Clipboard\` or
+  `C:\VeilShared\Veil Clipboard from Windows\`. Those are exactly the files a host paste places there, so a
+  host-to-guest paste is not echoed back as a guest copy.
+- After writing guest files to the pasteboard the host remembers the pasteboard change count and guest
+  sequence. A ⌘V in a mirrored window while both still match sends Ctrl+V without re-sending the files,
+  because Windows' clipboard already holds the originals.
+
+Compatibility: an older host ignores a guest-origin `clipboard.files.set` (its event pump drops unknown
+clipboard kinds), so the only cost of a newer agent against an older host is the staged copy in the share.
+
+Not in v1:
+
+- **Folders.** Explorer's Copy on a folder is not sent. A recursive copy is where links and junctions
+  inside the tree would need the same per-component checks, and is left for a later version with its own
+  tests.
+- **Drag out of a mirrored window.** A Windows drag runs `DoDragDrop`'s modal loop inside the guest; the
+  guest never learns that the pointer left the mirrored window on the Mac, and Windows offers no API to read
+  another process's in-flight drag data object. Supporting it needs a guest-side drop target the host can
+  steer the drag onto when the Mac pointer leaves the window, which is a separate design.
+
+Fixture: `harness/protocol-fixtures/clipboard.files.set.guest.json`.
+
+### Host controls
+
+Clipboard sharing is on by default, matching the text behaviour Veil already shipped, and can be turned off
+from the Apps menu (**Share Clipboard with Windows**). Off means no clipboard message is sent or accepted in
+either direction; ⌘V still forwards Ctrl+V, so Windows pastes its own clipboard. **Copy Files into Windows on
+Paste** is a separate switch, also on by default, because it writes into the shared folder. **Copy Files
+from Windows** is the guest-to-host switch, also on by default and also behind sharing, because it writes
+into `~/Downloads/Veil Clipboard`.
+
+Guest-to-host updates are applied to the Mac pasteboard only while Veil is the active app. A Windows app
+that sets the clipboard in the background would otherwise replace what the user just copied in a Mac app
+with no warning. A background update is dropped, not queued.
 
 ## Windows Notifications
 
@@ -924,7 +1999,7 @@ Rules:
 ### Codes
 
 Codes documented alongside the message that produces them: `app_not_found`, `invalid_file_name`,
-`file_decode_failed`, `file_too_large`, `file_write_failed`, `file_open_failed`, `window_not_tracked`,
+`invalid_shared_file_path`, `shared_file_missing`, `file_decode_failed`, `file_too_large`, `file_write_failed`, `file_open_failed`, `window_not_tracked`,
 `text_too_long`, `invalid_message`, `input_text_failed`, `window_resize_failed`.
 
 The guest also emits the following. They were undocumented, which meant a host could neither explain them
@@ -937,25 +2012,28 @@ to a user nor pre-empt them:
 | `window_focus_failed` | `window.focus.request` threw. Distinct from an accepted-but-refused focus, which returns `accepted: false` rather than an error. |
 | `window_close_failed` | `window.close.request` threw, same distinction. |
 | `window_resize_failed` | `window.resize.request` threw while applying the size to the tracked HWND. |
-| `input_mouse_failed` | Posting a mouse message threw. |
-| `input_key_failed` | Posting a key message threw. |
+| `window_move_failed` | `window.move.request` reached a tracked HWND but Windows refused to move it. |
+| `input_mouse_failed` | Posting a mouse message threw or Windows declined to apply it. |
+| `input_key_failed` | Posting a key message threw or Windows declined to apply it. |
+| `input_text_failed` | Posting committed text threw or Windows declined to apply it. |
+| `clipboard_image_failed` | The guest could not read, convert, or write an image on the Windows clipboard. |
+| `clipboard_image_too_large` | A `clipboard.image.set` exceeded the byte or pixel bounds in Clipboard Image. |
+| `clipboard_files_failed` | The guest could not place the shared-folder files on the Windows clipboard. |
+| `appearance_set_failed` | `appearance.set.request` could not write the per-user theme values. See "Guest Appearance". |
+| `visual_effects_set_failed` | `visual.effects.set.request` could not write the per-user settings. See "Guest Visual Effects". |
 | `clipboard_text_failed` | The guest could not take the Windows clipboard. Routine rather than exotic: the guest retries `OpenClipboard` for 250 ms and any clipboard manager or Office instance can hold it longer. |
 
-Two gaps worth knowing about, both tracked in
-`docs/checklists/2026-08-13-host-guest-contract-audit.md`:
-
-- **Most of these cannot currently be observed by the macOS host.** `input.mouse`, `input.key`,
-  `input.text`, `clipboard.text.set`, and frame subscribe/unsubscribe are sent fire-and-forget, and the
-  host's transport closes the socket without reading. The sentence above permitting errors on those
-  requests describes surface no host reads today.
-- **`input_mouse_failed`, `input_key_failed`, and `input_text_failed` are only raised for thrown
-  exceptions.** The guest's desktop layer returns `false` — not an exception — for an unparseable HWND, an
-  unknown event name, and a dead window, and that path produces no reply at all.
+The fire-and-forget observation and silent `false`-return gaps recorded in
+`docs/checklists/2026-08-13-host-guest-contract-audit.md` are addressed for negotiated
+agents: the host reads the acknowledgement/error and the agent converts declined
+input to a structured failure. Legacy agents retain unacknowledged delivery, so
+socket submission alone cannot prove that Windows consumed their input.
 
 ## Shared Folder
 
-A live, writable folder both macOS and Windows can read and write continuously. This replaces
-`file.open.request` for anything that is not literally "open this dropped file", and it has no size cap.
+A live, writable folder both macOS and Windows can read and write continuously. The
+`file.open.shared.request` companion uses this folder for opening large files without copying their
+bytes through the control channel, and the folder itself has no size cap.
 
 Host request:
 
@@ -1064,3 +2142,338 @@ Turning the shared folder on or off does **not** invalidate a suspended Windows 
 forwarding is excluded from the suspend/resume machine fingerprint, because a `hostfwd` rule is slirp-side
 plumbing: the guest sees an identical NIC with an identical MAC and address either way, and QEMU migration
 does not serialize forwarding rules. Device topology is a different question and stays fingerprinted.
+
+## Mac Folder In Windows
+
+A folder on the Mac, mounted in Windows as a drive letter. The reverse of § Shared Folder, which keeps the
+folder in Windows. UTM shares Mac folders with Windows guests over WebDAV (its SPICE WebDAV channel); Veil
+does the same over plain HTTP, because QEMU usermode networking already lets the guest reach the Mac's
+loopback at `10.0.2.2` and Windows ships a WebDAV client (the WebClient service).
+
+- The host serves the folder with WebDAV on `127.0.0.1` only, at a random port, under a random path token:
+  `http://10.0.2.2:<port>/<token>/` from the guest. Requests outside the token get 404, and paths that
+  leave the folder, by `..` or a symlink, get 403.
+- The token is the only credential. Windows refuses Basic authentication over plain HTTP by default
+  (`BasicAuthLevel`), and the server is reachable only from this Mac and its guest. Any local Mac process
+  that learns the token can use the share, the same trust as the agent's own loopback port.
+- The guest maps it with `net use <drive>: \\10.0.2.2@<port>\<token>` in the signed-in user's session, so
+  Explorer shows it, and names it in Explorer with `label`.
+
+Host request:
+
+```json
+{
+  "type": "host.folder.mount.request",
+  "requestId": "req_host_folder",
+  "protocolVersion": 1,
+  "port": 50123,
+  "token": "6f1d0c9a2b7e4f30a8d5c1e9b2f47a60",
+  "driveLetter": "M",
+  "label": "Mac"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "host.folder.mount.response",
+  "requestId": "req_host_folder",
+  "protocolVersion": 1,
+  "hostFolder": {
+    "isMounted": true,
+    "driveLetter": "M",
+    "uncPath": "\\\\10.0.2.2@50123\\6f1d0c9a2b7e4f30a8d5c1e9b2f47a60",
+    "message": null
+  }
+}
+```
+
+- `port` is 1-65535; `token` is 16-128 characters of `[A-Za-z0-9_-]`, so it is safe on a command line;
+  `driveLetter` is one letter `D`-`Z`; `label` is at most 32 characters. Anything else is rejected with
+  `invalid_message`.
+- A drive letter already mapped to the same UNC path counts as mounted. One mapped elsewhere is replaced
+  only when it is a Veil WebDAV mapping (`\\10.0.2.2@...`); a letter taken by anything else is refused
+  with `isMounted: false` and a message.
+- `host.folder.unmount.request` with `driveLetter` removes a Veil mapping and answers
+  `host.folder.unmount.response` with the same `hostFolder` shape.
+- An agent that reports `capabilities.hostFolder` understands both.
+
+## Tools Update
+
+The host updates the Windows tools from a disc it puts in the VM's removable drive. An agent that reports
+`capabilities.toolsUpdate` starts the update itself, so the host does not have to type a command into
+Windows.
+
+Typing was the only way before: a click at a fixed place on the Windows screen, Ctrl+A, then the command in
+the Run dialog, all sent through QEMU. With apps open in Windows the click and the keys reached those apps.
+On the live guest one run replaced the text of an open Notepad document.
+
+Request (host → agent), after the host has inserted the disc:
+
+```json
+{
+  "type": "tools.update.request",
+  "requestId": "req_tools_update",
+  "protocolVersion": 1
+}
+```
+
+Response:
+
+```json
+{
+  "type": "tools.update.response",
+  "requestId": "req_tools_update",
+  "protocolVersion": 1,
+  "accepted": true,
+  "entryPoint": "H:\\Veil Guest Agent\\U.cmd"
+}
+```
+
+Rules:
+
+- The agent looks for an optical drive whose volume label is `VEIL_TOOLS` and that has
+  `Veil Guest Agent\U.cmd`. It starts that file with `cmd.exe`, with no window, and answers at once. The
+  script then stops the agent, replaces its files, and starts the new one, so the connection drops a few
+  seconds after the response.
+- The request carries no path and no command. The agent runs only that one file from a disc with that
+  label, as the user the agent runs as, without elevation.
+- This gives the host nothing it could not already do: it attaches the disc, and it can type into Windows.
+  A program inside Windows that mounts its own disc image with that label and sends the request gets its
+  script run as the same user it already runs as.
+- With no such disc the agent answers with a `tools_media_missing` error. When the file cannot be started
+  it answers `tools_update_failed`.
+- A host connected to an agent without the capability, or to no agent, still types the command, and only
+  while no app window is open in Windows.
+
+Fixtures: `harness/protocol-fixtures/tools.update.request.json`,
+`harness/protocol-fixtures/tools.update.response.json`.
+
+## Guest Time Sync
+
+Windows keeps its own clock once it has booted. When Veil restores a suspended session
+(`QEMUVMSuspension`) or the Mac sleeps for a long time, the guest resumes with the clock it had when
+it stopped, and nothing inside Windows notices. The host therefore tells the guest what time it is.
+
+Host request:
+
+```json
+{
+  "type": "time.sync.request",
+  "requestId": "req_time_sync",
+  "protocolVersion": 1,
+  "hostUtc": "2026-11-11T09:30:00.000Z",
+  "reason": "vm-resume"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "time.sync.response",
+  "requestId": "req_time_sync",
+  "protocolVersion": 1,
+  "timeSync": {
+    "isSupported": true,
+    "guestUtcBefore": "2026-11-10T22:12:41.118Z",
+    "skewMilliseconds": 40638882,
+    "thresholdMilliseconds": 2000,
+    "outcome": "corrected",
+    "method": "set-system-time",
+    "requiresElevation": false,
+    "recommendedAction": "none",
+    "message": "Windows clock was 40638882 ms behind macOS and has been set from the host."
+  }
+}
+```
+
+Rules:
+
+- `hostUtc` is required, must be an ISO 8601 UTC timestamp ending in `Z`, and must fall between the
+  years 2020 and 2100. A host clock outside that window is far more likely to be broken than right, and
+  the guest refuses rather than propagating it.
+- `reason` is one of `agent-connected`, `mac-wake`, `vm-resume`, or `manual`. It is diagnostic only; the
+  guest applies the same policy for every reason.
+- `skewMilliseconds` is `hostUtc - guestUtcBefore`. Positive means Windows was behind.
+- Within `thresholdMilliseconds` (2000) the guest reports `outcome: "in-sync"` and changes nothing. Message
+  transit time stays well inside that band on the loopback forward, so sending this on every agent
+  connection is safe.
+- `outcome` is one of `in-sync`, `corrected`, `resync-requested`, `failed`, `unsupported`, or
+  `invalid-request`. `method` is one of `none`, `set-system-time`, or `resync-task`.
+- The guest agent runs as the interactive user with a limited token (`Install-VeilAgent.ps1` registers it
+  with `-RunLevel Limited`), and setting the Windows clock needs `SeSystemtimePrivilege`, which a UAC-
+  filtered token does not hold. The guest therefore tries, in order:
+  1. `SetSystemTime` from `hostUtc`, after enabling `SeSystemtimePrivilege`. This works only when the agent
+     happens to be elevated. `outcome: "corrected"`.
+  2. Starting the `VeilTimeSync` scheduled task, which an elevated `Install-VeilAgent.ps1` registers to run
+     as SYSTEM and grants the installing user permission to start. It runs `Sync-VeilGuestTime.ps1`, which starts W32Time and calls `w32tm /resync`.
+     `outcome: "resync-requested"`: the guest only knows the task started, not that NTP answered, so it
+     never reports this as `corrected`. The host checks by sending another `time.sync.request` later.
+  3. Otherwise `outcome: "failed"`, `requiresElevation: true`, and
+     `recommendedAction: "install-time-sync-task-elevated"`.
+- The SYSTEM task deliberately does **not** take the host's time as input. Passing `hostUtc` into a
+  SYSTEM process would let any program running as the user set the system clock to anything. `w32tm`
+  takes no caller-controlled input, at the cost of needing the Mac to be online for NTP to answer.
+- An elevated install also raises W32Time's `MaxPosPhaseCorrection`/`MaxNegPhaseCorrection` to unlimited.
+  The standalone-machine defaults reject corrections over 15 hours, which is exactly the long-sleep case.
+- `recommendedAction` is one of `none`, `install-time-sync-task-elevated`, `wait-for-network-time`,
+  `invalid-request`, or `unsupported-on-this-host`.
+- `isSupported: false` is only for a non-Windows agent (the test harness). It must come with
+  `outcome: "unsupported"` and `method: "none"`.
+- `agent.health.response.capabilities.timeSync: true` advertises the message. A host must not send it to an
+  agent that does not advertise it.
+
+Host triggers: the macOS host sends `time.sync.request` when the agent connection becomes live, after
+`NSWorkspace.didWakeNotification`, and after a suspended session is resumed. Wake and resume set a pending
+flag that is flushed as soon as the agent is reachable, because the agent socket is usually still
+reconnecting at that moment.
+
+### Repairing the clock task
+
+Request (host → agent), sent when the agent advertises `capabilities.timeSyncRepair` and the user asks for it:
+
+```json
+{
+  "type": "time.sync.repair.request",
+  "requestId": "req_time_sync_repair",
+  "protocolVersion": 1
+}
+```
+
+Response:
+
+```json
+{
+  "type": "time.sync.repair.response",
+  "requestId": "req_time_sync_repair",
+  "protocolVersion": 1,
+  "repair": { "isSupported": true, "outcome": "approval-requested", "message": null }
+}
+```
+
+Rules:
+
+- **When:** a `time.sync.response` whose `recommendedAction` is `install-time-sync-task-elevated` means the `VeilTimeSync` task is missing, as on a Windows whose tools were installed without administrator rights. The clock then stays wrong however often it is checked. The host offers Set Windows Clock in the Veil menu and sends this request when the user chooses it.
+- **What it does:** the agent starts PowerShell as administrator, so Windows shows its approval prompt, which the host shows on the Mac (`secureDesktop` in `window.layout`). Once approved, the task is registered and started.
+- **`outcome`:** `approval-requested` when the prompt was asked for, `already-running` while an earlier prompt is still up, `failed`, or `unsupported`. The agent answers at once and does not wait for the user; the host sends `time.sync.request` again afterwards to see whether the clock is right.
+- **Trust:** the elevated command is built by the agent and passed encoded. It takes one value from outside, the user's SID, checked to be digits and hyphens. It runs no file from a folder the user can write to.
+- **The task:** runs as SYSTEM, takes no input, and runs only `sc.exe` and `w32tm.exe` from the Windows directory by full path. Installations before 2026-11-13 registered it to run a script in the tools' own folder, which the user can write to; `Install-VeilAgent.ps1` now registers the same command as this request. A guest that already has the older task keeps it until its tools are installed again as administrator.
+- Not yet checked on the live Windows 11 Arm guest.
+
+Fixtures: `harness/protocol-fixtures/time.sync.repair.request.json`, `time.sync.repair.response.json`.
+
+## Guest Appearance
+
+Makes Windows follow the Mac's light or dark appearance.
+
+Host request:
+
+```json
+{
+  "type": "appearance.set.request",
+  "requestId": "req_appearance_set",
+  "protocolVersion": 1,
+  "theme": "dark"
+}
+```
+
+Guest response:
+
+```json
+{
+  "type": "appearance.set.response",
+  "requestId": "req_appearance_set",
+  "protocolVersion": 1,
+  "appearance": {
+    "isSupported": true,
+    "theme": "dark",
+    "appsUseLightTheme": false,
+    "systemUsesLightTheme": false,
+    "changed": true,
+    "broadcast": true,
+    "message": null
+  }
+}
+```
+
+Rules:
+
+- `theme` is `light` or `dark`. Anything else is answered with an `error` whose code is `invalid_message`.
+- The guest writes the per-user DWORDs `AppsUseLightTheme` and `SystemUsesLightTheme` under
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize` (1 for light, 0 for dark), then
+  broadcasts `WM_SETTINGCHANGE` with `lParam = "ImmersiveColorSet"` using `SendMessageTimeout` and
+  `SMTO_ABORTIFHUNG`, so a hung window cannot stall the agent. Running apps that listen for that broadcast
+  repaint; others pick the theme up on their next launch. HKCU needs no elevation.
+- These two values are what Windows' own Settings > Personalization > Colors writes. They are not a
+  documented API; Microsoft documents them only indirectly (see
+  `docs/research/guest-host-state-sync.md`). The guest therefore reports what it read back rather than
+  what it intended.
+- `changed` is false when both values already matched, in which case the broadcast is skipped and
+  `broadcast` is false.
+- `appsUseLightTheme` and `systemUsesLightTheme` are the values read back after the write and must agree
+  with `theme` when `isSupported` is true.
+- A registry write failure is answered with an `error` whose code is `appearance_set_failed`.
+- `agent.health.response.capabilities.appearanceSync: true` advertises the message.
+
+Host behaviour: "Match Mac appearance in Windows" is a host setting, on by default
+(`UserDefaults` key `veil.guestSync.matchMacAppearance`). While it is on, the host sends the current Mac
+appearance when the agent connection becomes live and whenever the Mac appearance changes. Turning it off
+stops sending; it does not revert the Windows theme.
+
+## Guest Visual Effects
+
+Request (host → agent), sent when the agent advertises `capabilities.visualEffects`:
+
+```json
+{
+  "type": "visual.effects.set.request",
+  "requestId": "req_visual_effects_set",
+  "protocolVersion": 1,
+  "reduced": true
+}
+```
+
+Response:
+
+```json
+{
+  "type": "visual.effects.set.response",
+  "requestId": "req_visual_effects_set",
+  "protocolVersion": 1,
+  "visualEffects": {
+    "isSupported": true,
+    "reduced": true,
+    "transparency": false,
+    "windowAnimation": false,
+    "clientAnimation": false,
+    "changed": true,
+    "message": null
+  }
+}
+```
+
+Why: a Veil guest has no graphics acceleration, so Windows draws every frame on the CPU, and Microsoft lists turning visual effects down among the ways to speed up a slow PC ([Tips to improve PC performance in Windows](https://support.microsoft.com/windows/tips-to-improve-pc-performance-in-windows-b3b3ef5b-5953-fb6a-2528-4bbed82fba96)). A window fading in also shows the desktop behind it, which a Mac window cropped from the guest display would show as well.
+
+Rules:
+
+- `reduced: true` turns off three per-user settings:
+  - transparency, the `EnableTransparency` value the Settings app's "Transparency effects" switch writes. Microsoft documents the switch, not the value.
+  - the minimize and maximize animation (`SPI_SETANIMATION`).
+  - animations inside windows (`SPI_SETCLIENTAREAANIMATION`). Both are [SystemParametersInfo](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-systemparametersinfow) actions.
+- The first `reduced: true` saves what the user had under `HKCU\Software\UULab\Veil\VisualEffectsBackup`. Later ones leave that copy alone and write nothing when the settings are already off.
+- `reduced: false` puts the saved values back and removes the copy. With no copy it changes nothing, so a user who turned the effects off in Windows keeps them off.
+- `transparency`, `windowAnimation`, and `clientAnimation` are the values read back after the request; null where Windows did not report one.
+- `reduced` must be a boolean; anything else is answered with `invalid_message`. A failed write is answered with an `error` whose code is `visual_effects_set_failed`.
+- Nothing here needs administrator rights.
+- Not yet checked on the live Windows 11 Arm guest: that the registry write changes transparency at once, and how much frame time it saves.
+
+Host behaviour: "Reduce Windows Visual Effects" is a host setting, on by default (`UserDefaults` key `veil.guestSync.reduceVisualEffects`). The host sends its value when the agent connection becomes live and when it changes, on or off.
+
+Fixtures: `harness/protocol-fixtures/visual.effects.set.request.json`, `visual.effects.set.response.json`.
+
+## Battery
+
+Not synced. QEMU's `virt` machine exposes no ACPI battery or AC adapter device, so Windows has no battery
+to report. See `docs/research/guest-host-state-sync.md` for what was checked.

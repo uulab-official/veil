@@ -1,0 +1,5 @@
+{
+  "type": "display.scale.request",
+  "requestId": "req_display_scale_user",
+  "restoresUserScale": true
+}

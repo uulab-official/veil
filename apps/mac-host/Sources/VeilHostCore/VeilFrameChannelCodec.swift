@@ -42,6 +42,10 @@ public enum VeilFrameChannelCodec {
     public static let magicV1 = Data("VFR1".utf8)
     public static let magicV2 = Data("VFR2".utf8)
     public static let pngFormat: UInt8 = 1
+    /// 32-bit BGRA rows, top to bottom with no padding, compressed with raw deflate. Far cheaper for the guest
+    /// to produce than PNG; requested per window in `window.frame.subscribe` as `bgraDeflateFormatName`.
+    public static let bgraDeflateFormat: UInt8 = 2
+    public static let bgraDeflateFormatName = "bgra-deflate"
     public static let keyFrameFlag: UInt8 = 0x01
     /// v1: magic(4) + format(1) + idLength(2) + sequence(4) + width(4) + height(4) + scale(4) + payloadLength(4)
     public static let headerByteCountWithoutWindowIdV1 = 27
@@ -193,8 +197,9 @@ public enum VeilFrameChannelCodec {
         guard bytes.count >= fixedHeaderByteCount else {
             throw CodecError.truncated(expectedAtLeast: fixedHeaderByteCount, actual: bytes.count)
         }
-        guard bytes[4] == pngFormat else {
-            throw CodecError.unsupportedFormat(bytes[4])
+        let payloadFormat = bytes[4]
+        guard payloadFormat == pngFormat || payloadFormat == bgraDeflateFormat else {
+            throw CodecError.unsupportedFormat(payloadFormat)
         }
 
         // v1 has no flags byte, so every v1 message is a full-surface key frame.
@@ -296,7 +301,8 @@ public enum VeilFrameChannelCodec {
             scale: scaleThousandths == 0 ? 1 : Double(scaleThousandths) / 1_000,
             isKeyFrame: isKeyFrame,
             rect: rect,
-            payload: Data(bytes[cursor..<(cursor + payloadByteCount)])
+            payload: Data(bytes[cursor..<(cursor + payloadByteCount)]),
+            payloadFormat: payloadFormat
         )
     }
 

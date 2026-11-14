@@ -133,6 +133,11 @@ public struct RFBRenderedFrame: Codable, Equatable, Sendable {
 /// The RFB pseudo-encoding number for ExtendedDesktopSize resize negotiation.
 public let rfbExtendedDesktopSizeEncoding: Int32 = -223
 
+/// QEMU's historical Pierre Ossman ExtendedDesktopSize encoding. QEMU emits
+/// this value for the resize response even when the client also understands the
+/// standardized -223 value, so production clients must advertise and parse both.
+public let rfbQEMUExtendedDesktopSizeEncoding: Int32 = -308
+
 /// One screen entry from an ExtendedDesktopSize rectangle or SetDesktopSize message.
 public struct RFBScreenLayoutEntry: Equatable, Sendable {
     public var id: Int
@@ -179,6 +184,12 @@ public struct RFBDesktopSizeResponse: Equatable, Sendable {
         resultCode == 0
     }
 
+    /// QEMU's answer when it passed the size to a display device that resizes on the guest's side,
+    /// such as `virtio-gpu`: RFB ExtendedDesktopSize result 4, "request forwarded".
+    public var isForwardedToGuest: Bool {
+        resultCode == 4
+    }
+
     /// A failure only answers a request when the echoed framebuffer size matches it.
     public func matches(_ target: RFBDesktopResizeTarget) -> Bool {
         width == target.widthInPixels && height == target.heightInPixels
@@ -209,9 +220,10 @@ public enum RFBClientMessageBuilder {
         setEncodings([0])
     }
 
-    /// Raw pixels plus ExtendedDesktopSize, the minimum set for dynamic resolution.
+    /// Raw pixels plus both standardized and QEMU ExtendedDesktopSize encodings,
+    /// the minimum set for dynamic resolution against the QEMU VNC server.
     public static func setRawAndDesktopResizeEncodings() -> Data {
-        setEncodings([0, rfbExtendedDesktopSizeEncoding])
+        setEncodings([0, rfbQEMUExtendedDesktopSizeEncoding, rfbExtendedDesktopSizeEncoding])
     }
 
     public static func setDesktopSize(width: Int, height: Int) -> Data {
@@ -271,6 +283,24 @@ public enum RFBClientMessageBuilder {
         data.appendBigEndian(y)
         data.appendBigEndian(width)
         data.appendBigEndian(height)
+        return data
+    }
+
+    /// RFB key event: one keysym press or release on the existing display session.
+    public static func keyEvent(keysym: UInt32, isDown: Bool) -> Data {
+        var data = Data([4, isDown ? 1 : 0, 0, 0])
+        data.appendBigEndian(keysym)
+        return data
+    }
+
+    /// RFB pointer event using the guest framebuffer's absolute pixel coordinates.
+    /// RFC 6143 section 7.5.5: type, button mask, x, y; six bytes. Two padding bytes after the mask used to
+    /// shift x and y, and QEMU dropped the connection on the malformed stream, so the desktop view reconnected
+    /// every second or so and every click in it was lost.
+    public static func pointerEvent(buttonMask: UInt8, x: UInt16, y: UInt16) -> Data {
+        var data = Data([5, buttonMask])
+        data.appendBigEndian(x)
+        data.appendBigEndian(y)
         return data
     }
 }
@@ -430,8 +460,100 @@ public protocol RFBByteStream: AnyObject {
     func close()
 }
 
+/// Where QEMU's display server listens: a Unix socket (`unix:/path`), or a loopback TCP port
+/// (`127.0.0.1:5907`) for launches before the socket.
+public enum RFBEndpoint: Equatable, Sendable, CustomStringConvertible {
+    case unix(path: String)
+    case tcp(host: String, port: Int)
+
+    public init?(_ endpoint: String) {
+        if endpoint.hasPrefix("unix:") {
+            let path = String(endpoint.dropFirst("unix:".count))
+            guard path.hasPrefix("/") else {
+                return nil
+            }
+            self = .unix(path: path)
+            return
+        }
+        let parts = endpoint.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let port = Int(parts[1]), port > 0, port <= 65_535 else {
+            return nil
+        }
+        self = .tcp(host: parts[0], port: port)
+    }
+
+    /// From a launch record's fields; the socket wins when both are present.
+    public init?(socketPath: String?, host: String?, port: Int?) {
+        if let socketPath = socketPath?.trimmingCharacters(in: .whitespacesAndNewlines), socketPath.hasPrefix("/") {
+            self = .unix(path: socketPath)
+        } else if let host = host?.trimmingCharacters(in: .whitespacesAndNewlines), !host.isEmpty,
+                  let port, port > 0, port <= 65_535 {
+            self = .tcp(host: host, port: port)
+        } else {
+            return nil
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .unix(let path): "unix:\(path)"
+        case .tcp(let host, let port): "\(host):\(port)"
+        }
+    }
+}
+
 public final class RFBLoopbackSocket: RFBByteStream {
     private var fileDescriptor: Int32 = -1
+
+    public convenience init(endpoint: RFBEndpoint, timeoutSeconds: Int = 3) throws {
+        switch endpoint {
+        case .unix(let path):
+            try self.init(unixSocketPath: path, timeoutSeconds: timeoutSeconds)
+        case .tcp(let host, let port):
+            try self.init(host: host, port: port, timeoutSeconds: timeoutSeconds)
+        }
+    }
+
+    public init(unixSocketPath path: String, timeoutSeconds: Int = 3) throws {
+        var address = sockaddr_un()
+        let pathBytes = Array(path.utf8)
+        guard path.hasPrefix("/"), pathBytes.count < MemoryLayout.size(ofValue: address.sun_path) else {
+            throw RFBLoopbackSocketError.invalidEndpoint("unix:\(path)")
+        }
+
+        let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard descriptor >= 0 else {
+            throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("socket"))
+        }
+        fileDescriptor = descriptor
+        applyTimeouts(seconds: timeoutSeconds)
+
+        address.sun_family = sa_family_t(AF_UNIX)
+        address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+        withUnsafeMutableBytes(of: &address.sun_path) { buffer in
+            buffer.copyBytes(from: pathBytes)
+        }
+        let result = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
+                Darwin.connect(fileDescriptor, sockaddrPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        guard result == 0 else {
+            let reason = Self.lastErrnoDescription("connect")
+            close()
+            throw RFBLoopbackSocketError.socketOperationFailed(reason)
+        }
+    }
+
+    /// Timeouts, and no SIGPIPE: a write after QEMU closed the connection otherwise kills Veil instead of
+    /// failing with EPIPE.
+    private func applyTimeouts(seconds: Int) {
+        var timeout = timeval(tv_sec: seconds, tv_usec: 0)
+        setsockopt(fileDescriptor, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(fileDescriptor, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        var noSigPipe: Int32 = 1
+        setsockopt(fileDescriptor, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
+    }
 
     public init(host: String, port: Int, timeoutSeconds: Int = 3) throws {
         guard port > 0 && port <= 65_535 else {
@@ -443,10 +565,7 @@ public final class RFBLoopbackSocket: RFBByteStream {
             throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("socket"))
         }
         fileDescriptor = descriptor
-
-        var timeout = timeval(tv_sec: timeoutSeconds, tv_usec: 0)
-        setsockopt(fileDescriptor, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
-        setsockopt(fileDescriptor, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        applyTimeouts(seconds: timeoutSeconds)
 
         var address = sockaddr_in()
         address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
@@ -493,6 +612,14 @@ public final class RFBLoopbackSocket: RFBByteStream {
             }
 
             if result < 0 {
+                // A framebuffer can legitimately remain unchanged longer than the
+                // socket read timeout. Treat EAGAIN/EWOULDBLOCK as an idle wait,
+                // not a broken display, so the live session and its input channel
+                // stay connected instead of entering a reconnect loop every few
+                // seconds.
+                if errno == EAGAIN || errno == EWOULDBLOCK {
+                    continue
+                }
                 throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("read"))
             }
 
@@ -603,6 +730,33 @@ public final class RFBFrameStreamClient {
         try stream.write(RFBClientMessageBuilder.setDesktopSize(width: width, height: height))
     }
 
+    /// Sends a key event over the already authenticated RFB connection. This avoids
+    /// spawning a shell/netcat process for each keystroke.
+    public func sendKeyEvent(keysym: UInt32, isDown: Bool) throws {
+        guard serverInit != nil else {
+            throw RFBError.sessionNotStarted
+        }
+
+        try stream.write(RFBClientMessageBuilder.keyEvent(keysym: keysym, isDown: isDown))
+    }
+
+    /// Sends a pointer event over the already authenticated RFB connection.
+    public func sendPointerEvent(buttonMask: UInt8, x: Int, y: Int) throws {
+        guard let serverInit else {
+            throw RFBError.sessionNotStarted
+        }
+        guard x >= 0, y >= 0, x < serverInit.width, y < serverInit.height,
+              x <= Int(UInt16.max), y <= Int(UInt16.max) else {
+            throw RFBError.invalidFramebufferSize(width: x, height: y)
+        }
+
+        try stream.write(RFBClientMessageBuilder.pointerEvent(
+            buttonMask: buttonMask,
+            x: UInt16(x),
+            y: UInt16(y)
+        ))
+    }
+
     /// Adopts a server-confirmed framebuffer size so subsequent framebuffer update
     /// requests address the new surface instead of the old one.
     public func applyDesktopSize(width: Int, height: Int) throws {
@@ -641,7 +795,8 @@ public final class RFBFrameStreamClient {
             let height = Int(rectangleHeader.readUInt16BigEndian(at: 6))
             let encoding = rectangleHeader.readInt32BigEndian(at: 8)
 
-            if encoding == rfbExtendedDesktopSizeEncoding {
+            if encoding == rfbExtendedDesktopSizeEncoding ||
+                encoding == rfbQEMUExtendedDesktopSizeEncoding {
                 let screenCountByte = try stream.readExactly(1)
                 let payloadLength = try RFBFrameParser.desktopSizePayloadLength(firstBytes: screenCountByte)
                 let payloadRest = try stream.readExactly(payloadLength - 1)

@@ -171,6 +171,12 @@ struct QEMUBootArgumentsFingerprintTests {
         "-m", "8192M"
     ]
 
+    @Test("a session saved before Windows got a local-time clock still resumes")
+    func ignoresClockBase() {
+        let withClock = Self.baseArguments + ["-rtc", "base=localtime"]
+        #expect(QEMUBootArgumentsFingerprint.value(for: withClock) == QEMUBootArgumentsFingerprint.value(for: Self.baseArguments))
+    }
+
     @Test("ignores per-launch plumbing that legitimately changes on every start")
     func ignoresPerLaunchPlumbing() {
         let first = Self.baseArguments + [
@@ -378,10 +384,11 @@ struct QEMUVMSuspensionControllerTests {
         #expect(executed.prefix(2) == ["stop", "query-status"])
     }
 
-    @Test("keeps the guest paused and reports the terminal state when the save fails")
+    @Test("sets the guest running again and reports the terminal state when the save fails")
     func reportsFailedMemoryStateSave() async {
+        let qmp = FakeQMPControl(migrationStatuses: ["active", "failed"])
         let controller = QEMUVMSuspensionController(
-            qmp: FakeQMPControl(migrationStatuses: ["active", "failed"]),
+            qmp: qmp,
             sleeper: { _ in }
         )
 
@@ -395,12 +402,18 @@ struct QEMUVMSuspensionControllerTests {
                 pollIntervalNanoseconds: 1
             )
         }
+
+        // A paused guest nothing resumes is a frozen Windows, and QEMU is never told to quit.
+        let executed = await qmp.executeNames
+        #expect(executed.suffix(2) == ["migrate_cancel", "cont"])
+        #expect(!executed.contains("quit"))
     }
 
     @Test("times out with the last observed migration state rather than hanging")
     func timesOutWithLastObservedState() async {
+        let qmp = FakeQMPControl(migrationStatuses: ["active", "active", "active"])
         let controller = QEMUVMSuspensionController(
-            qmp: FakeQMPControl(migrationStatuses: ["active", "active", "active"]),
+            qmp: qmp,
             sleeper: { _ in }
         )
 
@@ -414,6 +427,10 @@ struct QEMUVMSuspensionControllerTests {
                 pollIntervalNanoseconds: 1
             )
         }
+
+        // The save is still writing: it is cancelled before the guest runs again.
+        let executed = await qmp.executeNames
+        #expect(executed.suffix(2) == ["migrate_cancel", "cont"])
     }
 
     @Test("refuses to suspend a machine with no QMP control socket")
@@ -673,6 +690,31 @@ struct VMRuntimeModelSessionTests {
         #expect(model.snapshot?.state == .suspended)
         #expect(model.errorMessage?.contains("configuration changed") == true)
         #expect(model.canResume)
+        // Trying again cannot help, so Start has to offer a fresh start.
+        #expect(model.savedSessionCannotResume)
+    }
+
+    @Test("a resume that may work next time does not offer to discard the session")
+    @MainActor
+    func aTransientResumeFailureKeepsTheSession() async {
+        let service = SessionVMRuntimeService(snapshot: .suspendedQEMU, resumeError: VMSuspensionError.qmpUnavailable)
+        let model = VMRuntimeModel(service: service)
+        await model.load()
+
+        await model.resume()
+
+        #expect(model.snapshot?.state == .suspended)
+        #expect(!model.savedSessionCannotResume)
+    }
+
+    @Test("tells sessions that can never resume from failures worth retrying")
+    func classifiesResumeFailures() {
+        #expect(VMSuspensionError.machineConfigurationChanged(expected: "a", actual: "b").savedSessionCannotResume)
+        #expect(VMSuspensionError.machineFingerprintSchemeSuperseded(stored: "fnv1a64:a").savedSessionCannotResume)
+        #expect(VMSuspensionError.suspendedStateFileMissing("/tmp/disk.vmsave").savedSessionCannotResume)
+        #expect(VMSuspensionError.noSuspendedState.savedSessionCannotResume)
+        #expect(!VMSuspensionError.qmpUnavailable.savedSessionCannotResume)
+        #expect(!VMSuspensionError.memoryStateSaveFailed(status: "failed").savedSessionCannotResume)
     }
 
     @Test("reports suspend as unsupported instead of silently stopping the VM")

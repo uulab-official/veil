@@ -194,10 +194,13 @@ Exit criteria:
   extracts each app's real Windows icon (`WindowsAppIconExtractor`), the protocol carries it once per
   `app.list.response` as `iconPngBase64`, and the launcher's app list renders it with a documented fallback
   when the guest could not resolve one.
-  What is genuinely missing is narrower than "app icons": the **mirrored window carries no icon at all**.
-  `configure(_:for:)` sets only the title, so a Windows app window has no proxy icon, and the Dock shows one
-  Veil tile rather than a tile per running Windows app. The Dock half is not a small fix — Parallels ships a
-  per-app wrapper bundle to get separate Dock entries, which is a packaging decision, not a drawing one.
+  The host now carries the catalog icon into mirrored-window chrome and the Focus/Close/Open Dock menu items,
+  with a generic fallback when the guest does not provide a valid PNG. This improves app identity without
+  pretending Veil has separate per-app Dock bundles; Parallels' per-app Dock entries remain a packaging decision,
+  not a drawing-only fix. Live verification with real Windows icons and multiple windows is still open.
+  Per-app launchers now exist (2026-11-11): Veil generates an ad-hoc-signed `.app` per opened Windows app in
+  `~/Applications/Veil Apps`, so Windows apps appear in Launchpad, Spotlight and the Dock and in Finder's Open
+  With for Notepad and Paint file types. See "Mac Integration URLs" in `docs/protocol.md`.
 - Drag and drop. **Already shipped**, and again understated here. Dropping a file on a mirrored window sends
   it to the guest, which writes it into a per-request directory, opens it with the target app, and deletes
   the copy after five minutes.
@@ -294,20 +297,18 @@ the prerequisite and the alternative, so nothing is silently broken. Revisit aga
 
 ## Open Contract Debt
 
-A systematic pass over every host→guest message against `docs/protocol.md` and the guest's C# handlers
-found that **six of the nine cannot receive an error at all**. `URLSessionWebSocketTransport.send` opens a
-new WebSocket per message and closes it immediately when `expectedReplies` is `0`, which is what mouse, key,
-text, clipboard, and frame subscribe/unsubscribe all pass. Eight documented guest error codes are therefore
-unobservable, and messages have no ordering guarantee at the guest because each arrives on its own
-connection.
+The host/guest contract audit originally found that **six of the nine host→guest operations could not receive
+an error**: each short-lived WebSocket closed immediately when `expectedReplies` was `0`. The negotiated
+`capabilities.operationAcks` slice now closes that gap for current agents. Input, committed text, clipboard,
+and frame-subscription operations receive one bounded `operation.ack` or structured error, and the host
+serializes those short-lived sends per mirrored window so key-down/key-up cannot overtake each other without
+letting a slow acknowledgement in one app stall another. A guest `false` return is also converted to
+`input_*_failed` rather than silently disappearing.
 
-The sharpest consequence was ⌘V: the clipboard write can fail routinely (the guest's `OpenClipboard` retry
-budget is 250 ms, which any clipboard manager beats), the host could not see the failure, and Ctrl+V was
-posted anyway — pasting whatever Windows had before into the user's document. That is now honest rather than
-silent: a failed clipboard write cancels the paste and says so. Making it *correct* needs the guest to
-acknowledge the write, which is a wire-contract change across two languages and is deliberately deferred to
-a session that can compile both. See `docs/checklists/2026-08-13-host-guest-contract-audit.md` for the full
-list, evidence, and suggested order.
+The compatibility debt is explicit: agents that do not advertise acknowledgements keep fire-and-forget
+delivery, so legacy transport cannot prove Windows consumed an operation. A persistent shared control channel
+may be warranted after live latency measurement, but it is no longer required for correctness with the current
+agent. See `docs/checklists/2026-08-13-host-guest-contract-audit.md` for the historical audit and live gates.
 
 ## Current Next Step
 
@@ -370,7 +371,7 @@ Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent
    - Text input was worse than "IME missing". `MacKeyboardInputMapper` only resolves letters, digits, and nine named keys, so space, every punctuation mark, and every non-Latin character were silently dropped. Hangul, kana, and Han characters have no Windows virtual key at all.
    - Added the `input.text` message for committed Unicode text, posted on the guest as `WM_CHAR` per UTF-16 code unit. macOS owns the IME: the host composes with the user's existing input source, shows the composition in its own overlay, and sends only the committed result, so there is no per-keystroke round trip and no guest candidate window over a mirrored bitmap.
    - Enter, Tab, arrows, and shortcut chords deliberately stay on the `input.key` path, because their guest meaning is the key rather than a character. The decision lives in `MacTextInputRouter`, free of AppKit so it is unit testable.
-   - Open: live Korean typing on Windows 11 Arm, live audio playback confirmation, and the deferred `type-unicode` automation action.
+   - Open: live Korean typing on Windows 11 Arm and live audio playback confirmation. `type-unicode` now gives automation the same bounded committed-text path as the interactive IME.
 
 11. Frame pipeline, first slice (2026-07-31): damage tracking and unchanged-frame heartbeats. See `docs/checklists/2026-07-31-frame-pipeline-damage-tracking.md`.
    - The streamer ticked on a fixed 250 ms timer, a hard 4 frames-per-second ceiling, and re-encoded the **entire** window as PNG plus base64 on every tick regardless of whether a single pixel had changed.
@@ -391,6 +392,7 @@ Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent
    - The guest now computes the bounding rectangle of changed pixels and encodes only that region. Wire format v2 (`VFR2`) carries the rectangle plus a key-frame flag; `VFR1` still decodes as a full-surface key frame so an agent mid-upgrade degrades rather than fails.
    - The host keeps the authoritative full-window surface in `WindowFrameCompositor` and composites tiles into it. That also removes the host's per-frame full-surface PNG decode, since only the tile is decoded.
    - A tile is a distinct type from a frame on both sides, so a tile cannot be accidentally rendered as a whole window. Tiles arriving before a key frame, after an unkeyed resize, or with a payload whose size disagrees with its rectangle are dropped with a specific reason rather than approximated. A dropped tile is not counted as a received frame, so a stalled surface cannot report as healthy.
+   - The host binary channel buffer is bounded and now treats overflow as a scoped recovery event instead of silently losing an incremental tile: only the affected HWND is unsubscribed/resubscribed so its next stream begins with a key frame, while other mirrored windows keep their surfaces and input path. The compositor also rejects skipped or repeated dirty-tile sequence numbers per window and immediately restarts only that HWND's stream, so a missing delta cannot leave a plausible but permanently stale surface even when the guest keeps producing only small changes.
    - Composited pixels deliberately live outside the observable session value; views observe a generation counter and read the image through the model, so a full-resolution bitmap is never copied through the session array or compared by SwiftUI's equality diffing.
    - Open: periodic time-based key frames, deferred because picking an interval needs the measurement below rather than a guess.
 
@@ -401,12 +403,19 @@ Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent
    - Latency stays out of scope: `coherence-proof` already measures first-frame and post-input latency against a budget, and a second implementation could only disagree with it.
    - Open: actually running it. Three runs are specified in the checklist -- typing, idle, and scrolling a large document -- along with what each one would tell us.
 
-15. Still not Parallels-class, and the remaining decisions are now blocked on data rather than design. Once the three measurement runs exist: the coverage numbers choose the periodic key-frame interval that the tile slice deliberately deferred, and the byte-rate versus composite-time numbers decide whether the pipeline is bandwidth-bound or CPU-bound, which determines whether a codec change is the next step at all. The header's format byte reserves room for a hardware or inter-frame codec without another negotiation round. A guest display driver remains the only path to true Parallels-class graphics and is a separate, much larger decision. Beyond graphics: no live shared folder (no virtio-9p or SMB; file transfer is base64 over the control channel with a 50 MB cap), no USB passthrough, and usermode NAT only.
+15. Still not Parallels-class, and the remaining decisions are now blocked on data rather than design. Once the three measurement runs exist: the coverage numbers choose the periodic key-frame interval that the tile slice deliberately deferred, and the byte-rate versus composite-time numbers decide whether the pipeline is bandwidth-bound or CPU-bound, which determines whether a codec change is the next step at all. The header's format byte reserves room for a hardware or inter-frame codec without another negotiation round. A guest display driver remains the only path to true Parallels-class graphics and is a separate, much larger decision. Beyond graphics: the guest-SMB live shared-folder transport and a path-based large-file open contract are implemented but still need real Windows evidence; USB passthrough remains unavailable and networking is usermode NAT only.
+
+15a. Large-file shared-folder open contract (2026-09-15): `file.open.shared.request` lets the host open a file
+already copied into `C:\\VeilShared` without putting its bytes on the control channel. The host client, protocol
+fixture/validator, and Windows agent all share the contract. The agent independently rejects traversal, paths
+outside the fixed share root, mismatched final names, and missing files. Finder drag-and-drop still uses the
+bounded 50 MB base64 path until the shared-volume mount/copy UX is wired and live-tested; this slice is the
+safe transport foundation, not a claim that large-file UX is complete.
 
 16. Desktop dynamic resolution, first slice (2026-08-29): implemented the RFB half of the
     `2026-08-28-desktop-resize-stability-design.md` against the full Windows desktop window. See
     `docs/checklists/2026-08-29-rfb-dynamic-desktop-resolution.md`.
-    - The RFB handshake now advertises ExtendedDesktopSize, `readUpdateEvent()` surfaces resize
+    - The RFB handshake now advertises both standardized and QEMU ExtendedDesktopSize, `readUpdateEvent()` surfaces resize
       responses as typed events instead of failing as an unsupported encoding, and
       `sendSetDesktopSize`/`applyDesktopSize` send the request and adopt the confirmed size so
       framebuffer update requests follow the new surface.
@@ -417,16 +426,19 @@ Veil now has the local QEMU/HVF boot path, embedded display evidence, fake-agent
       in-flight request, a queued newest target, and an injected clock) are unit tested end to end,
       including wire bytes against a fake RFB stream.
     - The desktop window presenter debounces geometry changes and emits one bounded target per
-      settled resize; requests sent before the capability probe finishes are flushed when the
-      connection reports available. Pointer input maps through the viewport against the last
-      applied framebuffer geometry, and the desktop status overlay reports
-      available/scaled/rejected/recovering truthfully.
+      settled resize; the first target is sent while probing because QEMU often reports the
+      extension only after that request. Pointer input maps through the viewport against the
+      last applied framebuffer geometry, and the desktop status overlay reports
+      available/scaled/rejected/recovering truthfully. Repeated no-op QEMU resize rectangles
+      no longer trigger a full-update feedback loop.
     - The same session fixed a real process-pipe deadlock, not a test-only annoyance:
       `QEMUVMRuntimeBooter.runningProcess` waited on `ps axww | grep qemu` before draining a 16 KB
       pipe while a real Windows VM's process line was flowing through it — the host hung forever
       detecting a running VM, and each stuck `ps|grep` matched the next probe, piling up. The drain
       order is fixed there, in `QEMUWindowsBootPlan.availableBackends`, and the QEMU boot-log
       runner now drains concurrently instead of silently truncating the log at the pipe buffer.
-    - Open: the live Windows evidence pass (windowed → larger → full screen → windowed, requested
-      vs applied sizes, four-corner pointer proof, and whether the tested virtio display driver
-      accepts SetDesktopSize — a rejection is honest evidence for the guest-agent fallback slice).
+    - Live evidence: the tested Windows 11 Arm virtio display path rejects `1024x768` with
+      QEMU ExtendedDesktopSize result 3, so Veil preserves the confirmed `800x600` surface
+      aspect-fit without stretching. The new `display.resize.request` guest-agent fallback
+      asks Windows to apply the mode through `ChangeDisplaySettingsEx`; a later RFB size
+      response remains authoritative.

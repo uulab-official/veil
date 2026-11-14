@@ -52,16 +52,21 @@ public protocol VMSuspensionRecordStore: Sendable {
 }
 
 public struct JSONVMSuspensionRecordStore: VMSuspensionRecordStore {
-    private let directory: URL
+    private let fixedDirectory: URL?
     private let fileName: String
 
+    /// A nil directory follows the selected library machine's diagnostics folder.
     public init(
-        directory: URL = QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
-            .appendingPathComponent("QEMU Suspend", isDirectory: true),
+        directory: URL? = nil,
         fileName: String = "qemu-suspend-latest.json"
     ) {
-        self.directory = directory
+        self.fixedDirectory = directory
         self.fileName = fileName
+    }
+
+    private var directory: URL {
+        fixedDirectory ?? QEMUVMRuntimeBooter.defaultDiagnosticsDirectory()
+            .appendingPathComponent("QEMU Suspend", isDirectory: true)
     }
 
     private var recordURL: URL {
@@ -106,6 +111,20 @@ public enum VMSuspensionError: Error, LocalizedError, Equatable, Sendable {
     /// a configuration the user never touched.
     case machineFingerprintSchemeSuperseded(stored: String)
 
+    /// True when the saved session can never be resumed, however often it is tried: the machine it was
+    /// saved from is not the one Veil would start now, or the saved state is gone. Starting Windows then
+    /// means starting it fresh, which discards the saved session.
+    public var savedSessionCannotResume: Bool {
+        switch self {
+        case .noSuspendedState, .suspendedStateFileMissing, .machineConfigurationChanged,
+             .machineFingerprintSchemeSuperseded:
+            true
+        case .runtimeNotRunning, .qmpUnavailable, .memoryStateSaveRejected, .memoryStateSaveFailed,
+             .memoryStateSaveTimedOut:
+            false
+        }
+    }
+
     public var errorDescription: String? {
         switch self {
         case .runtimeNotRunning:
@@ -115,9 +134,9 @@ public enum VMSuspensionError: Error, LocalizedError, Equatable, Sendable {
         case .memoryStateSaveRejected(let message):
             "QEMU rejected the Windows VM memory state save: \(message)"
         case .memoryStateSaveFailed(let status):
-            "The Windows VM memory state save ended in state '\(status)'. The VM is still paused; resume or stop it before retrying."
+            "The Windows VM memory state save ended in state '\(status)'. Windows is running again; make room on the Mac disk before retrying."
         case .memoryStateSaveTimedOut(let seconds, let latestStatus):
-            "The Windows VM memory state save did not finish within \(seconds) seconds (last reported state '\(latestStatus)'). The VM is still paused."
+            "The Windows VM memory state save did not finish within \(seconds) seconds (last reported state '\(latestStatus)'). The save was cancelled and Windows is running again."
         case .noSuspendedState:
             "No suspended Windows VM state was found. Start the VM instead of resuming it."
         case .suspendedStateFileMissing(let path):
@@ -153,7 +172,10 @@ public enum QEMUBootArgumentsFingerprint {
         "-qmp",
         "-vnc",
         "-display",
-        "-incoming"
+        "-incoming",
+        // The clock's starting point, not a device: a session saved before Windows got a local-time
+        // clock still resumes, and the RTC state in the stream carries on from there.
+        "-rtc"
     ]
 
     /// Flags whose value can carry host-side port forwarding clauses.
@@ -237,10 +259,10 @@ public enum QEMUBootArgumentsFingerprint {
 
 /// Suspends a running QEMU/HVF Windows VM to a local memory-state file.
 ///
-/// QEMU's internal `savevm` snapshots need a qcow2 image, and Veil's default system disk is raw
-/// (`if=none,id=system,format=raw`), so suspend uses the migration path instead: pause the guest,
-/// stream RAM plus device state through `migrate` to a file, then quit the process. The raw disk is
-/// never rewritten, which is why this works on the shipping disk format.
+/// QEMU's internal `savevm` snapshots need a qcow2 image, and disks made by older Veil builds are raw,
+/// so suspend uses the migration path instead: pause the guest, stream RAM plus device state through
+/// `migrate` to a file, then quit the process. The disk is never rewritten, which is why this works on
+/// raw and qcow2 disks alike.
 public struct QEMUVMSuspensionController: Sendable {
     public static let defaultPollAttempts = 240
     public static let defaultPollIntervalNanoseconds: UInt64 = 500_000_000
@@ -305,21 +327,27 @@ public struct QEMUVMSuspensionController: Sendable {
         // like a usable stream.
         try? FileManager.default.removeItem(atPath: stateFilePath)
 
+        let migrationStatus: String
         do {
-            try await qmp.run(
-                .saveMemoryState(filePath: stateFilePath),
-                socketPath: qmpSocketPath,
-                idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+            do {
+                try await qmp.run(
+                    .saveMemoryState(filePath: stateFilePath),
+                    socketPath: qmpSocketPath,
+                    idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+                )
+            } catch {
+                throw VMSuspensionError.memoryStateSaveRejected(error.localizedDescription)
+            }
+
+            migrationStatus = try await waitForMemoryStateSave(
+                qmpSocketPath: qmpSocketPath,
+                pollAttempts: pollAttempts,
+                pollIntervalNanoseconds: pollIntervalNanoseconds
             )
         } catch {
-            throw VMSuspensionError.memoryStateSaveRejected(error.localizedDescription)
+            await resumeGuestAfterFailedSave(qmpSocketPath: qmpSocketPath, stateFilePath: stateFilePath)
+            throw error
         }
-
-        let migrationStatus = try await waitForMemoryStateSave(
-            qmpSocketPath: qmpSocketPath,
-            pollAttempts: pollAttempts,
-            pollIntervalNanoseconds: pollIntervalNanoseconds
-        )
 
         // QEMU exits as it acknowledges `quit`, so a missing reply here is the expected outcome
         // rather than a failure. The suspension is already durable at this point.
@@ -335,6 +363,29 @@ public struct QEMUVMSuspensionController: Sendable {
             migrationStatus: migrationStatus,
             suspendedAt: now()
         )
+    }
+
+    /// Puts a guest that was paused for a save back to running when the save did not finish.
+    ///
+    /// Without this a failed suspend, such as a Mac disk too full for the memory state, left Windows
+    /// frozen: the error was reported, nothing sent `cont`, and when the suspend was part of quitting,
+    /// Veil quit and left the frozen QEMU behind. Everything here is best effort; the save's own error is
+    /// the one the caller sees.
+    private func resumeGuestAfterFailedSave(qmpSocketPath: String, stateFilePath: String) async {
+        // A save still under way holds the guest paused and keeps writing; one that already failed
+        // ignores the cancel.
+        _ = try? await qmp.run(
+            .cancelMemoryStateSave,
+            socketPath: qmpSocketPath,
+            idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+        )
+        _ = try? await qmp.run(
+            .cont,
+            socketPath: qmpSocketPath,
+            idleTimeoutSeconds: Self.qmpControlIdleTimeoutSeconds
+        )
+        // A partial stream must not be taken for a session to resume.
+        try? FileManager.default.removeItem(atPath: stateFilePath)
     }
 
     /// Loads a saved memory-state stream into an already-launched, `-incoming` QEMU and unpauses it.

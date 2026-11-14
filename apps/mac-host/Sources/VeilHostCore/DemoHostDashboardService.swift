@@ -49,6 +49,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.openFile(appId: appId, fileName: fileName, contentBase64: contentBase64)
     }
 
+    public func openSharedFile(appId: String, fileName: String, guestPath: String) async throws -> WindowsAppLaunchResult {
+        try await primary.openSharedFile(appId: appId, fileName: fileName, guestPath: guestPath)
+    }
+
     public func focusWindow(windowId: String) async throws -> WindowFocusResponse {
         try await primary.focusWindow(windowId: windowId)
     }
@@ -61,8 +65,24 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.resizeWindow(windowId: windowId, width: width, height: height)
     }
 
+    public func resizeDisplay(width: Int, height: Int) async throws -> DisplayResizeResponse {
+        try await primary.resizeDisplay(width: width, height: height)
+    }
+
+    public func setDisplayScale(scalePercent: Int?) async throws -> DisplayScaleResponse {
+        try await primary.setDisplayScale(scalePercent: scalePercent)
+    }
+
+    public func requestSystemShutdown() async throws -> SystemShutdownResponse {
+        try await primary.requestSystemShutdown()
+    }
+
     public func sendMouseInput(_ input: InputMouseEvent) async throws {
         try await primary.sendMouseInput(input)
+    }
+
+    public func sendMouseInputReportingPointer(_ input: InputMouseEvent) async throws -> GuestPointerPosition? {
+        try await primary.sendMouseInputReportingPointer(input)
     }
 
     public func sendKeyInput(_ input: InputKeyEvent) async throws {
@@ -77,6 +97,14 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.sendClipboardText(clipboard)
     }
 
+    public func sendClipboardImage(_ clipboard: ClipboardImageSet) async throws {
+        try await primary.sendClipboardImage(clipboard)
+    }
+
+    public func sendClipboardFiles(_ clipboard: ClipboardFilesSet) async throws {
+        try await primary.sendClipboardFiles(clipboard)
+    }
+
     public func subscribeWindowFrames(windowId: String) async throws {
         try await primary.subscribeWindowFrames(windowId: windowId)
     }
@@ -85,8 +113,48 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.unsubscribeWindowFrames(windowId: windowId)
     }
 
+    public func setCroppedWindows(windowIds: [String], hidesDesktop: Bool) async throws {
+        try await primary.setCroppedWindows(windowIds: windowIds, hidesDesktop: hidesDesktop)
+    }
+
+    public func moveWindow(windowId: String, x: Int, y: Int) async throws {
+        try await primary.moveWindow(windowId: windowId, x: x, y: y)
+    }
+
     public func waitForAgentConnection(endpoint: String, timeoutSeconds: Int) async -> AgentConnectionWaitReport {
         await primary.waitForAgentConnection(endpoint: endpoint, timeoutSeconds: timeoutSeconds)
+    }
+
+    public func syncGuestTime(hostUtc: Date, reason: GuestTimeSyncReason) async throws -> TimeSyncResponse {
+        try await primary.syncGuestTime(hostUtc: hostUtc, reason: reason)
+    }
+
+    public func setGuestAppearance(theme: GuestAppearanceTheme) async throws -> AppearanceSetResponse {
+        try await primary.setGuestAppearance(theme: theme)
+    }
+
+    public func setGuestVisualEffects(reduced: Bool) async throws -> VisualEffectsSetResponse {
+        try await primary.setGuestVisualEffects(reduced: reduced)
+    }
+
+    public func repairGuestTimeSync() async throws -> TimeSyncRepairResponse {
+        try await primary.repairGuestTimeSync()
+    }
+
+    public func setGuestImeMode(_ mode: GuestImeMode) async throws {
+        try await primary.setGuestImeMode(mode)
+    }
+
+    public func mountHostFolder(_ request: HostFolderMountRequest) async throws -> HostFolderMountResponse {
+        try await primary.mountHostFolder(request)
+    }
+
+    public func unmountHostFolder(_ request: HostFolderUnmountRequest) async throws -> HostFolderMountResponse {
+        try await primary.unmountHostFolder(request)
+    }
+
+    public func startToolsUpdate(_ request: ToolsUpdateRequest) async throws -> ToolsUpdateResponse {
+        try await primary.startToolsUpdate(request)
     }
 
     private var fallbackDetail: String {
@@ -155,6 +223,10 @@ public struct DemoHostDashboardService: HostDashboardService, Sendable {
             window: .demo(app: app),
             connectionMode: .demo
         )
+    }
+
+    public func openSharedFile(appId: String, fileName: String, guestPath: String) async throws -> WindowsAppLaunchResult {
+        try await openFile(appId: appId, fileName: fileName, contentBase64: "")
     }
 
     public func focusWindow(windowId: String) async throws -> WindowFocusResponse {

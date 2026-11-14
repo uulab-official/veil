@@ -1,0 +1,10 @@
+{
+  "type": "time.sync.repair.response",
+  "requestId": "req_time_sync_repair",
+  "protocolVersion": 1,
+  "repair": {
+    "isSupported": true,
+    "outcome": "approval-requested",
+    "message": null
+  }
+}

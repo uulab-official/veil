@@ -20,7 +20,7 @@ Veil already starts QEMU/HVF with `virtio-gpu-pci`, receives the desktop over lo
 
 The host now preserves the live framebuffer aspect ratio, but resizing the macOS window still scales the same guest framebuffer. That explains the remaining blur and why a large full-screen window does not behave like a guest whose display resolution actually changed.
 
-The RFB protocol provides capability-based desktop resizing: a client requests the `ExtendedDesktopSize` pseudo-encoding, sends `SetDesktopSize` only after the server advertises support, and waits for an explicit success or failure rectangle. QEMU can forward this request to the guest display device, but the guest remains responsible for applying it. Windows 11 virtio display drivers can reject the request, so Veil must treat refusal as a supported fallback state rather than retrying indefinitely.
+The RFB protocol provides capability-based desktop resizing: a client requests the `ExtendedDesktopSize` pseudo-encoding, sends `SetDesktopSize`, and waits for an explicit success or failure rectangle. QEMU commonly reports the extension only after the first request and uses its historical `-308` pseudo-encoding, so Veil advertises/parses both `-223` and `-308` and sends the first settled target while probing. QEMU can forward the request to the guest display device, but the guest remains responsible for applying it. Windows 11 virtio display drivers can reject the request, so Veil must treat refusal as a supported fallback state rather than retrying indefinitely.
 
 References:
 
@@ -103,7 +103,7 @@ requestPending -> rejected(reason)
 requestPending -> timedOut
 ```
 
-The client advertises raw encoding plus `ExtendedDesktopSize`. It records support only after receiving that rectangle. A `SetDesktopSize` message contains one screen covering the requested framebuffer. The next matching `ExtendedDesktopSize` response completes the request.
+The client advertises raw encoding plus standardized and QEMU `ExtendedDesktopSize`. It sends one bounded first target while probing; the next matching `ExtendedDesktopSize` response completes the request. A `SetDesktopSize` message contains one screen covering the requested framebuffer.
 
 Only one request may be pending. A newer host-window target replaces the queued target but does not overtake the in-flight request. Success triggers a non-incremental framebuffer refresh because the previous pixel buffer no longer describes the surface.
 
@@ -173,7 +173,9 @@ The first slice includes:
 6. installed-app live evidence,
 7. full repository regression gates, commit, and push.
 
-The slice does not add a new guest-agent protocol message. If live Windows rejects the standard RFB request, the next slice designs and implements the typed Windows display API fallback using that captured rejection evidence.
+The slice now includes the typed `display.resize.request` guest-agent fallback. If live Windows rejects
+both the standard RFB request and the Win32 display-mode change, the host keeps the confirmed framebuffer
+aspect-fit and reports that limitation instead of stretching pixels.
 
 ## Exit Criteria
 

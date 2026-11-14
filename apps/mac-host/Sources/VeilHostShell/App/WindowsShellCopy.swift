@@ -16,6 +16,35 @@ struct WindowsLauncherMetadataStatus: Equatable {
 }
 
 enum WindowsShellCopy {
+    static func restartInstallationMessage(isRunning: Bool, windowsOnDisk: Bool = false) -> String {
+        // Whole sentences per case so each one can be translated with its own word order.
+        switch (isRunning, windowsOnDisk) {
+        case (true, true):
+            return String(localized: "Veil shuts Windows down, then moves the Windows disk (Windows Setup already finished copying Windows to it), its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        case (true, false):
+            return String(localized: "Veil shuts Windows down, then moves the unfinished Windows disk, its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        case (false, true):
+            return String(localized: "Veil moves the Windows disk (Windows Setup already finished copying Windows to it), its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        case (false, false):
+            return String(localized: "Veil moves the unfinished Windows disk, its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        }
+    }
+
+    /// The guest agent is only expected to answer once Windows is installed and running.
+    /// Before that it is unreachable by definition; treating that as a broken connection
+    /// sends a first-run user into a repair flow for a Windows install that does not exist.
+    static func appConnectionNeedsRepair(
+        hasLiveAppConnection: Bool,
+        agentUnavailable: Bool,
+        windowsInstalled: Bool,
+        runtimeState: VMRuntimeState?
+    ) -> Bool {
+        !hasLiveAppConnection
+            && agentUnavailable
+            && windowsInstalled
+            && runtimeState == .running
+    }
+
     static func headerSubtitle(
         hasLiveAppConnection: Bool,
         runtimeState: VMRuntimeState?,
@@ -87,10 +116,20 @@ enum WindowsShellCopy {
     }
 
     static let quietStopWaitingMessage =
-        "Windows app windows are closed. Veil will stop Windows after status refreshes."
+        String(localized: "Windows app windows are closed. Veil will stop Windows after status refreshes.")
+
+    static func lowDiskSpacePauseTitle(availableBytes: Int64) -> String {
+        let free = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+        return String(localized: "Windows Paused: Mac Disk Almost Full (\(free) free)")
+    }
+
+    static func lowDiskSpacePauseNotificationBody(availableBytes: Int64) -> String {
+        let free = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+        return String(localized: "Only \(free) is free on the disk that holds Windows. Veil paused Windows so it cannot fail mid-write. Free up space and Windows continues by itself.")
+    }
 
     static func displayRecoveryStillStaleMessage(statusText: String) -> String {
-        "Display is still \(statusText). Refresh the Windows display before opening an app."
+        String(localized: "Display is still \(statusText). Refresh the Windows display before opening an app.")
     }
 
     static func openWindowsActionTitle(windowsInstalled: Bool) -> String {

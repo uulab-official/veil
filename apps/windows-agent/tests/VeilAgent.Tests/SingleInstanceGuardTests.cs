@@ -30,10 +30,18 @@ public class SingleInstanceGuardTests
 
         var endpoint = UniqueEndpoint();
         using var first = SingleInstanceGuard.TryAcquire(endpoint);
-        using var second = SingleInstanceGuard.TryAcquire(endpoint);
+
+        // A Windows mutex is reentrant on the thread that owns it, so a second agent is modeled on
+        // another thread; a second agent process behaves the same way.
+        SingleInstanceGuard? second = null;
+        var contender = new Thread(() => second = SingleInstanceGuard.TryAcquire(endpoint));
+        contender.Start();
+        contender.Join();
 
         Assert.True(first.HasOwnership);
-        Assert.False(second.HasOwnership);
+        Assert.NotNull(second);
+        Assert.False(second!.HasOwnership);
+        second.Dispose();
     }
 
     [Fact]

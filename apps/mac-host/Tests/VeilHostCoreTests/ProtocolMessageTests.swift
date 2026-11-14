@@ -146,6 +146,20 @@ struct ProtocolMessageTests {
         #expect(response.bounds?.height == 900)
     }
 
+    @Test("decodes desktop display resize request and response")
+    func decodesDisplayResizeRequestAndResponse() throws {
+        let request: DisplayResizeRequest = try decodeFixture("display.resize.request")
+        let response: DisplayResizeResponse = try decodeFixture("display.resize.response")
+
+        #expect(request.type == .displayResizeRequest)
+        #expect(request.isPlausible)
+        #expect(response.type == .displayResizeResponse)
+        #expect(response.requestId == request.requestId)
+        #expect(response.accepted)
+        #expect(response.width == request.width)
+        #expect(response.height == request.height)
+    }
+
     @Test("decodes mouse input event")
     func decodesMouseInputEvent() throws {
         let input: InputMouseEvent = try decodeFixture("input.mouse.left-down")
@@ -155,6 +169,26 @@ struct ProtocolMessageTests {
         #expect(input.event == "leftDown")
         #expect(input.x == 240)
         #expect(input.y == 130)
+        #expect(input.modifiers == [])
+    }
+
+    @Test("decodes a trackpad pinch as a Ctrl+wheel scroll")
+    func decodesPinchZoomMouseInput() throws {
+        let input: InputMouseEvent = try decodeFixture("input.mouse.pinch-zoom")
+
+        #expect(input.event == "scroll")
+        #expect(input.modifiers == ["ctrl"])
+        #expect(input.deltaX == nil)
+        #expect(input.deltaY == 40)
+    }
+
+    @Test("decodes a page swipe as the browser Back key")
+    func decodesBrowserBackKeyInput() throws {
+        let input: InputKeyEvent = try decodeFixture("input.key.browser-back")
+
+        #expect(input.event == "keyDown")
+        #expect(input.key == "browserBack")
+        #expect(input.windowsVirtualKey == WindowsTrackpadGesture.NavigationKey.back.windowsVirtualKey)
         #expect(input.modifiers == [])
     }
 

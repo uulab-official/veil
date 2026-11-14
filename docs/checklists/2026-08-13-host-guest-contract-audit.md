@@ -7,8 +7,10 @@ Swift sender, and the guest's C# handler. Prompted by two bugs found the same wa
 before: the host was sending a file name the guest was documented to reject, and the guest's
 structured rejections were being reported as a broken runtime.
 
-The result is worse than "a few unvalidated fields". **Six of the nine host→guest messages
-cannot receive an error at all**, by construction.
+The result was worse than "a few unvalidated fields". **At audit time, six of the nine
+host→guest messages could not receive an error at all**, by construction. The current
+implementation closes that gap for agents advertising `capabilities.operationAcks`; older
+agents retain the legacy fire-and-forget path for compatibility.
 
 ## The Structural Problem
 
@@ -25,8 +27,9 @@ while replies.count < expectedReplies { ... }
 ```
 
 With `expectedReplies: 0` the loop body never runs and the socket closes. These six callers
-all pass `0` (`VeilHostClient.swift:1139-1177`): `sendMouseInput`, `sendKeyInput`,
+used to pass `0` (`VeilHostClient.swift:1139-1177`): `sendMouseInput`, `sendKeyInput`,
 `sendTextInput`, `sendClipboardText`, `subscribeWindowFrames`, `unsubscribeWindowFrames`.
+They now negotiate one bounded acknowledgement when the guest advertises the capability.
 
 Every guest error on those paths is therefore unobservable: `window_not_tracked`,
 `text_too_long`, `invalid_message`, `input_text_failed`, `input_mouse_failed`,
@@ -67,8 +70,9 @@ clipboard is contended it is **systematically lost**.
       *transport* success, recording a host update the guest may never have taken, which could
       make the next genuine guest clipboard change look like an echo.
 
-This does not make ⌘V correct. It makes it **honest**: it either pastes the right text or says
-it did not paste. Correctness needs the guest to acknowledge the write — see below.
+For a negotiated agent, the acknowledgement path now makes ⌘V correct: the host waits for
+the guest's clipboard write before posting Ctrl+V. Legacy agents remain honest rather than
+silently claiming delivery, and keep the pre-ack compatibility behavior.
 
 ### `phase = .failed` reported unrelated failures as a lost connection
 
@@ -82,7 +86,11 @@ renders as **"Connection failed"** in the runtime status line, which feeds the m
       putting the whole model into a failed phase.
 - [x] `openFile` no longer sets it (fixed 2026-08-12); it restores the entering phase.
 
-## Not Fixed: Needs A Compiler
+## Historical Not-Fixed Snapshot
+
+The sections below record the gaps found before the negotiated acknowledgement slice landed.
+They remain useful design context; the current status is recorded in the progress section at
+the end of this document.
 
 ### 1. Give fire-and-forget messages a way to see an error
 
@@ -244,17 +252,11 @@ than a silent assumption: a host that skips the shortening gets `file_write_fail
 Documenting the second gap matters more than it looks. Without it, a future reader would take
 `protocol.md:760` at face value and build error handling for a message the guest never sends.
 
-## Remaining, In Order
+## Remaining, In Order (2026-09-09)
 
-1. Error-reading path for fire-and-forget messages. Still blocks 2 and 3.
-2. Clipboard acknowledgement, bounded for backward compatibility.
-3. Treat `window_not_tracked` as "window is gone".
-4. Reconcile the guest's `false` input path with `protocol.md` — now that the doc states what
-   actually happens, this is a choice between changing the guest and accepting the behaviour.
-5. Relax the host's control-character rule and the CLI `type-text` restriction to match the
-   guest. `veil-vmctl app-runtime-action --action type-text --text 안녕하세요` is refused by the
-   host because that path routes through `VeilHostClient.keyInputs`, which only accepts
-   `[A-Za-z0-9]` — reasonable for the coherence proof it was written for, wrong for a general
-   type-text action, and directly contrary to why `input.text` exists. Deferred because moving
-   the action onto `input.text` changes the `app-runtime-action` report shape, which several
-   harness fixtures pin.
+1. Run the negotiated acknowledgement and `false`-return path against a Windows CI/live guest.
+2. Keep the legacy-agent fallback explicit; it cannot prove Windows consumed an input operation.
+3. Measure whether a persistent shared control channel is warranted; the host gate currently
+   serializes short-lived operation sockets per window so key-down/key-up cannot overtake each
+   other without blocking unrelated mirrored windows.
+4. Complete live Korean IME, audio, and multi-window evidence on Windows 11 Arm.

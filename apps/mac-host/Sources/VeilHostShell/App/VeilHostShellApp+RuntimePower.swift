@@ -1,0 +1,521 @@
+import AppKit
+import SwiftUI
+import VeilHostCore
+
+extension VeilHostShellApp {
+    func startWindowsAndShowDisplay() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            activateMainWindow()
+            await startOrResumeWindows()
+
+            // Like a Parallels VM, Windows shows up in the main window. The separate desktop window
+            // opens only from View > Open Desktop in Separate Window, never as a side effect of Start.
+            if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+                displayMessage = "Windows is running in this window."
+                scheduleAutomaticGuestAgentRecoveryIfNeeded()
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = String(localized: "Windows display could not start: \(errorMessage)")
+            }
+        }
+    }
+
+    /// Erases an unfinished installation and boots Windows Setup again from the installer.
+    func restartWindowsInstallation() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            activateMainWindow()
+            if vmModel.canStop {
+                await vmModel.stop()
+            }
+            guard await vmModel.restartWindowsInstallation() else {
+                displayMessage = vmModel.errorMessage.map { String(localized: "Veil could not restart the installation: \($0)") }
+                return
+            }
+
+            displayMessage = "Windows Setup is starting over."
+            if AppWindowEngineStatus.resolve(
+                bootProvider: vmRuntimeBooter.provider,
+                providers: vmModel.snapshot?.runtimeProviders ?? []
+            ).canRunWindows {
+                startWindowsAndShowDisplay()
+            }
+        }
+    }
+
+    /// Starts Windows fresh after the user agreed to give up a saved session that cannot be resumed. A
+    /// cold boot removes the saved memory state.
+    func startWindowsDiscardingSavedSession() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            await attachDriverMediaForColdStartIfNeeded()
+            displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
+            await vmModel.start()
+            if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+                displayMessage = "Windows is running in this window."
+                scheduleAutomaticGuestAgentRecoveryIfNeeded()
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = String(localized: "Windows display could not start: \(errorMessage)")
+            }
+        }
+    }
+
+    /// Resumes a suspended session when one exists, and cold boots otherwise.
+    ///
+    /// `vmModel.canStart` is true for a suspended VM, so calling `start()` here would boot Windows fresh
+    /// and throw away the session idle suspend just saved. That would make the round trip lossy in
+    /// exactly the case this is supposed to protect.
+    @MainActor
+    func startOrResumeWindows() async {
+        // The app can be launched while QEMU is already booting (or while a previous
+        // Veil instance is being replaced). Refresh the authoritative runtime evidence
+        // before deciding to start; otherwise we race the existing process and surface
+        // a misleading "already running" failure instead of attaching its desktop.
+        await vmModel.refreshRuntimeEvidence()
+        if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+            displayMessage = "Windows is already running. Connecting to its desktop."
+            return
+        }
+
+        if vmModel.canResume {
+            displayMessage = "Resuming your Windows session."
+            await vmModel.resume()
+            if vmModel.snapshot?.state == .running || vmModel.snapshot?.state == .starting {
+                return
+            }
+
+            // Resume keeps the saved state file on failure, so the VM is reported as still suspended and
+            // the user can retry. Cold booting here would silently discard the session instead.
+            if vmModel.savedSessionCannotResume {
+                // Retrying cannot help, and Start always resumes first, so without this question the
+                // machine could not be started again at all.
+                // The main window asks whether to start fresh; see `ContentView`.
+                displayMessage = "Your saved Windows session cannot be resumed."
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = String(localized: "Your Windows session could not be resumed: \(errorMessage)")
+            }
+            return
+        }
+
+        await attachDriverMediaForColdStartIfNeeded()
+        displayMessage = "Starting Windows locally. Veil stays in this main window while setup runs."
+        await vmModel.start()
+    }
+
+    /// A Windows installed before Veil fetched VirtIO drivers has no guest network: its boot plan
+    /// falls back to usb-net, which Windows binds as a serial port. A cold start attaches the
+    /// virtio-win ISO when it is already on this Mac, which switches the plan to virtio-net-pci; the
+    /// agent repair then installs NetKVM from it. Otherwise the ISO downloads in the background for
+    /// the next start, so starting Windows never waits on an 877 MB download. Resume is never
+    /// changed here, since a saved session needs the same devices.
+    @MainActor
+    func attachDriverMediaForColdStartIfNeeded() async {
+        guard let snapshot = vmModel.snapshot,
+              DriverMediaAttachPolicy.attachesOnColdStart(snapshot: snapshot) else {
+            return
+        }
+
+        guard let media = await VirtioWinDriverMediaProvider.shared.cachedMedia() else {
+            await VirtioWinDriverMediaProvider.shared.prefetch()
+            return
+        }
+
+        await vmModel.updateProfilePaths(
+            installerMediaPath: snapshot.installerMediaPath,
+            driverMediaPath: media.path,
+            virtualDiskPath: snapshot.virtualDiskPath
+        )
+    }
+
+    /// Toolbar and Actions-menu suspend. Unlike the idle quiet policy this never falls back to a shut
+    /// down: the user asked to keep the session, so a failed suspend reports the error instead.
+    func suspendWindows() {
+        Task { @MainActor in
+            guard vmModel.canSuspend, vmModel.phase != .loading else {
+                return
+            }
+            // Saving Windows' memory would fill the volume that is already nearly full, and a failed save
+            // continues Windows on it.
+            guard !isWindowsPausedForDiskSpace else {
+                displayMessage = String(localized: "Windows cannot be suspended while your Mac's disk is almost full.")
+                return
+            }
+
+            cancelAutomaticQuietRuntime()
+            cancelAutomaticRuntimeConnectionRecovery()
+            await vmModel.suspend()
+            if vmModel.snapshot?.state == .suspended {
+                displayMessage = "Windows is suspended. Resume it to continue where you left off."
+            } else if let errorMessage = vmModel.errorMessage {
+                displayMessage = String(localized: "Windows could not be suspended: \(errorMessage)")
+            }
+        }
+    }
+
+    /// Decides what happens to a running Windows as Veil quits (`StartupBehaviorPolicy.quitAction`).
+    /// Returns false when the user cancelled the quit.
+    @MainActor
+    func handleWindowsBeforeQuit(isSystemQuit: Bool) async -> Bool {
+        // Paused for disk space, Windows stays paused: suspending it would fill the volume, and the next
+        // Veil continues it once there is room (the pause is recorded against the running QEMU).
+        if isWindowsPausedForDiskSpace {
+            return true
+        }
+        let action = StartupBehaviorPolicy.quitAction(
+            snapshot: vmModel.snapshot,
+            canSuspend: vmModel.canSuspend,
+            isBusy: vmModel.phase == .loading,
+            keepsWindowsRunningWithoutAsking: UserDefaults.standard.bool(forKey: StartupBehaviorPolicy.keepsWindowsRunningOnQuitKey),
+            isSystemQuit: isSystemQuit
+        )
+        switch action {
+        case .quit:
+            return true
+        case .suspend:
+            await suspendWindowsForQuit()
+            return true
+        case .ask:
+            break
+        }
+
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Windows Is Still Running")
+        alert.informativeText = String(localized: "If Veil quits and leaves Windows running, Windows keeps using memory and battery in the background. Suspending saves your open Windows apps and stops Windows until you open Veil again.")
+        alert.addButton(withTitle: String(localized: "Suspend Windows"))
+        alert.addButton(withTitle: String(localized: "Keep Running"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = String(localized: "Do not ask again")
+        NSApp.activate()
+        let response = alert.runModal()
+        let remembers = alert.suppressionButton?.state == .on
+        switch response {
+        case .alertFirstButtonReturn:
+            if remembers, let snapshot = vmModel.snapshot {
+                // The same setting as "Suspend Windows when Veil quits".
+                await vmModel.updateStartupBehavior(autoStart: snapshot.autoStart ?? false, suspendOnQuit: true)
+            }
+            await suspendWindowsForQuit()
+            return true
+        case .alertSecondButtonReturn:
+            if remembers {
+                UserDefaults.standard.set(true, forKey: StartupBehaviorPolicy.keepsWindowsRunningOnQuitKey)
+            }
+            return true
+        default:
+            return false
+        }
+    }
+
+    @MainActor
+    private func suspendWindowsForQuit() async {
+        cancelAutomaticQuietRuntime()
+        cancelAutomaticRuntimeConnectionRecovery()
+        displayMessage = "Suspending Windows before Veil quits."
+        await vmModel.suspend()
+    }
+
+    func stopWindowsAndCloseDisplay() {
+        oneClickAppLaunchGate.cancel()
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            cancelAutomaticGuestAgentRecovery()
+            cancelAutomaticRuntimeConnectionRecovery()
+            hasObservedLiveAgentConnection = false
+            activateMainWindow()
+            var outcome: GracefulWindowsShutdown.Outcome?
+            if isWindowsPausedForDiskSpace {
+                // A paused Windows answers neither the tools nor the power button; waiting would only
+                // end in a question about unsaved documents that is not the reason.
+                guard confirmForcedWindowsStop(reason: .pausedForDiskSpace) == .turnOff else {
+                    displayMessage = String(localized: "Windows stays paused until there is more free space on your Mac.")
+                    return
+                }
+                outcome = .timedOut
+            } else {
+                displayMessage = String(localized: "Shutting down Windows. Windows may ask to save changes or finish updates first.")
+                outcome = await shutDownWindowsGracefully()
+                // Windows still running past the deadline is usually waiting on the user: an app asking to
+                // save a document, or an update. Turning it off then loses that work, so Veil asks first.
+                if let current = outcome, !current.poweredOff, vmModel.snapshot?.state == .running {
+                    switch confirmForcedWindowsStop(reason: .notShutDown) {
+                    case .turnOff:
+                        break
+                    case .showWindows:
+                        // The shutdown request stands: once the user has saved, Windows carries on, and
+                        // Veil finishes the stop then instead of leaving a Windows that shut down showing
+                        // as running.
+                        shellNavigation.showsWindowsDesktop = true
+                        activateMainWindow()
+                        displayMessage = String(localized: "Windows is waiting for you. Veil stops it once Windows has shut down.")
+                        let waited = await waitForWindowsShutdown()
+                        guard waited.poweredOff || vmModel.snapshot?.state != .running else {
+                            displayMessage = String(localized: "Windows is still running.")
+                            return
+                        }
+                        outcome = waited
+                    }
+                }
+            }
+            await vmModel.stop()
+            qemuConsoleWindowPresenter.closeConsole()
+
+            if vmModel.snapshot?.state == .stopped {
+                windowsAppWindowPresenter.closeAll()
+                displayMessage = outcome?.poweredOff == false
+                    ? String(localized: "Windows did not shut down, so Veil turned it off.")
+                    : String(localized: "Windows shut down.")
+            }
+        }
+    }
+
+    enum ForcedWindowsStopChoice {
+        case turnOff
+        /// Look at Windows; for a paused Windows, leave it paused.
+        case showWindows
+    }
+
+    enum ForcedWindowsStopReason {
+        /// Asked to shut down, Windows was still running at the deadline.
+        case notShutDown
+        /// Paused because the Mac volume holding its disk is nearly full.
+        case pausedForDiskSpace
+    }
+
+    /// Asked only after the user chose Stop and Windows cannot finish by itself.
+    @MainActor
+    func confirmForcedWindowsStop(reason: ForcedWindowsStopReason) -> ForcedWindowsStopChoice {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        switch reason {
+        case .notShutDown:
+            alert.messageText = String(localized: "Windows Did Not Shut Down")
+            alert.informativeText = String(localized: "Windows may be waiting for you to save a document or close an app. Turning it off now loses anything that is not saved.")
+            alert.addButton(withTitle: String(localized: "Show Windows"))
+        case .pausedForDiskSpace:
+            alert.messageText = String(localized: "Windows Is Paused")
+            alert.informativeText = String(localized: "Your Mac's disk is almost full, so Windows cannot shut down. Free up space and Windows continues by itself. Turning it off now loses anything that is not saved.")
+            alert.addButton(withTitle: String(localized: "Keep Paused"))
+        }
+        let turnOff = alert.addButton(withTitle: String(localized: "Turn Off"))
+        turnOff.hasDestructiveAction = true
+        return alert.runModal() == .alertSecondButtonReturn ? .turnOff : .showWindows
+    }
+
+    /// Waits again for a shutdown Windows was already asked for, as long as the first wait did.
+    @MainActor
+    private func waitForWindowsShutdown() async -> GracefulWindowsShutdown.Outcome {
+        let probes = shutdownProbes()
+        return await GracefulWindowsShutdown.waitForPowerOff(
+            viaTools: lastShutdownRequestedViaTools,
+            isStillRunning: probes.isStillRunning,
+            hasFinishedShuttingDown: probes.hasFinishedShuttingDown,
+            timeout: lastShutdownRequestedViaTools
+                ? GracefulWindowsShutdown.toolsShutdownSeconds
+                : GracefulWindowsShutdown.powerButtonSeconds
+        )
+    }
+
+    @MainActor
+    private func shutdownProbes() -> (
+        isStillRunning: @MainActor () async -> Bool,
+        hasFinishedShuttingDown: @MainActor () async -> Bool
+    ) {
+        let launch = vmModel.snapshot?.latestConsoleLaunch
+        let completionProbe = launch?.pid.map {
+            GuestShutdownCompletionProbe(pid: $0, monitorSocketPath: launch?.monitorSocketPath ?? "")
+        }
+        return (
+            isStillRunning: {
+                await vmModel.load()
+                return vmModel.snapshot?.state == .running
+            },
+            hasFinishedShuttingDown: {
+                guard let completionProbe else {
+                    return false
+                }
+                let toolsConnected = model.hasLiveAgentConnection
+                // The display check runs a monitor screendump; keep it off the main thread.
+                return await Task.detached {
+                    completionProbe.isFinished(toolsConnected: toolsConnected)
+                }.value
+            }
+        )
+    }
+
+    /// Shuts Windows down before the VM is turned off; see `GracefulWindowsShutdown`. Nil when Windows
+    /// was not running, so there was nothing to shut down.
+    @MainActor
+    func shutDownWindowsGracefully() async -> GracefulWindowsShutdown.Outcome? {
+        guard vmModel.snapshot?.state == .running else {
+            return nil
+        }
+        let probes = shutdownProbes()
+        lastShutdownRequestedViaTools = false
+        return await GracefulWindowsShutdown.run(
+            requestToolsShutdown: {
+                let accepted = await model.requestSystemShutdown()
+                lastShutdownRequestedViaTools = accepted
+                return accepted
+            },
+            pressPowerButton: { await vmModel.pressPowerButton() },
+            isStillRunning: probes.isStillRunning,
+            hasFinishedShuttingDown: probes.hasFinishedShuttingDown
+        )
+    }
+
+    /// The quiet policy resolved against the live VM snapshot.
+    ///
+    /// The snapshot has to be passed in. `quietRuntimeStatus()` with no local runtime cannot know
+    /// whether this VM can persist a session, so it conservatively resolves to stopping -- which would
+    /// silently shut Windows down on every idle timeout even where suspend works.
+    @MainActor
+    private func resolvedQuietRuntimeStatus() -> WindowsAppRuntimeQuietPolicyStatus {
+        model.quietRuntimeStatus(
+            localRuntime: model.localRuntimeStatus(snapshot: vmModel.snapshot)
+        )
+    }
+
+    /// Runs whichever quiet mode the status resolved to.
+    ///
+    /// Suspending keeps the user's open apps and unsaved work; stopping loses them. Both the manual
+    /// menu action and the automatic idle timer route through here so they can never do different
+    /// things for the same state.
+    @MainActor
+    private func performQuietRuntime(_ quietRuntime: WindowsAppRuntimeQuietPolicyStatus) async {
+        guard !isWindowsPausedForDiskSpace else {
+            // Neither a suspend nor a shutdown can finish then; Windows stays paused.
+            return
+        }
+        cancelAutomaticRuntimeConnectionRecovery()
+        if quietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.suspendMode,
+           vmModel.canSuspend {
+            await vmModel.suspend()
+            if vmModel.snapshot?.state == .suspended {
+                displayMessage = "Windows is suspended. Your open apps are still there and will come back with the next launch."
+                return
+            }
+
+            // Fall through to stopping. A memory-state save that fails partway leaves the guest paused,
+            // which is the one state the launcher offers no action for. Stopping costs the user their
+            // open apps but leaves a VM they can start again. The fallback is deliberately one-way:
+            // stopping always works, so a stop failure has no safe second attempt.
+            displayMessage = "Windows could not be suspended, so it is shutting down instead."
+        }
+
+        // Never turned off from here: this runs on its own when the last app window closes, with nobody
+        // asked, and a Windows that did not shut down may be holding unsaved work.
+        if let outcome = await shutDownWindowsGracefully(), !outcome.poweredOff,
+           vmModel.snapshot?.state == .running {
+            displayMessage = String(localized: "Windows did not shut down by itself, so Veil left it running.")
+            return
+        }
+        await vmModel.stop()
+        if vmModel.snapshot?.state == .stopped {
+            displayMessage = "Windows is quiet. No Windows app windows are open."
+        } else if let errorMessage = vmModel.errorMessage {
+            displayMessage = String(localized: "Windows could not quiet: \(errorMessage)")
+        }
+    }
+
+    func quietWindowsWhenIdle() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            let quietRuntime = resolvedQuietRuntimeStatus()
+            guard model.canQuietRuntimeWhenIdle else {
+                displayMessage = quietRuntime.reason
+                return
+            }
+
+            guard vmModel.canStop && vmModel.phase != .loading else {
+                displayMessage = WindowsShellCopy.quietStopWaitingMessage
+                return
+            }
+
+            await performQuietRuntime(quietRuntime)
+        }
+    }
+
+    func scheduleAutomaticQuietRuntimeIfNeeded() {
+        let quietRuntime = resolvedQuietRuntimeStatus()
+        guard quietRuntime.willQuietAutomatically,
+              AutomaticQuietPolicy.allowsQuiet(lastAppWindowClosedByUser: lastAppWindowClosedByUser) else {
+            cancelAutomaticQuietRuntime()
+            return
+        }
+
+        guard vmModel.canStop && vmModel.phase != .loading else {
+            cancelAutomaticQuietRuntime()
+            return
+        }
+
+        automaticQuietRuntimeTask?.cancel()
+        automaticQuietRuntimeTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(quietRuntime.automaticQuietDelaySeconds))
+            guard !Task.isCancelled,
+                  lastAppWindowClosedByUser,
+                  model.canQuietRuntimeWhenIdle,
+                  vmModel.canStop,
+                  vmModel.phase != .loading else {
+                return
+            }
+
+            // Re-resolved after the delay rather than reusing the mode captured when the timer was
+            // scheduled. The VM state can change during those seconds, and acting on a stale mode is how
+            // a suspend gets attempted against a machine that is no longer running.
+            let currentQuietRuntime = resolvedQuietRuntimeStatus()
+            displayMessage = currentQuietRuntime.quietMode == WindowsAppRuntimeQuietPolicyStatus.suspendMode
+                ? "All Windows app windows closed. Suspending Windows so your apps come back."
+                : "All Windows app windows closed. Quieting Windows."
+            await performQuietRuntime(currentQuietRuntime)
+        }
+    }
+
+    func cancelAutomaticQuietRuntime() {
+        automaticQuietRuntimeTask?.cancel()
+        automaticQuietRuntimeTask = nil
+    }
+
+    func cancelAutomaticGuestAgentRecovery() {
+        automaticGuestAgentRecoveryTask?.cancel()
+        automaticGuestAgentRecoveryTask = nil
+    }
+
+    func cancelAutomaticRuntimeConnectionRecovery() {
+        automaticRuntimeConnectionRecoveryTask?.cancel()
+        automaticRuntimeConnectionRecoveryTask = nil
+    }
+
+    func noteLiveAgentConnectionIfPresent() {
+        if model.hasLiveAgentConnection {
+            hasObservedLiveAgentConnection = true
+        }
+    }
+
+    func startAutomaticFrameStreamMaintenanceLoopIfNeeded() {
+        guard automaticFrameStreamMaintenanceTask == nil else {
+            return
+        }
+
+        automaticFrameStreamMaintenanceTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                await performFrameStreamMaintenance(automatic: true)
+                syncGuestFramebufferSource()
+            }
+        }
+    }
+}
+
+/// When Veil may quiet Windows on its own once no app windows are left.
+enum AutomaticQuietPolicy {
+    /// Only after the user closed the last app window. An empty window list is not enough: windows also go
+    /// away when the Windows agent restarts and forgets them, while the apps stay open in Windows.
+    static func allowsQuiet(lastAppWindowClosedByUser: Bool) -> Bool {
+        lastAppWindowClosedByUser
+    }
+}

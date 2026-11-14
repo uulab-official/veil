@@ -10,6 +10,19 @@ public interface IWindowsDesktop
 
     IReadOnlyList<LaunchedWindow> DiscoverAdditionalWindows(WindowsAppDescriptor app, IReadOnlySet<string> knownWindowIds);
 
+    /// <summary>
+    /// Every app window on the desktop that is not in <paramref name="knownWindowIds"/>, whichever app it
+    /// belongs to and however it was opened. Test doubles and desktops that cannot enumerate windows report
+    /// none.
+    /// </summary>
+    IReadOnlyList<DiscoveredAppWindow> DiscoverAppWindows(IReadOnlySet<string> knownWindowIds) => [];
+
+    /// <summary>
+    /// The window as it is now: its current title, frame, and style. A tracked window is recorded when it is
+    /// found, and Windows moves, resizes, and retitles it afterwards.
+    /// </summary>
+    LaunchedWindow CurrentWindow(LaunchedWindow window) => window;
+
     bool IsWindowStillOpen(string windowId);
 
     Task<bool> FocusWindowAsync(string windowId, CancellationToken cancellationToken);
@@ -23,7 +36,26 @@ public interface IWindowsDesktop
     Task<WindowRect?> ResizeWindowAsync(WindowResizeInput input, CancellationToken cancellationToken) =>
         Task.FromResult<WindowRect?>(null);
 
+    /// <summary>
+    /// Changes the active Windows desktop display mode. Older test doubles and agents can keep the
+    /// default refusal, allowing the host to retain its aspect-fit RFB fallback.
+    /// </summary>
+    Task<DisplayResizeResult?> ResizeDisplayAsync(DisplayResizeInput input, CancellationToken cancellationToken) =>
+        Task.FromResult<DisplayResizeResult?>(null);
+
+    /// <summary>
+    /// Moves a tracked HWND so its visible frame starts at (x, y) in display pixels, without resizing,
+    /// activating, or reordering it. Returns false when the window is gone or Windows refused.
+    /// </summary>
+    bool MoveWindow(string windowId, int x, int y) => false;
+
     Task<bool> SendMouseInputAsync(WindowMouseInput input, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Where the last applied mouse event put the cursor, in the absolute tablet range the host's virtual
+    /// pointer uses. Null for desktops that do not inject real input, including test doubles.
+    /// </summary>
+    GuestPointerPosition? LastInjectedPointer => null;
 
     Task<bool> SendKeyInputAsync(WindowKeyInput input, CancellationToken cancellationToken);
 
@@ -43,4 +75,55 @@ public interface IWindowsDesktop
     Task<string?> GetClipboardTextAsync(CancellationToken cancellationToken);
 
     bool TryConsumeHostClipboardEcho(string text);
+
+    // The image and file clipboard members below have defaults so existing desktop test doubles keep
+    // compiling. Writers throw rather than no-op: an acknowledged write that changed nothing would let the
+    // host send Ctrl+V and paste stale content, which is the exact failure operation.ack exists to stop.
+
+    /// <summary>
+    /// Windows' clipboard sequence number, which changes on every clipboard write. Zero means unknown, and
+    /// the streamer then reads the image on every tick and relies on the hash to skip repeats.
+    /// </summary>
+    uint GetClipboardSequenceNumber() => 0;
+
+    /// <summary>
+    /// The clipboard image as PNG bytes: the registered <c>PNG</c> format when present, otherwise
+    /// <c>CF_DIB</c> converted to PNG. Null when the clipboard holds no image.
+    /// </summary>
+    Task<byte[]?> GetClipboardImagePngAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<byte[]?>(null);
+
+    /// <summary>Places a verified host PNG on the clipboard as both <c>PNG</c> and <c>CF_DIB</c>.</summary>
+    Task SetClipboardImagePngAsync(byte[] png, string sha256, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("This desktop implementation cannot write clipboard images.");
+
+    /// <summary>
+    /// True once for the hash of an image this agent just wrote for the host, so the watcher does not
+    /// broadcast it back as a guest copy.
+    /// </summary>
+    bool TryConsumeHostClipboardImageEcho(string sha256) => false;
+
+    /// <summary>Places shared-folder files on the clipboard as <c>CF_HDROP</c> with a copy drop effect.</summary>
+    Task SetClipboardFilesAsync(IReadOnlyList<string> fullPaths, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("This desktop implementation cannot write clipboard files.");
+
+    /// <summary>
+    /// Whether the clipboard currently offers <c>CF_HDROP</c>. Checked without opening the clipboard, so the
+    /// watcher can prefer files over the text some apps also write for a file copy.
+    /// </summary>
+    bool IsClipboardFileDropAvailable() => false;
+
+    /// <summary>The full paths in the clipboard's <c>CF_HDROP</c>, or null when there is none.</summary>
+    Task<IReadOnlyList<string>?> GetClipboardFileDropAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<string>?>(null);
+
+    /// <summary>
+    /// True for an existing regular file that is not a reparse point. A junction or symlink inside the
+    /// share could otherwise point a host-named path at any file in the guest.
+    /// </summary>
+    bool IsRegularSharedFile(string fullPath)
+    {
+        var info = new FileInfo(fullPath);
+        return info.Exists && (info.Attributes & (FileAttributes.ReparsePoint | FileAttributes.Directory)) == 0;
+    }
 }

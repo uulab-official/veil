@@ -5,8 +5,9 @@ import { validateAppRuntimeStatus } from "../../app-runtime-status/src/validate-
 import { validateGuestAgentWait } from "../../guest-agent-wait/src/validate-guest-agent-wait.mjs";
 import { validateMultiAppProof } from "../../multi-app-proof/src/validate-multi-app-proof.mjs";
 import { validateNotificationProof } from "../../notification-proof/src/validate-notification-proof.mjs";
+import { validateInputText } from "../../../packages/protocol/src/messages.mjs";
 
-const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "request-notification-consent", "quiet-when-idle", "stop-runtime", "suspend-runtime", "clipboard", "type-text", "click", "proof-recommended", "proof-multi-app", "proof-notifications"]);
+const VALID_ACTIONS = new Set(["launch", "fulfill-pending", "focus", "close", "close-all", "restart-frame-stream", "recover-window-capture", "reopen-window", "maintain-frame-streams", "restore", "reconnect-restore", "bring-forward", "recover-display", "wait-agent", "repair-agent", "prepare-sparse-package", "request-notification-consent", "quiet-when-idle", "stop-runtime", "suspend-runtime", "clipboard", "type-text", "type-unicode", "click", "proof-recommended", "proof-multi-app", "proof-notifications"]);
 const VALID_CONNECTION_MODES = new Set(["agent", "demo"]);
 /// Suspending keeps the user's open Windows apps; stopping shuts them down.
 const VALID_QUIET_MODES = new Set(["suspend", "stop", "none"]);
@@ -96,6 +97,10 @@ export function validateAppRuntimeAction(report) {
     throw new TypeError("notificationConsent is only allowed for request-notification-consent actions.");
   }
 
+  if (report.action !== "type-unicode" && report.textInputs !== undefined && report.textInputs !== null) {
+    throw new TypeError("textInputs is only allowed for type-unicode actions.");
+  }
+
   switch (report.action) {
     case "launch":
       validateLaunchAction(report);
@@ -162,6 +167,9 @@ export function validateAppRuntimeAction(report) {
       break;
     case "type-text":
       validateTypeTextAction(report);
+      break;
+    case "type-unicode":
+      validateTypeUnicodeAction(report);
       break;
     case "click":
       validateClickAction(report);
@@ -1326,6 +1334,33 @@ function validateTypeTextAction(report) {
 
   for (const input of report.keyInputs) {
     validateKeyInput(input);
+  }
+}
+
+function validateTypeUnicodeAction(report) {
+  requireString(report.windowId, "windowId");
+
+  if (report.typedTextCharacterCount !== undefined) {
+    requireNonNegativeInteger(report.typedTextCharacterCount, "typedTextCharacterCount");
+  }
+
+  if (!report.accepted) {
+    if (report.textInputs !== undefined && report.textInputs !== null && !Array.isArray(report.textInputs)) {
+      throw new TypeError("textInputs must be an array when present.");
+    }
+    return;
+  }
+
+  if (!Array.isArray(report.textInputs) || report.textInputs.length !== 1) {
+    throw new TypeError("accepted type-unicode actions must include exactly one textInputs entry.");
+  }
+
+  const input = validateInputText(report.textInputs[0]);
+  if (/\p{Cc}/u.test(input.text)) {
+    throw new TypeError("type-unicode text must not contain Unicode control characters.");
+  }
+  if (input.windowId !== report.windowId) {
+    throw new TypeError("type-unicode input must target report.windowId.");
   }
 }
 

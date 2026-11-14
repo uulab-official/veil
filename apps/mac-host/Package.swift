@@ -23,7 +23,15 @@ let package = Package(
         .executable(
             name: "veil-vmctl",
             targets: ["VeilVMControl"]
+        ),
+        .executable(
+            name: "veil-app-launcher",
+            targets: ["VeilAppLauncher"]
         )
+    ],
+    dependencies: [
+        // Updates of Veil itself; see docs/release-updates.md.
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1")
     ],
     targets: [
         .target(
@@ -33,9 +41,22 @@ let package = Package(
             name: "VeilHostProbe",
             dependencies: ["VeilHostCore"]
         ),
+        // Shared by Veil and the per-app launchers it generates; kept free of VeilHostCore so each
+        // launcher binary stays small.
+        .target(
+            name: "VeilLauncherSupport"
+        ),
+        .executableTarget(
+            name: "VeilAppLauncher",
+            dependencies: ["VeilLauncherSupport"]
+        ),
         .executableTarget(
             name: "VeilHostShell",
-            dependencies: ["VeilHostCore"],
+            dependencies: [
+                "VeilHostCore",
+                "VeilLauncherSupport",
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             resources: [
                 .copy("Resources/VeilAppIcon.icns")
             ]
@@ -53,7 +74,7 @@ let package = Package(
         ),
         .testTarget(
             name: "VeilHostShellTests",
-            dependencies: ["VeilHostCore", "VeilHostShell"]
+            dependencies: ["VeilHostCore", "VeilHostShell", "VeilLauncherSupport"]
         )
     ]
 )
