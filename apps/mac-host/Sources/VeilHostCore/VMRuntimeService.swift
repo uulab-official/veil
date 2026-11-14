@@ -222,6 +222,9 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     case qemuNotReady(String)
     case qemuDisplayPortUnavailable
     case qemuAlreadyRunning(pid: Int32)
+    /// QEMU exited within moments of starting: it refused an argument, could not open a file, or found
+    /// the disk in use. `detail` is the end of its output.
+    case qemuExitedAtLaunch(status: Int32, detail: String)
     case resourceMutationRequiresStoppedRuntime
     case suspendNotSupported
     case restartInstallationRequiresUninstalledWindows
@@ -242,6 +245,10 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
             "No loopback VNC display port is available. Close stale QEMU/VNC listeners and try again."
         case let .qemuAlreadyRunning(pid):
             "QEMU is already running as PID \(pid) with the configured Windows disk attached. Shut down that VM before starting another one."
+        case let .qemuExitedAtLaunch(status, detail):
+            detail.isEmpty
+                ? "QEMU stopped right after starting (exit status \(status))."
+                : "QEMU stopped right after starting (exit status \(status)): \(detail)"
         case .resourceMutationRequiresStoppedRuntime:
             "Stop Windows before changing VM resources. Running, starting, or suspended sessions keep their disk and installer attachments locked."
         case .suspendNotSupported:

@@ -255,6 +255,12 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         process.standardOutput = logHandle
         process.standardError = logHandle
         try processRunner(process)
+        if await Self.exitedAtLaunch(process) {
+            try? logHandle.close()
+            let detail = Self.launchFailureDetail(logURL: logURL)
+            VeilLog.runtime.error("QEMU exited right after launch with status \(process.terminationStatus, privacy: .public).")
+            throw VMRuntimeError.qemuExitedAtLaunch(status: process.terminationStatus, detail: detail)
+        }
         self.process = process
         self.monitorSocketURL = monitorSocketURL
         self.qmpSocketURL = qmpSocketURL
@@ -284,6 +290,43 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         }
         scheduleConsoleScreenshotCapture(monitorSocketURL: monitorSocketURL, imageURL: consoleScreenshotURL)
         return .running
+    }
+
+    /// How long a fresh QEMU is watched for exiting at once. QEMU checks its arguments and opens the disk,
+    /// firmware, and sockets before the guest runs, and quits within a few hundred milliseconds when one
+    /// fails; reporting the machine as running then left the app waiting on a Windows that never started,
+    /// with the reason only in a log file.
+    static let earlyExitWindow: Duration = .milliseconds(800)
+
+    /// Whether a process started by `processRunner` exited within `earlyExitWindow`. A process that never
+    /// started (a test's runner) has no process id and is not watched.
+    static func exitedAtLaunch(_ process: Process, window: Duration = earlyExitWindow) async -> Bool {
+        guard process.processIdentifier > 0 else {
+            return false
+        }
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: window)
+        while clock.now < deadline {
+            if !process.isRunning {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return !process.isRunning
+    }
+
+    /// The last lines QEMU wrote, which name what it refused.
+    static func launchFailureDetail(logURL: URL, maximumCharacters: Int = 600) -> String {
+        guard let data = try? Data(contentsOf: logURL),
+              let text = String(data: data, encoding: .utf8) else {
+            return ""
+        }
+        let lines = text
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let joined = lines.suffix(3).joined(separator: " ")
+        return joined.count > maximumCharacters ? String(joined.suffix(maximumCharacters)) : joined
     }
 
     /// Removes a saved memory-state stream and its record.
