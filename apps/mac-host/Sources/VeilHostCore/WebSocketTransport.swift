@@ -18,15 +18,23 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
     private let url: URL
     private let session: URLSession
     /// Sent with every connection; see `GuestAgentAccessToken`.
-    private let accessToken: String?
+    private let accessToken: @Sendable () -> String?
 
-    public init(url: URL, session: URLSession = .shared, accessToken: String? = GuestAgentAccessToken.load()) {
+    public init(
+        url: URL,
+        session: URLSession = .shared,
+        accessToken: @escaping @Sendable () -> String? = { GuestAgentAccessToken.current() }
+    ) {
         self.url = url
         self.session = session
         self.accessToken = accessToken
     }
 
-    public init(url: URL, requestTimeout: TimeInterval, accessToken: String? = GuestAgentAccessToken.load()) {
+    public init(
+        url: URL,
+        requestTimeout: TimeInterval,
+        accessToken: @escaping @Sendable () -> String? = { GuestAgentAccessToken.current() }
+    ) {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = requestTimeout
         configuration.timeoutIntervalForResource = requestTimeout
@@ -36,7 +44,7 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
     }
 
     private func webSocketTask() -> URLSessionWebSocketTask {
-        session.webSocketTask(with: GuestAgentAccessToken.request(for: url, token: accessToken))
+        session.webSocketTask(with: GuestAgentAccessToken.request(for: url, token: accessToken()))
     }
 
     public func send(_ message: Data, expectedReplies: Int) async throws -> [Data] {

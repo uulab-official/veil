@@ -63,6 +63,13 @@ public enum GuestAgentAccessToken {
         return token
     }
 
+    /// The token as it is now, read again at most every two seconds. A connection must not use a token read
+    /// when Veil started: the file is first created when Windows starts, which can be after that, and every
+    /// connection from then on would be refused until Veil restarted.
+    public static func current(fileURL: URL = defaultFileURL, now: Date = Date()) -> String? {
+        CurrentTokenCache.shared.value(fileURL: fileURL, now: now)
+    }
+
     /// QEMU's arguments for a cold boot. QEMU option values escape a comma by doubling it.
     public static func smbiosArguments(fileURL: URL = defaultFileURL) -> [String] {
         ["-smbios", "type=11,path=\(fileURL.path.replacingOccurrences(of: ",", with: ",,"))"]
@@ -75,5 +82,28 @@ public enum GuestAgentAccessToken {
             request.setValue(token, forHTTPHeaderField: headerName)
         }
         return request
+    }
+}
+
+private final class CurrentTokenCache: @unchecked Sendable {
+    static let shared = CurrentTokenCache()
+    private static let lifetime: TimeInterval = 2
+
+    private let lock = NSLock()
+    private var fileURL: URL?
+    private var token: String?
+    private var readAt: Date?
+
+    func value(fileURL: URL, now: Date) -> String? {
+        lock.withLock {
+            if let readAt, self.fileURL == fileURL, now.timeIntervalSince(readAt) >= 0,
+               now.timeIntervalSince(readAt) < Self.lifetime {
+                return token
+            }
+            token = GuestAgentAccessToken.load(fileURL: fileURL)
+            self.fileURL = fileURL
+            readAt = now
+            return token
+        }
     }
 }

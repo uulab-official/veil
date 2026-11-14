@@ -56,3 +56,20 @@ struct GuestAgentAccessTokenTests {
         #expect(GuestAgentAccessToken.request(for: url, token: nil).value(forHTTPHeaderField: "X-Veil-Agent-Token") == nil)
     }
 }
+
+@Suite("Windows agent token, read at connection time")
+struct GuestAgentAccessTokenCurrentTests {
+    @Test("A token created after Veil started is picked up by the next connection")
+    func picksUpANewToken() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("agent-token-current-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let file = base.appendingPathComponent("agent-token.smbios")
+        let start = Date(timeIntervalSince1970: 1_000)
+
+        #expect(GuestAgentAccessToken.current(fileURL: file, now: start) == nil)
+        let token = try GuestAgentAccessToken.loadOrCreate(fileURL: file)
+        // Within the cache's two seconds the answer stands; after them the new file is read.
+        #expect(GuestAgentAccessToken.current(fileURL: file, now: start.addingTimeInterval(1)) == nil)
+        #expect(GuestAgentAccessToken.current(fileURL: file, now: start.addingTimeInterval(3)) == token)
+    }
+}

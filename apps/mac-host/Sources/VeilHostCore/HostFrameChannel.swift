@@ -56,9 +56,13 @@ public struct URLSessionFrameChannel: HostFrameChannel {
     private let url: URL
     private let session: URLSession
     /// Sent with the connection; see `GuestAgentAccessToken`.
-    private let accessToken: String?
+    private let accessToken: @Sendable () -> String?
 
-    public init(url: URL, session: URLSession = .shared, accessToken: String? = GuestAgentAccessToken.load()) {
+    public init(
+        url: URL,
+        session: URLSession = .shared,
+        accessToken: @escaping @Sendable () -> String? = { GuestAgentAccessToken.current() }
+    ) {
         self.url = url
         self.session = session
         self.accessToken = accessToken
@@ -126,7 +130,7 @@ public struct URLSessionFrameChannel: HostFrameChannel {
             WindowFrameChannelMessage.self,
             bufferingPolicy: .bufferingNewest(Self.frameBufferMessageCount)
         ) { continuation in
-            let task = session.webSocketTask(with: GuestAgentAccessToken.request(for: url, token: accessToken))
+            let task = session.webSocketTask(with: GuestAgentAccessToken.request(for: url, token: accessToken()))
             task.resume()
 
             continuation.onTermination = { @Sendable _ in
