@@ -472,3 +472,17 @@ or moved in Windows.
   boot. If it does not, the agent finds no token and nothing changes.
 - Takes effect only with all three: Veil relaunched (sends the header), the agent updated (checks it), and
   Windows restarted (reads the tables). The order does not matter; none of them alone locks Veil out.
+
+## Twelfth relaunch and agent update on 2026-11-14
+
+In the background, with the user's go-ahead; Windows was not restarted and nothing was opened or moved in it.
+
+- Veil did not come to the front, the three Mac windows opened where they were, and the agent went from
+  `e9d8f78b0ac0` to `909fa2217f50` (its first attempt found no tools disc yet and the second ran).
+- **The new agent accepts connections without a token while the machine carries none**: a probe sending
+  no `X-Veil-Agent-Token` still got its health answer. The running QEMU started without `-smbios`, and no
+  token file exists yet; both come with the next Windows start from Veil.
+- Once, the Mac windows read 2,102 points to the left; three seconds later they were back. That was a Space
+  switch on the Mac at that moment, not Veil moving them.
+- Still to check after the next Windows start from Veil: that Windows sees the OEM string, so that a probe
+  without the token gets 401 and Veil still connects.
