@@ -538,3 +538,15 @@ Veil only, in the background, with the user's go-ahead; nothing was opened or mo
   development build has no `SUFeedURL`, so the updater does not start and Check for Updates is hidden.
 - Veil did not come to the front; the three Mac windows opened where they were; the agent
   (`909fa2217f50`) connected, and the clock is still 9.6 hours behind until Set Windows Clock is used.
+
+## Desktop showing through a dragged window, 2026-11-14
+
+The user saw the Windows desktop in Paint's and Notepad's Mac windows while dragging them quickly. At the
+end of each caption drag Veil moves the guest window; Windows presented the moved window before the
+agent's next layout scan (33 ms apart once the layout is still) reached the host, and cropping the old
+frame from that picture showed the desktop the window had just left. Since `fb8194da` the layout store
+holds a window's last cropped picture from the move or resize request until the layout shows the new
+frame and it settles, at most a second. Unit-tested; Veil was relaunched with it (fourteenth relaunch,
+in the background, Veil not brought forward, agent connected). Whether the flash is gone needs the user
+to drag a window. Moves Windows makes by itself, such as snapping, are not announced to Veil and can still
+show it for a frame.
