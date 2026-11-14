@@ -254,6 +254,12 @@ public sealed class WebSocketAgentServer
             return null;
         }
 
+        if (!AgentAccessToken.IsAuthorized(headers, AgentAccessToken.Expected))
+        {
+            await WriteHttpResponseAsync(stream, "401 Unauthorized", "This connection did not present the Veil agent token.", cancellationToken);
+            return null;
+        }
+
         if (!HeaderContainsToken(headers, "Connection", "Upgrade")
             || !HeaderEquals(headers, "Upgrade", "websocket")
             || !headers.TryGetValue("Sec-WebSocket-Key", out var key)
@@ -290,7 +296,7 @@ public sealed class WebSocketAgentServer
     /// A browser adds <c>Origin</c> to every WebSocket handshake and a page cannot remove it
     /// (<see href="https://www.rfc-editor.org/rfc/rfc6455#section-10.2">RFC 6455, section 10.2</see>). The
     /// Veil host does not send one. This does not stop another program on the Mac, which can leave the
-    /// header out; that needs a secret both sides hold.
+    /// header out; `AgentAccessToken` keeps those out when the machine carries a token.
     /// </remarks>
     internal static bool IsFromWebPage(IReadOnlyDictionary<string, string> headers) =>
         headers.ContainsKey("Origin");
