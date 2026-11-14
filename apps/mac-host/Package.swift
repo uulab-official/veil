@@ -29,6 +29,10 @@ let package = Package(
             targets: ["VeilAppLauncher"]
         )
     ],
+    dependencies: [
+        // Updates of Veil itself; see docs/release-updates.md.
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1")
+    ],
     targets: [
         .target(
             name: "VeilHostCore"
@@ -48,7 +52,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "VeilHostShell",
-            dependencies: ["VeilHostCore", "VeilLauncherSupport"],
+            dependencies: [
+                "VeilHostCore",
+                "VeilLauncherSupport",
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             resources: [
                 .copy("Resources/VeilAppIcon.icns")
             ]

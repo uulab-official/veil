@@ -244,6 +244,13 @@ struct VeilMenuBarMenu: View {
 
         Divider()
 
+        if VeilUpdater.shared.isConfigured {
+            Button("Check for Updates…", systemImage: "arrow.down.circle") {
+                VeilUpdater.shared.checkForUpdates()
+            }
+            .disabled(!VeilUpdater.shared.canCheckForUpdates)
+        }
+
         Button("Quit Veil", systemImage: "power") {
             NSApp.terminate(nil)
         }

@@ -131,6 +131,9 @@ PLIST
 # quarantine marker before signing; do not remove any other extended attributes.
 xattr -dr com.apple.quarantine "$APP_BUNDLE" 2>/dev/null || true
 
+# Sparkle is linked into Veil even though a development build never updates itself (it has no feed).
+"$ROOT_DIR/script/embed_sparkle.sh" "$APP_BUNDLE" "$(swift build --package-path "$PACKAGE_DIR" --show-bin-path)" -
+
 codesign --force --sign - "$APP_CONTENTS/Helpers/veil-app-launcher" >/dev/null
 codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BINARY" >/dev/null
 codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_BUNDLE" >/dev/null

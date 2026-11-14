@@ -220,6 +220,15 @@ struct VeilHostShellApp: App {
             ToolbarCommands()
             NewGuestVMCommands()
 
+            CommandGroup(after: .appInfo) {
+                if VeilUpdater.shared.isConfigured {
+                    Button("Check for Updates…") {
+                        VeilUpdater.shared.checkForUpdates()
+                    }
+                    .disabled(!VeilUpdater.shared.canCheckForUpdates)
+                }
+            }
+
             CommandGroup(before: .sidebar) {
                 Button("Windows Apps as Mac Windows") {
                     shellNavigation.viewMode = .apps

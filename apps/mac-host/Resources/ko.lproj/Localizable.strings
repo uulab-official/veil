@@ -829,3 +829,4 @@
 "Do not ask again" = "다시 묻지 않기";
 "The Windows Clock Is Wrong" = "Windows 시계가 맞지 않습니다";
 "The clock in Windows is %@ off. Choose Set Windows Clock in the Veil menu and approve it once in Windows; after that Veil keeps it right." = "Windows 시계가 %@ 틀립니다. Veil 메뉴에서 'Windows 시계 맞추기…'를 선택하고 Windows에서 한 번 승인하면 그 뒤로는 Veil이 시계를 맞춥니다.";
+"Check for Updates…" = "업데이트 확인…";

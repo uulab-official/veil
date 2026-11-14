@@ -26,6 +26,10 @@ SIGNING_IDENTITY="${VEIL_DEVELOPER_ID_APPLICATION:-}"
 NOTARY_PROFILE="${VEIL_NOTARY_KEYCHAIN_PROFILE:-}"
 RELEASE_VERSION="${VEIL_RELEASE_VERSION:-0.1.0}"
 RELEASE_BUILD="${VEIL_RELEASE_BUILD:-$(date -u +%Y%m%d%H%M%S)}"
+# Sparkle update feed and the EdDSA public key updates are checked against; see docs/release-updates.md.
+# Without the key the release cannot update itself, and the app hides Check for Updates.
+UPDATE_FEED_URL="${VEIL_UPDATE_FEED_URL:-https://github.com/uulab-official/veil/releases/download/appcast/appcast.xml}"
+UPDATE_PUBLIC_KEY="${VEIL_SPARKLE_PUBLIC_ED_KEY:-$(tr -d '[:space:]' <"$ROOT_DIR/script/sparkle-public-ed-key.txt" 2>/dev/null || true)}"
 
 usage() {
   cat <<'USAGE'
@@ -222,10 +226,22 @@ stage_release_app() {
 </plist>
 PLIST
 
+  if [[ -n "$UPDATE_PUBLIC_KEY" ]]; then
+    plutil -insert SUFeedURL -string "$UPDATE_FEED_URL" "$INFO_PLIST"
+    plutil -insert SUPublicEDKey -string "$UPDATE_PUBLIC_KEY" "$INFO_PLIST"
+  else
+    echo "warning: no Sparkle public key (script/sparkle-public-ed-key.txt); this release cannot update itself." >&2
+  fi
+
   xattr -dr com.apple.quarantine "$APP_BUNDLE" 2>/dev/null || true
 }
 
+release_bin_path() {
+  swift build --configuration release --package-path "$PACKAGE_DIR" --show-bin-path
+}
+
 sign_release_app() {
+  "$ROOT_DIR/script/embed_sparkle.sh" "$APP_BUNDLE" "$(release_bin_path)" "$SIGNING_IDENTITY"
   # Signed for notarization here; each launcher Veil builds from it is re-signed ad hoc on the user's Mac.
   codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" \
     "$APP_CONTENTS/Helpers/veil-app-launcher"
@@ -249,10 +265,16 @@ sign_release_app() {
 # Ad-hoc signatures carry no identity or timestamp; the hardened runtime and entitlements still
 # apply, so the app and its bundled QEMU behave as in the Developer ID build.
 sign_unsigned_app() {
+  "$ROOT_DIR/script/embed_sparkle.sh" "$APP_BUNDLE" "$(release_bin_path)" -
+  # Library validation refuses an ad-hoc framework in an ad-hoc hardened process ("different Team IDs"),
+  # so this build alone may load Sparkle unvalidated. A Developer ID build signs both with one team.
+  local entitlements="$OUTPUT_DIR/unsigned.entitlements"
+  cp "$RELEASE_ENTITLEMENTS" "$entitlements"
+  /usr/libexec/PlistBuddy -c "Add :com.apple.security.cs.disable-library-validation bool true" "$entitlements"
   codesign --force --options runtime --sign - \
-    --entitlements "$RELEASE_ENTITLEMENTS" "$APP_BINARY"
+    --entitlements "$entitlements" "$APP_BINARY"
   codesign --force --options runtime --sign - \
-    --entitlements "$RELEASE_ENTITLEMENTS" "$APP_BUNDLE"
+    --entitlements "$entitlements" "$APP_BUNDLE"
   codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 }
 
