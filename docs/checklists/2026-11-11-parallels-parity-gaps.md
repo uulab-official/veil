@@ -506,3 +506,22 @@ service, or work outside this repository:
 - **Checks only the user can start**: the approval prompt in its own Mac window and input to an
   administrator's window (Set Windows Clock), the quit question, and the agent token after Windows is
   started again from Veil.
+
+## Review of this session's changes, 2026-11-14
+
+An independent read of `81e891a0..8e415a97` found five defects; all are fixed and unit-tested
+(`f183cb33`, `8a2c1521`):
+
+- The agent token was read once when Veil started, so a Windows first started from that Veil refused
+  every later connection until Veil restarted, and Veil could start typing its tools repair into a
+  healthy Windows. Connections now read it each time (cached two seconds).
+- A disk-space pause lived only in memory: after a quit or crash nothing continued Windows. It is now
+  recorded against the QEMU launch.
+- Suspend, the automatic quiet, and the quit question could save memory to the nearly full volume and,
+  on failure, continue Windows on it. They now leave a paused Windows paused.
+- Stop on a paused Windows waited 90 seconds and then blamed unsaved documents; it now names the disk.
+- Show Windows after a shutdown timeout stopped watching; Veil now waits for that shutdown and finishes.
+
+The same review found nothing wrong in the WebDAV descriptor check (checked against case-folded paths and
+hard links on APFS), the SMBIOS parsing, compatibility with a QEMU started before these changes, the event
+byte budget, the quit reply, or the release scripts.
