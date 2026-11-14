@@ -53,3 +53,18 @@ secret. Still to set: the Developer ID and notarization secrets (step 4). For a 
 
 Losing the private key means installed copies can never update again; keep a backup of the Keychain item.
 Changing it requires a release signed with the old key that carries the new public key.
+
+## Release rehearsal on 2026-11-14
+
+`VEIL_ALLOW_DIRTY_RELEASE=1 script/release_macos.sh --unsigned` on the release Mac, without touching the
+running Veil:
+
+- The build finished and wrote a 71 MB `Veil.zip`. `codesign --verify --deep --strict` passed on the app,
+  Sparkle.framework, Autoupdate, and Updater.app.
+- Info.plist carries `SUFeedURL` (the `appcast` release) and `SUPublicEDKey`; the app's entitlements are
+  `virtualization` and, for this ad-hoc build only, `disable-library-validation`; the binary has the
+  `@executable_path/../Frameworks` rpath, and the framework has no XPC services.
+- CI passed on the same commit, resolving the Sparkle package from GitHub.
+- Not run: launching that build (a second Veil would start next to the user's), the Developer ID path
+  (`--package`/`--notarize`), which needs a `notarytool` profile, and an update from one release to the
+  next, which needs two notarized releases on the feed.
