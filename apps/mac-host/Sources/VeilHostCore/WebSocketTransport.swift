@@ -180,6 +180,11 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
     /// which failure to take, and losing events beats exhausting memory.
     public static let eventBufferMessageCount = 1_024
 
+    /// Bytes of events received and not yet taken by the consumer. The count bound alone let 1,024
+    /// messages of up to 32 MiB each wait in memory, 32 GiB, while the app was busy; a working guest stays
+    /// far below this, since a large clipboard image is one message of about 11 MB.
+    public static let eventBufferByteBudget = 96 * 1_024 * 1_024
+
     /// Largest single message either socket will receive. URLSession's default is 1 MiB, and a guest
     /// clipboard image of up to 8 MiB arrives as about 11.2 MB of base64 JSON; at the default the receive
     /// fails and the event stream would reconnect on every large copy instead of delivering it.
@@ -191,8 +196,13 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
     /// Kept separate from the URLSession receive loop so the overflow contract is deterministic to test.
     static func yieldEventMessage(
         _ message: Data,
-        to continuation: AsyncThrowingStream<Data, any Error>.Continuation
+        to continuation: AsyncThrowingStream<Data, any Error>.Continuation,
+        budget: EventByteBudget? = nil
     ) -> Bool {
+        if let budget, !budget.reserve(message.count) {
+            continuation.finish(throwing: URLSessionWebSocketTransportError.eventBufferOverflow)
+            return false
+        }
         switch continuation.yield(message) {
         case .enqueued:
             return true
@@ -213,6 +223,11 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
     static let windowListTimeout: Duration = .seconds(15)
 
     public func eventMessages() -> AsyncThrowingStream<Data, any Error> {
+        let budget = EventByteBudget(limit: Self.eventBufferByteBudget)
+        return EventByteBudget.releasing(receivedEventMessages(budget: budget), into: budget)
+    }
+
+    private func receivedEventMessages(budget: EventByteBudget) -> AsyncThrowingStream<Data, any Error> {
         AsyncThrowingStream(
             Data.self,
             bufferingPolicy: .bufferingNewest(Self.eventBufferMessageCount)
@@ -257,7 +272,7 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
                     @unknown default: return
                     }
                     let step = reader.accept(data)
-                    if step.forward, !Self.yieldEventMessage(data, to: continuation) {
+                    if step.forward, !Self.yieldEventMessage(data, to: continuation, budget: budget) {
                         return
                     }
                     if step.done {
@@ -271,9 +286,9 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
                     while !Task.isCancelled {
                         switch try await task.receive() {
                         case .data(let data):
-                            guard Self.yieldEventMessage(data, to: continuation) else { return }
+                            guard Self.yieldEventMessage(data, to: continuation, budget: budget) else { return }
                         case .string(let text):
-                            guard Self.yieldEventMessage(Data(text.utf8), to: continuation) else { return }
+                            guard Self.yieldEventMessage(Data(text.utf8), to: continuation, budget: budget) else { return }
                         @unknown default:
                             continuation.finish(throwing: VeilHostError.missingReply("unsupported websocket message type"))
                             return
@@ -283,6 +298,67 @@ public struct URLSessionWebSocketTransport: HostTransport, HostEventSource {
                     continuation.finish(throwing: error)
                 }
             }
+        }
+    }
+}
+
+/// Counts the bytes of events waiting between the socket and the consumer.
+final class EventByteBudget: @unchecked Sendable {
+    let limit: Int
+    private let lock = NSLock()
+    private var buffered = 0
+
+    init(limit: Int) {
+        self.limit = limit
+    }
+
+    var bufferedBytes: Int {
+        lock.withLock { buffered }
+    }
+
+    /// False when the message would take the waiting bytes past the limit. A single message larger than the
+    /// limit still passes when nothing else waits, so one large clipboard copy is never refused.
+    func reserve(_ byteCount: Int) -> Bool {
+        lock.withLock {
+            guard buffered == 0 || buffered + byteCount <= limit else {
+                return false
+            }
+            buffered += byteCount
+            return true
+        }
+    }
+
+    func release(_ byteCount: Int) {
+        lock.withLock {
+            buffered = max(0, buffered - byteCount)
+        }
+    }
+
+    /// The same messages, giving their bytes back to the budget as the consumer takes each one.
+    static func releasing(
+        _ stream: AsyncThrowingStream<Data, any Error>,
+        into budget: EventByteBudget
+    ) -> AsyncThrowingStream<Data, any Error> {
+        let source = IteratorBox(stream.makeAsyncIterator(), budget: budget)
+        return AsyncThrowingStream(unfolding: { try await source.next() })
+    }
+
+    private final class IteratorBox: @unchecked Sendable {
+        private var iterator: AsyncThrowingStream<Data, any Error>.AsyncIterator
+        private let budget: EventByteBudget
+
+        init(_ iterator: AsyncThrowingStream<Data, any Error>.AsyncIterator, budget: EventByteBudget) {
+            self.iterator = iterator
+            self.budget = budget
+        }
+
+        /// Called by one consumer at a time, as an async sequence's iterator is.
+        func next() async throws -> Data? {
+            let message = try await iterator.next()
+            if let message {
+                budget.release(message.count)
+            }
+            return message
         }
     }
 }
