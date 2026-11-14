@@ -15,7 +15,8 @@ Who may connect:
 
 - QEMU forwards the agent's port to `127.0.0.1` on the Mac, where a page open in any web browser can try to open a WebSocket to it.
 - The agent answers a handshake that carries an `Origin` header with `403 Forbidden`. A browser sends that header with every WebSocket handshake and a page cannot remove it ([RFC 6455, section 10.2](https://www.rfc-editor.org/rfc/rfc6455#section-10.2)). A host must not send one; `URLSessionWebSocketTask` and Node's `WebSocket` do not.
-- Not covered: another program on the Mac, including one run by another user account, can connect without the header. Closing that needs a secret the host and the agent both hold, which the protocol does not have yet.
+- When the virtual machine carries an agent token, the agent answers a handshake without it with `401 Unauthorized`. The host keeps one random token per Mac user in `~/Library/Application Support/Veil/Agent Access/agent-token.smbios` (folder 0700, file 0600), which holds the SMBIOS OEM string `org.uulab.veil.agent-token=<64 hex digits>`. QEMU reads that file on a cold boot through `-smbios type=11,path=<file>`, so the token never appears in its arguments, and the host sends the token in the `X-Veil-Agent-Token` header of every handshake, control and frame channel alike. The agent reads the OEM strings once through `GetSystemFirmwareTable('RSMB')` and compares in constant time. A machine started without the string, by an older host or before Windows restarted, has no token, and the agent then accepts handshakes as before. A resumed session keeps the tables Windows booted with.
+- With the token, another user account on the Mac cannot connect. A program run by the same Mac user can read the token file, as it can read everything else of that user's.
 
 Executable protocol helpers live in `packages/protocol`. Harness tools should import that package instead of duplicating message type strings or structured error shapes.
 
