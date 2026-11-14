@@ -170,6 +170,34 @@ struct RuntimeWorkspacePresentationPolicyTests {
         )
     }
 
+    @Test("with no Windows app open, the app connection alone leaves the desktop Veil chose")
+    func noAppWindowsReturnToApps() {
+        #expect(
+            RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: true,
+                hasFirstAppFrame: false,
+                hasAppWindows: false,
+                hasLiveAppConnection: true
+            )
+        )
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: true,
+                hasFirstAppFrame: false,
+                hasAppWindows: false,
+                hasLiveAppConnection: false
+            )
+        )
+        #expect(
+            !RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
+                windowsInstalled: false,
+                hasFirstAppFrame: false,
+                hasAppWindows: false,
+                hasLiveAppConnection: true
+            )
+        )
+    }
+
     @Test("a dropped app connection leaves open app windows on screen instead of showing the desktop")
     func droppedConnectionKeepsAppWindows() {
         #expect(

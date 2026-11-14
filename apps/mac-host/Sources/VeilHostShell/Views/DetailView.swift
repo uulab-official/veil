@@ -99,6 +99,9 @@ struct DetailView: View {
         .onChange(of: hasFirstAppFrame) { _, _ in
             returnToAppsIfReady()
         }
+        .onChange(of: model.mirrorSessions.isEmpty) { _, _ in
+            returnToAppsIfReady()
+        }
     }
 
     private var hasFirstAppFrame: Bool {
@@ -113,9 +116,10 @@ struct DetailView: View {
            RuntimeWorkspacePresentationPolicy.shouldReturnToApps(
             windowsInstalled: hasInstalledWindows,
             hasFirstAppFrame: hasFirstAppFrame,
+            hasAppWindows: !model.mirrorSessions.isEmpty,
             hasLiveAppConnection: model.hasLiveAgentConnection
            ) {
-            navigation.showsWindowsDesktop = false
+            navigation.showDesktopAutomatically(false)
         }
     }
 
@@ -204,14 +208,18 @@ enum RuntimeWorkspacePresentationPolicy {
         return !windowsInstalled || !hasLiveAppConnection
     }
 
-    /// Whether the desktop Veil chose by itself gives way to apps: an app has a picture to show and the
-    /// app connection is up to drive it.
+    /// Whether the desktop Veil chose by itself gives way to apps: the app connection is up to drive them,
+    /// and either an app has a picture to show or no app window is waiting for one. Requiring a picture
+    /// even with no app open left the whole Windows desktop in Veil's main window for as long as Veil ran,
+    /// whenever it was opened with no Windows app open; Parallels shows its Control Center then, not the
+    /// desktop.
     static func shouldReturnToApps(
         windowsInstalled: Bool,
         hasFirstAppFrame: Bool,
+        hasAppWindows: Bool = true,
         hasLiveAppConnection: Bool = true
     ) -> Bool {
-        windowsInstalled && hasFirstAppFrame && hasLiveAppConnection
+        windowsInstalled && hasLiveAppConnection && (hasFirstAppFrame || !hasAppWindows)
     }
 
     /// Whether app windows stay where they are when the desktop would otherwise take over by itself. The
