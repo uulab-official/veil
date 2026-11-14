@@ -254,6 +254,31 @@ enum WebDAVPaths {
         segment.addingPercentEncoding(withAllowedCharacters: unreserved) ?? ""
     }
 
+    /// Whether an open file is inside the root, by the path the kernel holds for it. `isConfined` checks a
+    /// path before it is opened; a folder in that path swapped for a symlink in between would still lead
+    /// out. The descriptor names what was actually opened.
+    static func isInside(fileDescriptor: Int32, rootReal: String) -> Bool {
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard fcntl(fileDescriptor, F_GETPATH, &buffer) != -1 else { return false }
+        let path = String(cString: buffer)
+        return path == rootReal || path.hasPrefix(rootReal == "/" ? "/" : rootReal + "/")
+    }
+
+    /// Opens `path` and keeps it only if what was opened is inside the root.
+    static func openConfined(_ path: String, flags: Int32, mode: mode_t = 0o644, rootReal: String) -> FileHandle? {
+        let descriptor = Darwin.open(path, flags | O_CLOEXEC, mode)
+        guard descriptor >= 0 else { return nil }
+        guard isInside(fileDescriptor: descriptor, rootReal: rootReal) else {
+            if flags & O_CREAT != 0 {
+                // Created by this call (O_EXCL), outside the root: take it back.
+                unlink(path)
+            }
+            Darwin.close(descriptor)
+            return nil
+        }
+        return FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+    }
+
     /// Whether `url` (or, if it does not exist yet, its nearest existing ancestor) resolves inside the root.
     ///
     /// Checking the nearest existing ancestor rather than only the parent matters for paths like
@@ -1042,7 +1067,9 @@ final class WebDAVConnection: @unchecked Sendable {
         guard !info.isDirectory else {
             return WebDAVResponse(status: 405, headers: [("Allow", "OPTIONS, PROPFIND")])
         }
-        guard let handle = try? FileHandle(forReadingFrom: target.url) else { return WebDAVResponse(status: 403) }
+        guard let handle = WebDAVPaths.openConfined(target.url.path, flags: O_RDONLY, rootReal: context.rootReal) else {
+            return WebDAVResponse(status: 403)
+        }
 
         var headers: [(String, String)] = [
             ("Content-Type", WebDAVFormat.contentType(for: target.segments.last ?? "")),
@@ -1093,8 +1120,11 @@ final class WebDAVConnection: @unchecked Sendable {
         // Written beside the destination and renamed into place, so the Mac never sees a half-written file under
         // the real name and an interrupted upload leaves the previous version intact.
         let temporary = parent.appendingPathComponent("\(WebDAVPaths.uploadPrefix)\(UUID().uuidString).tmp")
-        guard FileManager.default.createFile(atPath: temporary.path, contents: nil),
-              let handle = try? FileHandle(forWritingTo: temporary) else {
+        guard let handle = WebDAVPaths.openConfined(
+            temporary.path,
+            flags: O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW,
+            rootReal: context.rootReal
+        ) else {
             return .failure(WebDAVStatusError(status: 403))
         }
         return .success(WebDAVBodySink(.upload(handle: handle, temporary: temporary, destination: target.url, existed: existing != nil)))
@@ -1206,9 +1236,14 @@ final class WebDAVConnection: @unchecked Sendable {
                   WebDAVPaths.info(target.url.deletingLastPathComponent().path)?.isDirectory == true else {
                 return WebDAVResponse(status: 409)
             }
-            guard FileManager.default.createFile(atPath: target.url.path, contents: nil) else {
+            guard let handle = WebDAVPaths.openConfined(
+                target.url.path,
+                flags: O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW,
+                rootReal: context.rootReal
+            ) else {
                 return WebDAVResponse(status: 403)
             }
+            try? handle.close()
             status = 201
         }
         // Locks are not enforced: the Mac side can always change the folder, so a real lock would promise

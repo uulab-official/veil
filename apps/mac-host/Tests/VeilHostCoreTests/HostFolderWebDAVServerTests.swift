@@ -390,3 +390,39 @@ struct HostFolderWebDAVServerTests {
         #expect(unlock.status == 204)
     }
 }
+
+@Suite("WebDAV opens only files inside the shared folder")
+struct WebDAVConfinedOpenTests {
+    @Test("A file reached through a folder swapped for a symlink is refused, reading or creating")
+    func refusesWhatIsOpenedOutside() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("webdav-confined-\(UUID().uuidString)")
+        let root = base.appendingPathComponent("root")
+        let outside = base.appendingPathComponent("outside")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        try Data("inside".utf8).write(to: root.appendingPathComponent("inside.txt"))
+        try Data("secret".utf8).write(to: outside.appendingPathComponent("secret.txt"))
+        // What a folder swapped after the path check looks like when the file is opened.
+        try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("swapped"), withDestinationURL: outside)
+        let rootReal = try #require(WebDAVPaths.realPath(root.path))
+
+        let inside = WebDAVPaths.openConfined(root.appendingPathComponent("inside.txt").path, flags: O_RDONLY, rootReal: rootReal)
+        #expect(inside != nil)
+        try inside?.close()
+
+        #expect(WebDAVPaths.openConfined(root.appendingPathComponent("swapped/secret.txt").path, flags: O_RDONLY, rootReal: rootReal) == nil)
+
+        let created = root.appendingPathComponent("swapped/new.txt").path
+        #expect(WebDAVPaths.openConfined(created, flags: O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, rootReal: rootReal) == nil)
+        #expect(!FileManager.default.fileExists(atPath: outside.appendingPathComponent("new.txt").path))
+
+        let createdInside = WebDAVPaths.openConfined(
+            root.appendingPathComponent("new.txt").path,
+            flags: O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW,
+            rootReal: rootReal
+        )
+        #expect(createdInside != nil)
+        try createdInside?.close()
+    }
+}
