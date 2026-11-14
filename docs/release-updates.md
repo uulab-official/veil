@@ -29,6 +29,10 @@ Veil only after the user agrees, and quitting for it asks about a running Window
 
 ## Setting it up once
 
+Done on 2026-11-14: the key pair is in the release Mac's login Keychain (Sparkle's `ed25519` item), the
+public key in `script/sparkle-public-ed-key.txt`, and the private key in the `SPARKLE_ED_PRIVATE_KEY`
+secret. Still to set: the Developer ID and notarization secrets (step 4). For a new key pair:
+
 1. Create the key pair on the release Mac. Sparkle keeps the private key in the login Keychain:
 
    ```bash
