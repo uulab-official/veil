@@ -419,9 +419,7 @@ so that item was not a bug. Still open:
   `URLSessionWebSocketTask`, which needs TCP, and the forward is part of the machine's arguments, so moving
   it invalidates a saved session.
 - The guest reaches every service on the Mac's loopback interface through QEMU's user networking.
-- The event and frame queues from the guest are bounded by message count, not bytes.
 - The system disk is opened with `file.locking=off`; only a process listing keeps two QEMUs off one disk.
-- Quitting Veil without "suspend on quit" leaves QEMU running, by design, without saying so.
 
 ## Tenth relaunch on 2026-11-14
 
@@ -437,3 +435,17 @@ and nothing was opened or moved in Windows.
   `VeilTimeSync` task, so every wake reports `install-time-sync-task-elevated`. The 2026-11-13 correction
   came from Windows itself. Set Windows Clock now shows in the Veil menu; using it once registers the task,
   after which the wake sync corrects the clock.
+
+## Third production pass on 2026-11-14
+
+Done without relaunching Veil or touching the guest; unit-tested only.
+
+- **Quitting Veil left Windows running without a word** whenever "Suspend Windows when Veil quits" was
+  off, still using memory and battery with nothing on screen. Veil now asks: suspend Windows, keep it
+  running, or cancel, with "do not ask again". A logout, restart, or shutdown is not held up by the
+  question, and changing the setting clears a remembered answer.
+- **A wrong Windows clock was only a menu item.** When the clock is at least five minutes off and needs
+  the repair, Veil posts one notification per session that names the skew and points at Set Windows Clock.
+- **The guest event queue could hold 32 GiB** (1,024 messages of up to 32 MiB). Waiting bytes are now
+  counted and the stream reconnects past 96 MiB. The frame channel was already bounded at 256 messages of
+  1 MiB each, URLSession's default message limit.
