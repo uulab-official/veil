@@ -32,7 +32,9 @@ struct QEMUEarlyExitTests {
     func keepsARunningProcess() async throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sleep")
-        process.arguments = ["5"]
+        // Far longer than any test run, so only the terminate below ends it: a loaded CI runner once took
+        // seven seconds to get through this test, and a five-second sleep had exited by then.
+        process.arguments = ["600"]
         try process.run()
         defer { process.terminate() }
 
