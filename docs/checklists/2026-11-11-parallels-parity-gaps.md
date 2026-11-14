@@ -525,3 +525,13 @@ An independent read of `81e891a0..8e415a97` found five defects; all are fixed an
 The same review found nothing wrong in the WebDAV descriptor check (checked against case-folded paths and
 hard links on APFS), the SMBIOS parsing, compatibility with a QEMU started before these changes, the event
 byte budget, the quit reply, or the release scripts.
+
+## Thirteenth relaunch on 2026-11-14
+
+Veil only, in the background, with the user's go-ahead; nothing was opened or moved in Windows.
+
+- The first build with Sparkle: the running Veil maps `Contents/Frameworks/Sparkle.framework` from its own
+  bundle, so the rpath and the ad-hoc signing from `embed_sparkle.sh` work in the app itself. A
+  development build has no `SUFeedURL`, so the updater does not start and Check for Updates is hidden.
+- Veil did not come to the front; the three Mac windows opened where they were; the agent
+  (`909fa2217f50`) connected, and the clock is still 9.6 hours behind until Set Windows Clock is used.
