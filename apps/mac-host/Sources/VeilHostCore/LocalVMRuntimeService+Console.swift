@@ -123,14 +123,14 @@ extension LocalVMRuntimeService {
 
     func refreshedConsoleScreenshot(from launchRecord: QEMULaunchRecord?) -> ConsoleScreenshotRefresh {
         let existingPath = Self.existingConsoleScreenshotPath(from: launchRecord)
-        if launchRecord?.vncHost?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
-           launchRecord?.vncPort != nil {
+        if let launchRecord,
+           RFBEndpoint(socketPath: launchRecord.vncSocketPath, host: launchRecord.vncHost, port: launchRecord.vncPort) != nil {
             // VNC is the authoritative live surface. A monitor screendump is unclassified and can
             // overwrite a verified frame with black pixels while leaving the old visual state in
             // place, so only the VNC validation path may refresh this evidence.
             return ConsoleScreenshotRefresh(
                 path: existingPath,
-                refreshedAt: launchRecord?.consoleScreenshotRefreshedAt
+                refreshedAt: launchRecord.consoleScreenshotRefreshedAt
             )
         }
 
@@ -208,6 +208,7 @@ extension LocalVMRuntimeService {
             qmpSocketPath: launchRecord.qmpSocketPath,
             vncHost: launchRecord.vncHost,
             vncPort: launchRecord.vncPort,
+            vncSocketPath: launchRecord.vncSocketPath,
             consoleScreenshotPath: consoleScreenshotPath ?? existingConsoleScreenshotPath(from: launchRecord),
             consoleScreenshotRefreshedAt: consoleScreenshotRefreshedAt ?? launchRecord.consoleScreenshotRefreshedAt,
             consoleVisualState: launchRecord.consoleVisualState,

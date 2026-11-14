@@ -1636,6 +1636,8 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
         bootDiskFirst: Bool = false,
         displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa,
         vncDisplay: Int? = nil,
+        /// QEMU's display server on this Unix socket; takes precedence over `vncDisplay`.
+        vncSocketPath: String? = nil,
         /// Path to a suspended memory-state stream. When present, QEMU starts paused and loads this
         /// stream instead of booting, so the guest continues from where it was suspended.
         incomingMemoryStatePath: String? = nil
@@ -1652,7 +1654,9 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
                 arguments.append(contentsOf: ["-display", "none"])
             }
         }
-        if displayMode == .vncLoopback, let vncDisplay {
+        if displayMode == .vncLoopback, let vncSocketPath {
+            arguments.append(contentsOf: ["-vnc", "unix:\(vncSocketPath)"])
+        } else if displayMode == .vncLoopback, let vncDisplay {
             arguments.append(contentsOf: [
                 "-vnc", "127.0.0.1:\(vncDisplay)"
             ])

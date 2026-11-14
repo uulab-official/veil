@@ -325,8 +325,8 @@ extension VeilVMControl {
         print("Monitor socket: \(record.monitorSocketPath)")
         print("QMP socket: \(record.qmpSocketPath ?? "not attached")")
         print("Display mode: \(record.displayMode?.rawValue ?? "unknown")")
-        if let vncHost = record.vncHost, let vncPort = record.vncPort {
-            print("VNC display: \(vncHost):\(vncPort)")
+        if let endpoint = RFBEndpoint(socketPath: record.vncSocketPath, host: record.vncHost, port: record.vncPort) {
+            print("VNC display: \(endpoint)")
         }
         print("Console screenshot: \(record.consoleScreenshotPath ?? "pending")")
     }
@@ -343,9 +343,11 @@ extension VeilVMControl {
 
     static func smokeQEMUDisplay(json: Bool, waitSeconds: Int) async throws {
         let launchRecord = try latestQEMULaunchRecord()
-        guard let host = launchRecord.vncHost?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !host.isEmpty,
-              let port = launchRecord.vncPort else {
+        guard let displayEndpoint = RFBEndpoint(
+            socketPath: launchRecord.vncSocketPath,
+            host: launchRecord.vncHost,
+            port: launchRecord.vncPort
+        ) else {
             throw VMControlError.missingQEMUDisplayEndpoint
         }
 
@@ -393,7 +395,7 @@ extension VeilVMControl {
 
         let record = QEMUDisplaySmokeRecord(
             pid: launchRecord.pid,
-            endpoint: "\(host):\(port)",
+            endpoint: displayEndpoint.description,
             width: frame.width,
             height: frame.height,
             frameSequence: frame.sequence,
@@ -509,13 +511,15 @@ extension VeilVMControl {
         recognizeText: Bool = true
     ) throws -> QEMUConsoleVisualSnapshot {
         let launchRecord = try latestQEMULaunchRecord()
-        guard let host = launchRecord.vncHost?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !host.isEmpty,
-              let port = launchRecord.vncPort else {
+        guard let displayEndpoint = RFBEndpoint(
+            socketPath: launchRecord.vncSocketPath,
+            host: launchRecord.vncHost,
+            port: launchRecord.vncPort
+        ) else {
             throw VMControlError.missingQEMUDisplayEndpoint
         }
 
-        let socket = try RFBLoopbackSocket(host: host, port: port, timeoutSeconds: 3)
+        let socket = try RFBLoopbackSocket(endpoint: displayEndpoint, timeoutSeconds: 3)
         defer { socket.close() }
         let client = RFBFrameStreamClient(stream: socket)
         let serverInit = try client.startSharedSession()

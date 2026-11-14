@@ -2178,7 +2178,6 @@ struct QEMUWindowsBootPlanTests {
                 capture.frontmostCallCount += 1
             },
             bootKeySender: { _ in true },
-            vncPortAllocator: { 5_907 },
             displayMode: .vncLoopback
         )
 
@@ -2187,7 +2186,10 @@ struct QEMUWindowsBootPlanTests {
         #expect(state == .running)
         #expect(capture.executablePath == qemuURL.path)
         #expect(capture.arguments.containsSequence(["-display", "none"]))
-        #expect(capture.arguments.containsSequence(["-vnc", "127.0.0.1:7"]))
+        let vncIndex = try #require(capture.arguments.firstIndex(of: "-vnc"))
+        let vncArgument = capture.arguments[vncIndex + 1]
+        #expect(vncArgument.hasPrefix("unix:/tmp/vq-") && vncArgument.hasSuffix(".vnc.sock"))
+        #expect(!capture.arguments.contains { $0.hasPrefix("127.0.0.1:") })
         #expect(!capture.arguments.containsSequence(["-display", "cocoa"]))
         #expect(capture.frontmostCallCount == 0)
 
@@ -2198,10 +2200,11 @@ struct QEMUWindowsBootPlanTests {
         decoder.dateDecodingStrategy = .iso8601
         let record = try decoder.decode(QEMULaunchRecord.self, from: Data(contentsOf: recordURL))
         #expect(record.displayMode == .vncLoopback)
-        #expect(record.vncHost == "127.0.0.1")
-        #expect(record.vncPort == 5_907)
+        #expect(record.vncHost == nil)
+        #expect(record.vncPort == nil)
+        #expect(record.vncSocketPath.map { vncArgument == "unix:\($0)" } == true)
         #expect(record.arguments.containsSequence(["-display", "none"]))
-        #expect(record.arguments.containsSequence(["-vnc", "127.0.0.1:7"]))
+        #expect(record.arguments.containsSequence(["-vnc", vncArgument]))
     }
 }
 

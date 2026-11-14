@@ -13,6 +13,10 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
     public var qmpSocketPath: String?
     public var vncHost: String?
     public var vncPort: Int?
+    /// QEMU's display server on a Unix socket only this user can open, instead of a loopback TCP port
+    /// every account on the Mac can reach. Set for launches since 2026-11-14; older records carry
+    /// `vncHost`/`vncPort`.
+    public var vncSocketPath: String?
     public var consoleScreenshotPath: String?
     public var consoleScreenshotRefreshedAt: Date?
     /// The most recent live VNC observation, when `qemu-display-smoke` has validated the running
@@ -35,6 +39,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         qmpSocketPath: String? = nil,
         vncHost: String? = nil,
         vncPort: Int? = nil,
+        vncSocketPath: String? = nil,
         consoleScreenshotPath: String? = nil,
         consoleScreenshotRefreshedAt: Date? = nil,
         consoleVisualState: QEMUConsoleVisualState? = nil,
@@ -53,6 +58,7 @@ public struct QEMULaunchRecord: Codable, Equatable, Sendable {
         self.qmpSocketPath = qmpSocketPath
         self.vncHost = vncHost
         self.vncPort = vncPort
+        self.vncSocketPath = vncSocketPath
         self.consoleScreenshotPath = consoleScreenshotPath
         self.consoleScreenshotRefreshedAt = consoleScreenshotRefreshedAt
         self.consoleVisualState = consoleVisualState
@@ -123,7 +129,6 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let frontmostRunner: @Sendable () -> Void
     private let bootKeySender: @Sendable (URL) -> Bool
     private let consoleScreenshotCapturer: @Sendable (URL, URL) -> Void
-    private let vncPortAllocator: @Sendable () -> Int?
     private let displayMode: QEMUWindowsBootDisplayMode
     private let suspensionController: QEMUVMSuspensionController
     private let suspensionRecordStore: any VMSuspensionRecordStore
@@ -140,7 +145,6 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         frontmostRunner: @escaping @Sendable () -> Void = QEMUVMRuntimeBooter.bringQEMUToFrontIfAllowed,
         bootKeySender: @escaping @Sendable (URL) -> Bool = QEMUVMRuntimeBooter.sendWindowsInstallerBootKey,
         consoleScreenshotCapturer: @escaping @Sendable (URL, URL) -> Void = QEMUVMRuntimeBooter.captureConsoleScreenshot,
-        vncPortAllocator: @escaping @Sendable () -> Int? = QEMUVMRuntimeBooter.allocateLoopbackVNCPort,
         displayMode: QEMUWindowsBootDisplayMode = .nativeCocoa,
         suspensionController: QEMUVMSuspensionController = QEMUVMSuspensionController(),
         suspensionRecordStore: (any VMSuspensionRecordStore)? = nil,
@@ -153,7 +157,6 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         self.frontmostRunner = frontmostRunner
         self.bootKeySender = bootKeySender
         self.consoleScreenshotCapturer = consoleScreenshotCapturer
-        self.vncPortAllocator = vncPortAllocator
         self.displayMode = displayMode
         self.suspensionController = suspensionController
         self.qmpControl = qmpControl
@@ -233,11 +236,9 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         let logHandle = try FileHandle(forWritingTo: logURL)
         let monitorSocketURL = Self.monitorSocketURL()
         let qmpSocketURL = Self.qmpSocketURL()
-        let vncPort = displayMode == .vncLoopback ? vncPortAllocator() : nil
-        if displayMode == .vncLoopback, vncPort == nil {
-            throw VMRuntimeError.qemuDisplayPortUnavailable
-        }
-        let vncDisplay = vncPort.map { max($0 - 5_900, 0) }
+        // A Unix socket rather than a loopback port: any account on the Mac can open 127.0.0.1, and the
+        // display connection carries the keyboard and mouse.
+        let vncSocketURL = displayMode == .vncLoopback ? Self.vncSocketURL() : nil
         try tpmEmulatorRunner(plan)
 
         let process = Process()
@@ -249,7 +250,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             qmpSocketPath: qmpSocketURL.path,
             bootDiskFirst: !shouldSendInstallerBootKey,
             displayMode: displayMode,
-            vncDisplay: vncDisplay,
+            vncSocketPath: vncSocketURL?.path,
             incomingMemoryStatePath: incomingMemoryStatePath
         )
         process.standardOutput = logHandle
@@ -261,6 +262,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             VeilLog.runtime.error("QEMU exited right after launch with status \(process.terminationStatus, privacy: .public).")
             throw VMRuntimeError.qemuExitedAtLaunch(status: process.terminationStatus, detail: detail)
         }
+        Self.restrictToOwner([monitorSocketURL, qmpSocketURL, vncSocketURL].compactMap { $0 })
         self.process = process
         self.monitorSocketURL = monitorSocketURL
         self.qmpSocketURL = qmpSocketURL
@@ -271,7 +273,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             processLogURL: logURL,
             monitorSocketURL: monitorSocketURL,
             qmpSocketURL: qmpSocketURL,
-            vncPort: vncPort,
+            vncSocketURL: vncSocketURL,
             consoleScreenshotURL: consoleScreenshotURL,
             directory: launchDirectory,
             stamp: stamp
@@ -582,7 +584,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         processLogURL: URL,
         monitorSocketURL: URL,
         qmpSocketURL: URL,
-        vncPort: Int?,
+        vncSocketURL: URL?,
         consoleScreenshotURL: URL,
         directory: URL,
         stamp: String
@@ -596,8 +598,7 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             processLogPath: processLogURL.path,
             monitorSocketPath: monitorSocketURL.path,
             qmpSocketPath: qmpSocketURL.path,
-            vncHost: vncPort == nil ? nil : "127.0.0.1",
-            vncPort: vncPort,
+            vncSocketPath: vncSocketURL?.path,
             consoleScreenshotPath: consoleScreenshotURL.path,
             startedAt: Date()
         )
@@ -894,6 +895,22 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private static func qmpSocketURL() -> URL {
         URL(fileURLWithPath: "/tmp")
             .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).qmp.sock")
+    }
+
+    static func vncSocketURL() -> URL {
+        URL(fileURLWithPath: "/tmp")
+            .appendingPathComponent("vq-\(UUID().uuidString.prefix(8)).vnc.sock")
+    }
+
+    /// QEMU creates its sockets with the process umask, which can leave them open to other accounts.
+    /// Connecting to a Unix socket needs write permission on it, so owner-only read and write keeps every
+    /// other account out. QEMU has created them by the time the early-exit watch ends.
+    static func restrictToOwner(_ sockets: [URL]) {
+        for socket in sockets where FileManager.default.fileExists(atPath: socket.path) {
+            if chmod(socket.path, 0o600) != 0 {
+                VeilLog.runtime.error("Could not restrict a QEMU socket to this user: \(String(cString: strerror(errno)), privacy: .public)")
+            }
+        }
     }
 
     public static func allocateLoopbackVNCPort() -> Int? {

@@ -101,7 +101,7 @@ final class RFBEmbeddedDisplayModel {
         }
         status = .connecting
 
-        guard let parsedEndpoint = RFBDisplayEndpoint(endpoint) else {
+        guard let parsedEndpoint = RFBEndpoint(endpoint) else {
             status = .failed("Display endpoint unavailable")
             return
         }
@@ -369,25 +369,9 @@ enum RFBDesktopSizeFollowUp: Equatable {
     }
 }
 
-private struct RFBDisplayEndpoint: Equatable, Sendable {
-    var host: String
-    var port: Int
-
-    init?(_ endpoint: String) {
-        let parts = endpoint.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2,
-              let port = Int(parts[1]),
-              port > 0 else {
-            return nil
-        }
-
-        self.host = parts[0]
-        self.port = port
-    }
-}
 
 private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
-    private let endpoint: RFBDisplayEndpoint
+    private let endpoint: RFBEndpoint
     private let queue = DispatchQueue(label: "app.veil.rfb-display", qos: .userInitiated)
     private let lock = NSLock()
     private let writeLock = NSLock()
@@ -435,7 +419,7 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
     private var client: RFBFrameStreamClient?
     private var resizeMachine = RFBDesktopResizeStateMachine()
 
-    init(endpoint: RFBDisplayEndpoint) {
+    init(endpoint: RFBEndpoint) {
         self.endpoint = endpoint
     }
 
@@ -646,7 +630,7 @@ private final class RFBEmbeddedDisplayWorker: @unchecked Sendable {
         onResizeState: @escaping @MainActor (RFBDesktopResizePresentation) -> Void
     ) {
         do {
-            let socket = try RFBLoopbackSocket(host: endpoint.host, port: endpoint.port)
+            let socket = try RFBLoopbackSocket(endpoint: endpoint)
             setStream(socket)
             let sessionClient = RFBFrameStreamClient(stream: socket)
             let serverInit = try sessionClient.startSharedSession()

@@ -8,6 +8,8 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
     public var qmpSocketPath: String?
     public var vncHost: String?
     public var vncPort: Int?
+    /// QEMU's display server on a Unix socket; see `QEMULaunchRecord.vncSocketPath`.
+    public var vncSocketPath: String?
     public var consoleScreenshotPath: String?
     public var consoleScreenshotRefreshedAt: Date?
     /// The most recent live VNC classification. A recent blank frame means Windows is still
@@ -19,10 +21,10 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
     public var startedAt: Date
 
     public var displaySurface: VMConsoleDisplaySurface {
-        if let vncHost, let vncPort {
+        if let endpoint = RFBEndpoint(socketPath: vncSocketPath, host: vncHost, port: vncPort)?.description {
             return VMConsoleDisplaySurface(
                 kind: .vncLoopback,
-                endpoint: "\(vncHost):\(vncPort)",
+                endpoint: endpoint,
                 screenshotPath: consoleScreenshotPath,
                 isLiveCapable: true,
                 validationCommand: VMRuntimeDeviceDefaults.liveDisplayValidationCommand
@@ -50,6 +52,7 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         qmpSocketPath: String? = nil,
         vncHost: String? = nil,
         vncPort: Int? = nil,
+        vncSocketPath: String? = nil,
         consoleScreenshotPath: String?,
         consoleScreenshotRefreshedAt: Date? = nil,
         consoleVisualState: QEMUConsoleVisualState? = nil,
@@ -64,6 +67,7 @@ public struct VMConsoleLaunchEvidence: Codable, Equatable, Sendable {
         self.qmpSocketPath = qmpSocketPath
         self.vncHost = vncHost
         self.vncPort = vncPort
+        self.vncSocketPath = vncSocketPath
         self.consoleScreenshotPath = consoleScreenshotPath
         self.consoleScreenshotRefreshedAt = consoleScreenshotRefreshedAt
         self.consoleVisualState = consoleVisualState

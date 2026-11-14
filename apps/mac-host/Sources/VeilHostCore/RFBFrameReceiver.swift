@@ -460,8 +460,100 @@ public protocol RFBByteStream: AnyObject {
     func close()
 }
 
+/// Where QEMU's display server listens: a Unix socket (`unix:/path`), or a loopback TCP port
+/// (`127.0.0.1:5907`) for launches before the socket.
+public enum RFBEndpoint: Equatable, Sendable, CustomStringConvertible {
+    case unix(path: String)
+    case tcp(host: String, port: Int)
+
+    public init?(_ endpoint: String) {
+        if endpoint.hasPrefix("unix:") {
+            let path = String(endpoint.dropFirst("unix:".count))
+            guard path.hasPrefix("/") else {
+                return nil
+            }
+            self = .unix(path: path)
+            return
+        }
+        let parts = endpoint.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let port = Int(parts[1]), port > 0, port <= 65_535 else {
+            return nil
+        }
+        self = .tcp(host: parts[0], port: port)
+    }
+
+    /// From a launch record's fields; the socket wins when both are present.
+    public init?(socketPath: String?, host: String?, port: Int?) {
+        if let socketPath = socketPath?.trimmingCharacters(in: .whitespacesAndNewlines), socketPath.hasPrefix("/") {
+            self = .unix(path: socketPath)
+        } else if let host = host?.trimmingCharacters(in: .whitespacesAndNewlines), !host.isEmpty,
+                  let port, port > 0, port <= 65_535 {
+            self = .tcp(host: host, port: port)
+        } else {
+            return nil
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .unix(let path): "unix:\(path)"
+        case .tcp(let host, let port): "\(host):\(port)"
+        }
+    }
+}
+
 public final class RFBLoopbackSocket: RFBByteStream {
     private var fileDescriptor: Int32 = -1
+
+    public convenience init(endpoint: RFBEndpoint, timeoutSeconds: Int = 3) throws {
+        switch endpoint {
+        case .unix(let path):
+            try self.init(unixSocketPath: path, timeoutSeconds: timeoutSeconds)
+        case .tcp(let host, let port):
+            try self.init(host: host, port: port, timeoutSeconds: timeoutSeconds)
+        }
+    }
+
+    public init(unixSocketPath path: String, timeoutSeconds: Int = 3) throws {
+        var address = sockaddr_un()
+        let pathBytes = Array(path.utf8)
+        guard path.hasPrefix("/"), pathBytes.count < MemoryLayout.size(ofValue: address.sun_path) else {
+            throw RFBLoopbackSocketError.invalidEndpoint("unix:\(path)")
+        }
+
+        let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard descriptor >= 0 else {
+            throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("socket"))
+        }
+        fileDescriptor = descriptor
+        applyTimeouts(seconds: timeoutSeconds)
+
+        address.sun_family = sa_family_t(AF_UNIX)
+        address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+        withUnsafeMutableBytes(of: &address.sun_path) { buffer in
+            buffer.copyBytes(from: pathBytes)
+        }
+        let result = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
+                Darwin.connect(fileDescriptor, sockaddrPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        guard result == 0 else {
+            let reason = Self.lastErrnoDescription("connect")
+            close()
+            throw RFBLoopbackSocketError.socketOperationFailed(reason)
+        }
+    }
+
+    /// Timeouts, and no SIGPIPE: a write after QEMU closed the connection otherwise kills Veil instead of
+    /// failing with EPIPE.
+    private func applyTimeouts(seconds: Int) {
+        var timeout = timeval(tv_sec: seconds, tv_usec: 0)
+        setsockopt(fileDescriptor, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(fileDescriptor, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        var noSigPipe: Int32 = 1
+        setsockopt(fileDescriptor, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
+    }
 
     public init(host: String, port: Int, timeoutSeconds: Int = 3) throws {
         guard port > 0 && port <= 65_535 else {
@@ -473,10 +565,7 @@ public final class RFBLoopbackSocket: RFBByteStream {
             throw RFBLoopbackSocketError.socketOperationFailed(Self.lastErrnoDescription("socket"))
         }
         fileDescriptor = descriptor
-
-        var timeout = timeval(tv_sec: timeoutSeconds, tv_usec: 0)
-        setsockopt(fileDescriptor, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
-        setsockopt(fileDescriptor, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        applyTimeouts(seconds: timeoutSeconds)
 
         var address = sockaddr_in()
         address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
