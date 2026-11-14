@@ -172,25 +172,68 @@ extension VeilHostShellApp {
             hasObservedLiveAgentConnection = false
             activateMainWindow()
             displayMessage = String(localized: "Shutting down Windows. Windows may ask to save changes or finish updates first.")
-            let poweredOff = await shutDownWindowsGracefully()
+            let outcome = await shutDownWindowsGracefully()
+            // Windows still running past the deadline is usually waiting on the user: an app asking to
+            // save a document, or an update. Turning it off then loses that work, so Veil asks first.
+            if let outcome, !outcome.poweredOff, vmModel.snapshot?.state == .running {
+                switch confirmForcedWindowsStop() {
+                case .turnOff:
+                    break
+                case .showWindows:
+                    shellNavigation.showsWindowsDesktop = true
+                    activateMainWindow()
+                    displayMessage = String(localized: "Windows is still running. Finish what it is waiting for, then stop it again.")
+                    return
+                case .keepRunning:
+                    displayMessage = String(localized: "Windows is still running.")
+                    return
+                }
+            }
             await vmModel.stop()
             qemuConsoleWindowPresenter.closeConsole()
 
             if vmModel.snapshot?.state == .stopped {
                 windowsAppWindowPresenter.closeAll()
-                displayMessage = poweredOff
-                    ? String(localized: "Windows shut down.")
-                    : String(localized: "Windows did not shut down in time, so Veil turned it off.")
+                displayMessage = outcome?.poweredOff == false
+                    ? String(localized: "Windows did not shut down, so Veil turned it off.")
+                    : String(localized: "Windows shut down.")
             }
         }
     }
 
-    /// Shuts Windows down before the VM is turned off; see `GracefulWindowsShutdown`. Returns
-    /// false when Windows never powered off and the caller has to turn it off.
+    enum ForcedWindowsStopChoice {
+        case turnOff
+        case showWindows
+        case keepRunning
+    }
+
+    /// Asked only after the user chose Stop and Windows did not shut down by itself.
     @MainActor
-    func shutDownWindowsGracefully() async -> Bool {
+    func confirmForcedWindowsStop() -> ForcedWindowsStopChoice {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = String(localized: "Windows Did Not Shut Down")
+        alert.informativeText = String(localized: "Windows may be waiting for you to save a document or close an app. Turning it off now loses anything that is not saved.")
+        alert.addButton(withTitle: String(localized: "Show Windows"))
+        alert.addButton(withTitle: String(localized: "Keep Running"))
+        let turnOff = alert.addButton(withTitle: String(localized: "Turn Off"))
+        turnOff.hasDestructiveAction = true
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return .showWindows
+        case .alertThirdButtonReturn:
+            return .turnOff
+        default:
+            return .keepRunning
+        }
+    }
+
+    /// Shuts Windows down before the VM is turned off; see `GracefulWindowsShutdown`. Nil when Windows
+    /// was not running, so there was nothing to shut down.
+    @MainActor
+    func shutDownWindowsGracefully() async -> GracefulWindowsShutdown.Outcome? {
         guard vmModel.snapshot?.state == .running else {
-            return false
+            return nil
         }
         let launch = vmModel.snapshot?.latestConsoleLaunch
         let completionProbe = launch?.pid.map {
@@ -214,7 +257,7 @@ extension VeilHostShellApp {
                 }.value
             }
         )
-        return outcome.poweredOff
+        return outcome
     }
 
     /// The quiet policy resolved against the live VM snapshot.
@@ -252,7 +295,13 @@ extension VeilHostShellApp {
             displayMessage = "Windows could not be suspended, so it is shutting down instead."
         }
 
-        _ = await shutDownWindowsGracefully()
+        // Never turned off from here: this runs on its own when the last app window closes, with nobody
+        // asked, and a Windows that did not shut down may be holding unsaved work.
+        if let outcome = await shutDownWindowsGracefully(), !outcome.poweredOff,
+           vmModel.snapshot?.state == .running {
+            displayMessage = String(localized: "Windows did not shut down by itself, so Veil left it running.")
+            return
+        }
         await vmModel.stop()
         if vmModel.snapshot?.state == .stopped {
             displayMessage = "Windows is quiet. No Windows app windows are open."
