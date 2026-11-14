@@ -11,6 +11,8 @@ name: Release
 #   APPLE_API_KEY_P8            base64 App Store Connect API key (.p8) for notarytool
 #   APPLE_API_KEY_ID            its key ID
 #   APPLE_API_ISSUER_ID         its issuer ID
+#   SPARKLE_ED_PRIVATE_KEY      EdDSA private key for Veil's own updates (docs/release-updates.md); with it
+#                               and the signing secrets, the release is also published to the update feed
 
 on:
   push:
@@ -30,6 +32,7 @@ jobs:
     env:
       VERSION: ${{ inputs.version || github.ref_name }}
       HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12 != '' && secrets.APPLE_API_KEY_P8 != '' }}
+      HAS_UPDATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -113,6 +116,18 @@ jobs:
           cp dist/release/sources/SOURCES.md dist/assets/SOURCES.md
           (cd dist/assets && shasum -a 256 Veil-* SOURCES.md > SHA256SUMS.txt)
 
+      # Only a notarized build goes to the update feed: an update replaces Veil on the user's Mac, and
+      # Gatekeeper would refuse an ad-hoc one there anyway.
+      - name: Update feed
+        if: env.HAS_SIGNING == 'true' && env.HAS_UPDATE_KEY == 'true'
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          echo "$SPARKLE_ED_PRIVATE_KEY" | ./script/make_appcast.sh \
+            "dist/assets/Veil-$VEIL_RELEASE_VERSION.zip" "$VEIL_RELEASE_VERSION" "$VEIL_RELEASE_BUILD" \
+            "https://github.com/${{ github.repository }}/releases/download/$TAG/Veil-$VEIL_RELEASE_VERSION.zip" \
+            dist/appcast.xml
+
       - name: Release notes
         run: |
           {
@@ -142,6 +157,20 @@ jobs:
             [[ "$VEIL_RELEASE_VERSION" == 0.* ]] && flags+=(--prerelease)
             gh release create "$TAG" dist/assets/* "${flags[@]}"
           fi
+
+      # The feed lives at a fixed URL, an asset of the "appcast" release, because 0.x releases are
+      # pre-releases and GitHub's releases/latest skips those.
+      - name: Publish update feed
+        if: env.HAS_SIGNING == 'true' && env.HAS_UPDATE_KEY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view appcast >/dev/null 2>&1; then
+            gh release create appcast --prerelease --title "Veil update feed" \
+              --notes "Sparkle update feed for Veil. Not a release; download Veil from the newest versioned release." \
+              --target "$GITHUB_SHA"
+          fi
+          gh release upload appcast dist/appcast.xml --clobber
 
       - name: Remove signing keychain
         if: always() && env.HAS_SIGNING == 'true'
