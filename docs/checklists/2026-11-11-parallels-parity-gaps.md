@@ -468,8 +468,11 @@ or moved in Windows.
   showed this account the arguments of root's processes, so other accounts can read QEMU's. An agent that
   finds the token refuses connections without it (401); without it, as before.
 - Checked headless: the bundled QEMU 11.1.3 accepts the option with a path holding spaces and a doubled
-  comma. Not checked: that Windows on the `virt` machine sees the OEM string, which needs a Windows cold
-  boot. If it does not, the agent finds no token and nothing changes.
+  comma. A separate empty `virt` machine (TCG, the bundled EDK2 firmware, a test token) showed the string
+  in the firmware's SMBIOS 3.0 table: `smbiosview -t 11` in the UEFI shell listed one type 11 structure,
+  length 5, holding `org.uulab.veil.agent-token=<token>`. Windows reads SMBIOS from that table; the agent
+  test `ReadsTheStructureQemuWritesForTheTokenFile` parses those exact bytes. Not yet seen in Windows
+  itself, which needs Windows started again from Veil.
 - Takes effect only with all three: Veil relaunched (sends the header), the agent updated (checks it), and
   Windows restarted (reads the tables). The order does not matter; none of them alone locks Veil out.
 

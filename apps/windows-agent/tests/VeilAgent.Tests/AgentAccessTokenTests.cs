@@ -66,4 +66,17 @@ public sealed class AgentAccessTokenTests
         Assert.Empty(AgentAccessToken.OemStrings(table));
         Assert.Empty(AgentAccessToken.OemStrings([11, 2]));
     }
+
+    [Fact]
+    public void ReadsTheStructureQemuWritesForTheTokenFile()
+    {
+        // Type 11 as the bundled QEMU 11.1.3 and its EDK2 firmware laid it out for
+        // -smbios type=11,path=<token file>, dumped with the UEFI shell's smbiosview -t 11 on 2026-11-14.
+        var table = new List<byte> { 0x0B, 0x05, 0x00, 0x0E, 0x01 };
+        table.AddRange(Encoding.ASCII.GetBytes(AgentAccessToken.OemStringPrefix + Token));
+        table.AddRange([0x00, 0x00]);
+        table.AddRange([127, 4, 0xFF, 0xFE, 0, 0]);
+
+        Assert.Equal(Token, AgentAccessToken.FromOemStrings(AgentAccessToken.OemStrings(table.ToArray())));
+    }
 }
