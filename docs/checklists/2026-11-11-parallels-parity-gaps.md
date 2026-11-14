@@ -422,3 +422,18 @@ so that item was not a bug. Still open:
 - The event and frame queues from the guest are bounded by message count, not bytes.
 - The system disk is opened with `file.locking=off`; only a process listing keeps two QEMUs off one disk.
 - Quitting Veil without "suspend on quit" leaves QEMU running, by design, without saying so.
+
+## Tenth relaunch on 2026-11-14
+
+Veil only, in the background, with the user's go-ahead; the agent was not updated (still `e9d8f78b0ac0`)
+and nothing was opened or moved in Windows.
+
+- Veil did not come to the front, the three Mac windows opened where they were, and the main window stayed
+  off screen. The running QEMU keeps its TCP display port until Windows next starts.
+- No disk space pause: the Mac volume has far more than 2 GiB free.
+- **The guest clock loses the time the Mac sleeps.** It was 669 ms off at 22:09 on 2026-11-13, 3.4 hours
+  off at 12:47, and 9.6 hours off after the Mac woke at 19:12; `pmset` shows the Mac asleep in between.
+  The guest's clock does not run while the Mac sleeps, and the agent cannot set it without the elevated
+  `VeilTimeSync` task, so every wake reports `install-time-sync-task-elevated`. The 2026-11-13 correction
+  came from Windows itself. Set Windows Clock now shows in the Veil menu; using it once registers the task,
+  after which the wake sync corrects the clock.
