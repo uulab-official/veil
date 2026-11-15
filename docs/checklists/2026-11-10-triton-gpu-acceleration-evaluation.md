@@ -461,3 +461,24 @@ arguments:
    1024x768 at 75 Hz and Paint drew at 66 frames/s, so Veil now asks for a restart when the install ends.
 
 The clone was then removed. `~/VeilTriton/vm2` remains as the Triton test disk.
+
+## First switch on the user's Windows (2026-11-15): two gaps found, nothing changed
+
+The clone checks above started QEMU from a script, so they never went through Veil's own start path. The
+first switch on the user's Windows did, and it stopped twice:
+
+1. **The shutdown was cancelled, and the agent stayed dead.** `system.shutdown.request` runs
+   `shutdown /s /t 0` without `/f`. An unsaved Notepad document cancelled it, as it should, and Windows
+   returned to the lock screen, but it had already closed the agent. Unlocking continues the same session,
+   so the agent's logon-only task never ran again. The power button (`system_powerdown`) is ignored at the
+   lock screen. Windows was finally shut down from the sign-in screen's power menu, after the user had saved
+   the document. Fix: the install and repair scripts also start the agent on session unlock (commit
+   `e54f1dcb`); existing Windows installs get the trigger with the next tools update.
+2. **Veil refused to start the GPU plan.** The readiness doctor matched `-accel hvf` and
+   `tpm-tis-device,tpmdev=tpm0,ppi=off` exactly. The GPU plan uses `hvf,ipa-granule-size=0x1000` and drops
+   `ppi=off`, so every GPU start ended in "Install swtpm locally" before QEMU ran. Fix: the checks accept
+   both forms, and a test runs the doctor over a GPU plan (commit `1811645b`).
+
+The backup had been taken (`Backups/before-gpu-20261115-134427`). The profile was set back to software, and
+Windows started again on the software runtime with its disk unchanged. The switch needs a Veil build with
+`1811645b`, so a relaunch, and then the same steps again.
