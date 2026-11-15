@@ -20,7 +20,7 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
 | 10 | Notifications | Implemented (unit) | Delivery on the live guest is unchecked. |
 | 11 | Network | Partial | NAT and port forwarding work. Bridged networking needs Apple's vmnet entitlement. |
 | 12 | Time, battery, dark mode sync | Implemented (live, partly) | Time: `time.sync.request` on agent connect, Mac wake, and session resume; correcting the clock needs the elevated-install `VeilTimeSync` task. Dark mode: `appearance.set.request`, on by default. Battery: not feasible, because QEMU `virt` has no ACPI battery (`docs/research/guest-host-state-sync.md`). Live, with agent `0.1.0+92b4061b37aa`: the agent reports `timeSync` and `appearanceSync`; with the Mac in dark mode Windows was already dark (`changed: false`), and the guest clock was 159 ms from the Mac's. Correcting a skewed clock and switching while Veil runs are unchecked. |
-| 13 | DirectX acceleration | Missing (experiment measured) | Software rendering (WARP): Paint at 23.5 fps, DWM presents 40.6 ms apart. With Triton on the same VM: 72 fps and 13.6 ms (the 75 Hz cap). Not shippable yet: with the driver installed Windows does not shut down, and the default runtime shows no display. The VM was restored to `snapshots/pre-triton-20261111-1506`. Both snapshot disk images were deleted on 2026-11-13 (see the 2026-11-15 section), so a new experiment starts from a fresh copy. |
+| 13 | DirectX acceleration | Missing (experiment measured) | Software rendering (WARP): Paint at 23.5 fps, DWM presents 40.6 ms apart. With Triton on the same VM: 72 fps and 13.6 ms (the 75 Hz cap). Not shippable yet: the default runtime shows no display once the driver is installed, Retina modes are missing, and upstream issue #20 is unresolved. The shutdown blocker turned out to be an unsaved Paint document, not the driver (retested 2026-11-15). The VM was restored to `snapshots/pre-triton-20261111-1506`. Both snapshot disk images were deleted on 2026-11-13 (see the 2026-11-15 section), so a new experiment starts from a fresh copy. |
 | 14 | Dynamic memory | Blocked (live) | The host side is done, but virtio-win 0.1.302's ARM64 Balloon driver gives wrong buffer addresses. Reported as virtio-win/kvm-guest-drivers-windows#1719. |
 
 ## Order of work
@@ -501,8 +501,8 @@ service, or work outside this repository:
   current app is ad-hoc signed.
 - **Updates of Veil itself.** There is no in-app update channel; it needs a decision on where releases are
   hosted.
-- **GPU acceleration** (gap 13): Triton measured 72 fps against 23.5 with WARP, but Windows does not shut
-  down with its driver.
+- **GPU acceleration** (gap 13): Triton measured 72 fps against 23.5 with WARP. The 2026-11-15 retest
+  showed it shuts down normally; driver lock-in to the Triton runtime and the mode list remain.
 - **Guest access to the Mac's loopback interface.** QEMU 11.1.3's user networking has no option to refuse
   it (`-netdev user` help lists none); closing it means patching libslirp's `disable_host_loopback` into
   the bundled QEMU and serving the shared folder through a fixed `guestfwd` instead.

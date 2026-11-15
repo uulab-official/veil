@@ -348,3 +348,53 @@ with them the main disk file, which was restored live from the running QEMU (see
 2026-11-15). The revert and "go back to the Triton state" commands above no longer work. A new Triton run
 has to clone the live disk while Windows is shut down, which needs the user's go-ahead. Upstream had no
 newer driver than v0.5 and no shutdown report on 2026-11-15.
+
+## Retest 2026-11-15: the shutdown blocker was an unsaved Paint document
+
+Setup: an APFS clone of the live disk (`~/VeilTriton/vm2`, taken while Windows ran, so crash-consistent)
+with copies of its UEFI variables and TPM state, booted on the same Triton QEMU next to the user's VM
+(`~/VeilTriton/run-triton-clone.sh`: agent forwarded to 127.0.0.1:28444, VNC and QMP on Unix sockets in a
+0700 folder, no Mac window). The user's VM was not touched. v0.5 `viogpu3d` was installed the same way as
+before (Command Prompt opened through the agent, `start -verb runas install.cmd`, UAC consent with Alt+Y;
+no credentials), and `VerboseStatus` was turned on so the screen names each shutdown stage.
+
+| Run | Config | Before the shutdown | Result |
+|---|---|---|---|
+| 1 | 4 vCPU, 8 GiB, no balloon | driver just installed, no reboot | powered off in about 5 s (QEMU exit 0) |
+| 2 | 4 vCPU, 8 GiB, no balloon | rebooted, driver loaded from boot | powered off in about 5 s |
+| 3 | 8 vCPU, 16 GiB, balloon (Veil's config) | 90 s drawing in Paint at 70.8 frames/s, Paint closed with "저장하지 않음" | powered off in about 6 s |
+| 4 | same | 20 s drawing in Paint, **Paint left open with the drawing unsaved** | **did not power off** |
+
+All shutdowns were `system.shutdown.request` through the agent, as Veil sends it (`shutdown /s /t 0`,
+without `/f`). Run 4 showed "1개 앱을 닫고 종료합니다" with Paint listed and [종료]/[취소]. With no one to answer,
+Windows cancelled the shutdown and came back to the lock screen; after that the ACPI power button did
+nothing. These are exactly the symptoms recorded on 2026-11-11, when every shutdown came after the Paint
+benchmark had drawn in an unsaved document. Through all of run 4 the virtio-gpu control queue was empty
+(`x-query-virtio-queue-status`: `inuse 0`, used index = available index), and the render servers stayed
+alive. Neither the guest nor the host GPU path was stuck.
+
+**Conclusion: viogpu3d v0.5 does not stop Windows from shutting down.** Blocker 1 in the Recommendation
+is withdrawn. Veil's stop path already handles an app that asks to save first: it waits, then offers
+"Show Windows" or "Turn Off".
+
+Also seen:
+
+- Mirrored Paint ran at 70.8 and 70.2 frames/s on the clone, the same as the 2026-11-11 measurement.
+- Before the driver the QEMU screendump of the GL scanout was all black, even though the agent captured
+  windows normally. After the driver, Metal scanouts read back correctly. This only affects diagnostics.
+- Before the driver, `display.resize.request` refused 1280x800 and 1024x768 too. The mode list is still a
+  blocker (Retina sizes).
+
+Blockers that remain before an opt-in GPU mode:
+
+1. **Driver lock-in.** The disk only shows a display on the Triton runtime once viogpu3d is installed, so
+   Veil has to start that VM with the Triton QEMU every time. That means a second QEMU in `Runtime/`, a boot
+   plan variant, and porting or replacing `veil-shm-display`.
+2. **Mode list.** No 2048x1280 and no 120 Hz.
+3. **Signing.** Ship osy's attestation-signed v0.5 as-is, or get attestation signing for a patched build.
+4. **Upstream `osy/kvm-guest-drivers-windows#20`** (open): shared surfaces of closed windows are not
+   released while DWM runs. A long session may grow host memory until DWM restarts. This needs a soak
+   test before shipping.
+
+`~/VeilTriton/vm2` keeps the clone with viogpu3d installed (stopped with QMP `quit` from the lock screen,
+so it is crash-consistent). It is the Triton disk for the next run.
