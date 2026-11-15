@@ -225,6 +225,18 @@ with nothing run inside Windows:
 `agentSeconds` is the agent process's own time. `idleSeconds` and `busySeconds` are for all of Windows,
 summed over its processors, from [GetSystemTimes](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-getsystemtimes).
 
+`layoutWake` is optional and diagnostic. It says whether WinEvent hooks wake the layout scan when Windows
+changes a top-level window, how many such changes they have reported since the agent started, and how many
+scans a change started before the poll was due. `hooks: false` means the agent polls only:
+
+```json
+"layoutWake": {
+  "hooks": true,
+  "windowChanges": 1834,
+  "wokenScans": 211
+}
+```
+
 `frameCapture` is optional and diagnostic. It reports how long each step of a mirrored frame capture
 took in the guest, so the host can see where frame time goes without reading guest logs:
 
