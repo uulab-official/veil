@@ -81,6 +81,32 @@ struct QEMUGPURuntimeTests {
         #expect(!arguments.contains("veil-shm-display,id=veilfb,path=/tmp/q.fb.sock"))
     }
 
+    @Test("Veil's readiness check accepts a GPU plan")
+    func readinessAcceptsGPUPlan() throws {
+        var profile = Self.profile(.gpu)
+        profile.installerMediaPath = "/Users/test/Win11.iso"
+        profile.virtualDiskPath = "/Users/test/VM/Windows 11 Arm.img"
+        profile.sharedFolderPath = "/Users/test/Veil Shared"
+        let planner = QEMUWindowsBootPlanner(
+            executablePath: "/Veil.app/Contents/Resources/Runtime/bin/qemu-system-aarch64",
+            isExecutableAvailable: true,
+            firmwarePath: "/Veil.app/Contents/Resources/Runtime/share/qemu/edk2-aarch64-code.fd",
+            isFirmwareAvailable: true,
+            firmwareVarsTemplatePath: "/Veil.app/Contents/Resources/Runtime/share/qemu/edk2-arm-vars.fd",
+            isFirmwareVarsTemplateAvailable: true,
+            firmwareVarsPath: "/Users/test/VM/uefi-vars.fd",
+            isSecureBootFirmwareAvailable: false,
+            tpmEmulatorPath: "/Veil.app/Contents/Resources/Runtime/bin/swtpm",
+            isTPMEmulatorAvailable: true,
+            tpmStateDirectoryPath: "/Users/test/VM/tpm"
+        )
+        let plan = QEMUGPURuntime.applying(to: try planner.makePlan(for: profile), profile: profile, runtime: Self.runtime)
+        let report = QEMUWindowsReadinessDoctor(fileExists: { _ in true }).makeReport(profile: profile, plan: plan)
+        let blocked = report.checks.filter { $0.state == .blocked }.map(\.id)
+        #expect(blocked.isEmpty, "blocked: \(blocked)")
+        #expect(report.overallState == .ready)
+    }
+
     @Test("The runtime is complete only with QEMU, the render server and DXMT")
     func completeness() {
         let present: Set<String> = [

@@ -1076,7 +1076,8 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
             )
         }
 
-        guard plan.arguments.containsSequence(["-accel", "hvf"]) else {
+        // The GPU runtime adds options (`hvf,ipa-granule-size=0x1000`); any HVF accelerator counts.
+        guard plan.arguments.containsOption("-accel", where: { $0 == "hvf" || $0.hasPrefix("hvf,") }) else {
             return QEMUWindowsReadinessCheck(
                 id: "hvf-plan",
                 title: "HVF command plan",
@@ -1184,7 +1185,10 @@ public struct QEMUWindowsReadinessDoctor: Sendable {
         }
 
         guard plan.arguments.containsSequence(["-tpmdev", "emulator,id=tpm0,chardev=chrtpm"]),
-              plan.arguments.containsSequence(["-device", "tpm-tis-device,tpmdev=tpm0,ppi=off"]) else {
+              // The GPU runtime's QEMU 10.0 has no `ppi` property, so its TPM device drops `ppi=off`.
+              plan.arguments.containsOption("-device", where: {
+                  $0 == "tpm-tis-device,tpmdev=tpm0,ppi=off" || $0 == "tpm-tis-device,tpmdev=tpm0"
+              }) else {
             return QEMUWindowsReadinessCheck(
                 id: "tpm-emulator",
                 title: "TPM 2.0 emulator",
@@ -2357,6 +2361,11 @@ private enum QEMUQMPCommandJSONEncoder {
 }
 
 private extension [String] {
+    /// Whether `flag` is followed by a value `matches` accepts.
+    func containsOption(_ flag: String, where matches: (String) -> Bool) -> Bool {
+        indices.dropLast().contains { self[$0] == flag && matches(self[$0 + 1]) }
+    }
+
     func containsSequence(_ sequence: [String]) -> Bool {
         guard !sequence.isEmpty, count >= sequence.count else {
             return false
