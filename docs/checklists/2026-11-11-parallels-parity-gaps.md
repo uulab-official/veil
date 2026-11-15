@@ -562,4 +562,15 @@ In the background, with the user's go-ahead; nothing was opened or moved in Wind
 - `window.layout` still answers, with each guest window where its Mac window is (Notepad at 605,330, where
   the user had dropped it). Veil did not come to the front; the three Mac windows opened where they were.
 - Not seen: the hooks firing. That needs a window to move in Windows, which only the user does; if the
-  hooks could not be set, the agent logs it and keeps polling as before.
+  hooks could not be set, the agent logs it and keeps polling as before. (Seen in the sixteenth relaunch.)
+
+## Sixteenth relaunch and agent update on 2026-11-15
+
+In the background, with the user's go-ahead; nothing was opened or moved in Windows.
+
+- The agent went from `4a487fa4c00c` to `561da14611f0`, which reports `layoutWake` in health.
+- **The WinEvent hooks work on the live Windows 11 Arm guest**: `hooks: true`, and since the agent started,
+  34 top-level window changes (the windows being placed as Veil reconnected) woke 16 scans before the poll
+  was due. Thirty seconds at rest added none, so idle Windows does not keep waking the scan.
+- At rest Windows used 13% of one core and the agent 6.2%, as before. Veil did not come to the front; the
+  three Mac windows opened where they were.
