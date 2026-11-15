@@ -550,3 +550,16 @@ frame and it settles, at most a second. Unit-tested; Veil was relaunched with it
 in the background, Veil not brought forward, agent connected). Whether the flash is gone needs the user
 to drag a window. Moves Windows makes by itself, such as snapping, are not announced to Veil and can still
 show it for a frame.
+
+## Fifteenth relaunch and agent update on 2026-11-15
+
+In the background, with the user's go-ahead; nothing was opened or moved in Windows.
+
+- The agent went from `909fa2217f50` to `4a487fa4c00c`, which wakes the layout scan on WinEvents for
+  top-level windows (`WindowChangeSignal`), no more often than the 8 ms fast pace.
+- **No extra cost at rest**: over 20 seconds Windows used 12% of one core and the agent 5.9%, against 14%
+  and 6.9% just before the update.
+- `window.layout` still answers, with each guest window where its Mac window is (Notepad at 605,330, where
+  the user had dropped it). Veil did not come to the front; the three Mac windows opened where they were.
+- Not seen: the hooks firing. That needs a window to move in Windows, which only the user does; if the
+  hooks could not be set, the agent logs it and keeps polling as before.
