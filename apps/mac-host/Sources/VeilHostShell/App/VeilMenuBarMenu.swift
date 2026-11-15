@@ -62,6 +62,11 @@ struct VeilMenuBarMenu: View {
 
         Label(primaryAction.statusTitle, systemImage: primaryAction.symbolName)
 
+        if let issue = vmModel.systemDiskFileIssue {
+            Label(WindowsShellCopy.deletedDiskMenuTitle(issue), systemImage: "exclamationmark.triangle")
+                .help("Do not shut down Windows until Veil has put its disk back.")
+        }
+
         if let available = vmModel.lowDiskSpacePauseAvailableBytes {
             Label(
                 WindowsShellCopy.lowDiskSpacePauseTitle(availableBytes: available),

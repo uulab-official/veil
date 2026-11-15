@@ -140,6 +140,10 @@ extension VeilHostShellApp {
                 displayMessage = String(localized: "Windows cannot be suspended while your Mac's disk is almost full.")
                 return
             }
+            guard !isSystemDiskFileDeleted else {
+                displayMessage = WindowsShellCopy.deletedDiskBlocksPowerMessage
+                return
+            }
 
             cancelAutomaticQuietRuntime()
             cancelAutomaticRuntimeConnectionRecovery()
@@ -159,6 +163,11 @@ extension VeilHostShellApp {
         // Paused for disk space, Windows stays paused: suspending it would fill the volume, and the next
         // Veil continues it once there is room (the pause is recorded against the running QEMU).
         if isWindowsPausedForDiskSpace {
+            return true
+        }
+        // The disk file was deleted: Windows keeps running after Veil quits, and the next Veil finishes
+        // putting the file back. A suspend would end QEMU and erase Windows.
+        if isSystemDiskFileDeleted {
             return true
         }
         let action = StartupBehaviorPolicy.quitAction(
@@ -223,6 +232,10 @@ extension VeilHostShellApp {
             cancelAutomaticRuntimeConnectionRecovery()
             hasObservedLiveAgentConnection = false
             activateMainWindow()
+            guard !isSystemDiskFileDeleted else {
+                displayMessage = WindowsShellCopy.deletedDiskBlocksPowerMessage
+                return
+            }
             var outcome: GracefulWindowsShutdown.Outcome?
             if isWindowsPausedForDiskSpace {
                 // A paused Windows answers neither the tools nor the power button; waiting would only
@@ -383,8 +396,9 @@ extension VeilHostShellApp {
     /// things for the same state.
     @MainActor
     private func performQuietRuntime(_ quietRuntime: WindowsAppRuntimeQuietPolicyStatus) async {
-        guard !isWindowsPausedForDiskSpace else {
-            // Neither a suspend nor a shutdown can finish then; Windows stays paused.
+        guard !isWindowsPausedForDiskSpace, !isSystemDiskFileDeleted else {
+            // Neither a suspend nor a shutdown can finish while paused, and either erases a Windows whose
+            // disk file was deleted.
             return
         }
         cancelAutomaticRuntimeConnectionRecovery()

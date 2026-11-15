@@ -21,6 +21,9 @@ public final class VMRuntimeModel {
     /// Free space on the Mac volume holding the Windows disk, in bytes, while Veil keeps Windows paused
     /// because that volume is nearly full (`HostDiskSpaceGuard`); nil while it is not.
     public var lowDiskSpacePauseAvailableBytes: Int64?
+    /// Set while the running Windows' disk file is deleted on the Mac (`HostDiskFileGuard`): Veil is
+    /// putting it back, or could not. Windows must keep running until it is clear.
+    public var systemDiskFileIssue: HostDiskFileGuard.Issue?
     /// The running Windows' removable CD drive, as QEMU last reported it.
     public private(set) var removableMedia: VMRemovableMediaStatus?
 

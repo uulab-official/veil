@@ -128,6 +128,30 @@ enum WindowsShellCopy {
         return String(localized: "Only \(free) is free on the disk that holds Windows. Veil paused Windows so it cannot fail mid-write. Free up space and Windows continues by itself.")
     }
 
+    static let deletedDiskRestoringNotificationBody = String(localized: "The Windows disk file was deleted from your Mac. Veil is copying it back while Windows runs. Keep Windows running until this finishes: shutting it down now would erase it.")
+
+    static let deletedDiskRestoredNotificationBody = String(localized: "Veil put the deleted Windows disk file back where it was. Windows keeps running on it.")
+
+    static func deletedDiskNeedsSpaceNotificationBody(neededBytes: Int64) -> String {
+        let needed = ByteCountFormatter.string(fromByteCount: neededBytes, countStyle: .file)
+        return String(localized: "The Windows disk file was deleted from your Mac. Veil needs \(needed) free to copy it back. Free up space and keep Windows running: shutting it down now would erase it.")
+    }
+
+    static let deletedDiskFailedNotificationBody = String(localized: "The Windows disk file was deleted from your Mac and Veil could not copy it back yet. It tries again in a minute. Keep Windows running: shutting it down now would erase it.")
+
+    static func deletedDiskMenuTitle(_ issue: HostDiskFileGuard.Issue) -> String {
+        switch issue {
+        case .restoring:
+            String(localized: "Restoring Deleted Windows Disk…")
+        case .notEnoughSpace(let needed, _):
+            String(localized: "Windows Disk Deleted: \(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)) Needed to Restore")
+        case .failed:
+            String(localized: "Windows Disk Deleted: Keep Windows Running")
+        }
+    }
+
+    static let deletedDiskBlocksPowerMessage = String(localized: "The Windows disk file was deleted from your Mac. Windows keeps running until Veil has put it back, because turning it off now would erase it.")
+
     static func displayRecoveryStillStaleMessage(statusText: String) -> String {
         String(localized: "Display is still \(statusText). Refresh the Windows display before opening an app.")
     }

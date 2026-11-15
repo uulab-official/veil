@@ -178,6 +178,10 @@ extension LocalVMRuntimeService {
             latestLaunchRecord = nil
             launchRecordWasUnreadable = true
         }
+        // QEMU holds the only copy of a disk whose file was deleted; it must not exit before the copy is back.
+        if HostDiskFileGuard.missingDiskPath(launchRecord: latestLaunchRecord, processIsRunning: qemuLaunchProcessIsRunning) != nil {
+            throw VMRuntimeError.systemDiskFileDeleted
+        }
         await detachUSBDevicesBeforeShutdown(launchRecord: latestLaunchRecord)
         _ = try await bootRunner.stop()
         if let profile {
@@ -222,6 +226,10 @@ extension LocalVMRuntimeService {
             profile,
             accesses: securityScopedAccesses
         )
+
+        if await missingSystemDiskPath() != nil {
+            throw VMRuntimeError.systemDiskFileDeleted
+        }
 
         let startedAt = diagnosticDate()
         do {

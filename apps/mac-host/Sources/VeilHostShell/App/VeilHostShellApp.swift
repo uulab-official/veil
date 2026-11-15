@@ -40,6 +40,7 @@ struct VeilHostShellApp: App {
     @State var memoryBalloonTask: Task<Void, Never>?
     @State var diskSpaceGuardTask: Task<Void, Never>?
     @State var notifiedWrongGuestClock = false
+    @State var lastSystemDiskRestoreAttempt: Date?
     /// Whether the last shutdown request went through the tools rather than the power button; a second
     /// wait for it treats a finished-looking guest the same way the first did.
     @State var lastShutdownRequestedViaTools = false

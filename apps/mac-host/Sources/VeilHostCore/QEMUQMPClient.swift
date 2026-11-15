@@ -71,6 +71,13 @@ public enum QEMUQMPCommand: Equatable, Sendable {
     case queryBalloon
     /// The memory statistics the balloon driver last reported (`guest-stats`).
     case queryBalloonStatistics(deviceID: String)
+    /// Every drive, with the file each one reads and the bytes that file has allocated (`query-block`).
+    case queryBlock
+    /// Copies a drive into a new image at `targetPath`, created in `format`, while the guest keeps running.
+    /// Once the job is ready, `jobComplete` switches the drive to the copy. Throttled to `bytesPerSecond`.
+    case driveMirror(jobID: String, device: String, targetPath: String, format: String, bytesPerSecond: Int64)
+    /// Finishes a job that waits for it, such as a ready mirror (which then switches the drive over).
+    case jobComplete(jobID: String)
     case quit
 
     public var executeName: String {
@@ -119,6 +126,12 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "query-balloon"
         case .queryBalloonStatistics:
             "qom-get"
+        case .queryBlock:
+            "query-block"
+        case .driveMirror:
+            "drive-mirror"
+        case .jobComplete:
+            "job-complete"
         case .quit:
             "quit"
         }
@@ -171,6 +184,12 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "memory balloon size query"
         case .queryBalloonStatistics:
             "memory balloon statistics query"
+        case .queryBlock:
+            "drive query"
+        case .driveMirror(_, let device, _, _, _):
+            "copy of drive \(device)"
+        case .jobComplete(let jobID):
+            "completion of job \(jobID)"
         case .quit:
             "QEMU process quit"
         }
@@ -213,6 +232,20 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             return ["value": bytes]
         case .queryBalloonStatistics(let deviceID):
             return ["path": "/machine/peripheral/\(deviceID)", "property": "guest-stats"]
+        case .driveMirror(let jobID, let device, let targetPath, let format, let bytesPerSecond):
+            // `absolute-paths` has QEMU create the target itself, in the drive's own format; a full sync
+            // gives it no backing file.
+            return [
+                "job-id": jobID,
+                "device": device,
+                "target": targetPath,
+                "format": format,
+                "sync": "full",
+                "mode": "absolute-paths",
+                "speed": bytesPerSecond
+            ]
+        case .jobComplete(let jobID):
+            return ["id": jobID]
         default:
             return nil
         }
@@ -258,6 +291,8 @@ public struct QEMUQMPReply: Equatable, Sendable {
     /// `guest-stats` from the balloon device: each `stat-*` value plus `last-update`, in bytes and
     /// seconds since the epoch. QEMU reports a statistic the driver never sent as -1.
     public var balloonStatistics: [String: Int64]?
+    /// `query-block` entries with a medium inserted.
+    public var blockDevicesReturn: [QEMUQMPBlockDevice]?
 
     public init(
         id: String?,
@@ -270,7 +305,8 @@ public struct QEMUQMPReply: Equatable, Sendable {
         jobsReturn: [QEMUQMPJob]? = nil,
         boolReturn: Bool? = nil,
         balloonActualBytes: Int64? = nil,
-        balloonStatistics: [String: Int64]? = nil
+        balloonStatistics: [String: Int64]? = nil,
+        blockDevicesReturn: [QEMUQMPBlockDevice]? = nil
     ) {
         self.id = id
         self.isSuccess = isSuccess
@@ -283,6 +319,27 @@ public struct QEMUQMPReply: Equatable, Sendable {
         self.boolReturn = boolReturn
         self.balloonActualBytes = balloonActualBytes
         self.balloonStatistics = balloonStatistics
+        self.blockDevicesReturn = blockDevicesReturn
+    }
+}
+
+/// One drive from `query-block` that has a medium inserted.
+public struct QEMUQMPBlockDevice: Equatable, Sendable {
+    public var device: String
+    /// The image file the drive reads, as QEMU opened it. The path may no longer exist.
+    public var filename: String
+    /// The image format QEMU reads the file as, such as `raw` or `qcow2`.
+    public var format: String
+    /// Bytes the file has allocated on the Mac volume.
+    public var actualSize: Int64?
+    public var virtualSize: Int64?
+
+    public init(device: String, filename: String, format: String, actualSize: Int64? = nil, virtualSize: Int64? = nil) {
+        self.device = device
+        self.filename = filename
+        self.format = format
+        self.actualSize = actualSize
+        self.virtualSize = virtualSize
     }
 }
 
@@ -483,9 +540,31 @@ public struct QEMUQMPClient: QEMUQMPControlling {
                     },
                     boolReturn: boolReturn,
                     balloonActualBytes: (returnObject?["actual"] as? NSNumber)?.int64Value,
-                    balloonStatistics: balloonStatistics(from: returnObject)
+                    balloonStatistics: balloonStatistics(from: returnObject),
+                    blockDevicesReturn: blockDevices(from: returnValue)
                 )
             }
+    }
+
+    private static func blockDevices(from value: Any) -> [QEMUQMPBlockDevice]? {
+        guard let entries = value as? [[String: Any]], entries.contains(where: { $0["device"] != nil }) else {
+            return nil
+        }
+        return entries.compactMap { entry in
+            guard let device = entry["device"] as? String,
+                  let inserted = entry["inserted"] as? [String: Any],
+                  let filename = inserted["file"] as? String else {
+                return nil
+            }
+            let image = inserted["image"] as? [String: Any]
+            return QEMUQMPBlockDevice(
+                device: device,
+                filename: filename,
+                format: (image?["format"] as? String) ?? (inserted["drv"] as? String) ?? "raw",
+                actualSize: (image?["actual-size"] as? NSNumber)?.int64Value,
+                virtualSize: (image?["virtual-size"] as? NSNumber)?.int64Value
+            )
+        }
     }
 
     private static func balloonStatistics(from object: [String: Any]?) -> [String: Int64]? {

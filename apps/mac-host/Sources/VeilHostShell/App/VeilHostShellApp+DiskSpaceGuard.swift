@@ -26,8 +26,13 @@ extension VeilHostShellApp {
                     || (launchKey != nil && recordedOwner == launchKey)
                 // While an operation such as a suspend runs, the machine's state belongs to it.
                 guard vmModel.phase != .loading,
-                      pausedByGuard || vmModel.snapshot?.state == .running,
                       let service = vmModel.runtimeService as? LocalVMRuntimeService else {
+                    continue
+                }
+                if await guardDeletedSystemDisk(service) {
+                    continue
+                }
+                guard pausedByGuard || vmModel.snapshot?.state == .running else {
                     continue
                 }
                 await applyDiskSpaceGuard(await service.guardDiskSpace(pausedByGuard: pausedByGuard))
@@ -53,6 +58,66 @@ extension VeilHostShellApp {
             UserDefaults.standard.removeObject(forKey: Self.diskSpaceGuardPauseOwnerKey)
             await windowsNotificationPresenter.removeDelivered(identifier: Self.lowDiskSpaceNotificationIdentifier)
         }
+    }
+
+    /// Puts the Windows disk file back when it was deleted while Windows runs (`HostDiskFileGuard`).
+    /// Returns true while the file is missing, so nothing else acts on Windows until it is back.
+    private func guardDeletedSystemDisk(_ service: LocalVMRuntimeService) async -> Bool {
+        guard await service.missingSystemDiskPath() != nil else {
+            if vmModel.systemDiskFileIssue != nil {
+                vmModel.systemDiskFileIssue = nil
+                await windowsNotificationPresenter.removeDelivered(identifier: Self.deletedDiskNotificationIdentifier)
+            }
+            return false
+        }
+        // A copy that could not start is tried again now and then, not on every pass.
+        if vmModel.systemDiskFileIssue != nil,
+           let lastAttempt = lastSystemDiskRestoreAttempt,
+           Date().timeIntervalSince(lastAttempt) < Self.systemDiskRestoreRetrySeconds {
+            return true
+        }
+        lastSystemDiskRestoreAttempt = Date()
+        vmModel.systemDiskFileIssue = .restoring
+        await notifyDeletedDisk(body: WindowsShellCopy.deletedDiskRestoringNotificationBody)
+
+        switch await service.restoreMissingSystemDisk() {
+        case .present:
+            vmModel.systemDiskFileIssue = nil
+            await windowsNotificationPresenter.removeDelivered(identifier: Self.deletedDiskNotificationIdentifier)
+            return false
+        case .restored:
+            vmModel.systemDiskFileIssue = nil
+            await notifyDeletedDisk(body: WindowsShellCopy.deletedDiskRestoredNotificationBody)
+            return false
+        case .notEnoughSpace(let needed, let available):
+            vmModel.systemDiskFileIssue = .notEnoughSpace(neededBytes: needed, availableBytes: available)
+            await notifyDeletedDisk(body: WindowsShellCopy.deletedDiskNeedsSpaceNotificationBody(neededBytes: needed))
+            return true
+        case .failed(let reason):
+            vmModel.systemDiskFileIssue = .failed(reason: reason)
+            await notifyDeletedDisk(body: WindowsShellCopy.deletedDiskFailedNotificationBody)
+            return true
+        }
+    }
+
+    static let systemDiskRestoreRetrySeconds: TimeInterval = 60
+    static let deletedDiskNotificationIdentifier = "org.uulab.veil.deleted-system-disk"
+
+    /// Windows runs on a disk file that was deleted on the Mac and is not back yet. Shutting it down,
+    /// suspending it or turning it off would erase it.
+    var isSystemDiskFileDeleted: Bool {
+        vmModel.systemDiskFileIssue != nil
+    }
+
+    private func notifyDeletedDisk(body: String) async {
+        let request = WindowsNotificationPresentationRequest(
+            identifier: Self.deletedDiskNotificationIdentifier,
+            title: String(localized: "Windows Disk Was Deleted"),
+            body: body,
+            threadIdentifier: "org.uulab.veil.runtime",
+            userInfo: [:]
+        )
+        await windowsNotificationPresenter.presentHostNotice(request)
     }
 
     /// Which QEMU launch a recorded pause belongs to; see `HostDiskSpaceGuard.pauseOwnerKey`.

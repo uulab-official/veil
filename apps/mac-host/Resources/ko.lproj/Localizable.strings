@@ -835,3 +835,15 @@
 "Your Mac's disk is almost full, so Windows cannot shut down. Free up space and Windows continues by itself. Turning it off now loses anything that is not saved." = "Mac 디스크 공간이 거의 없어 Windows를 종료할 수 없습니다. 공간을 확보하면 Windows가 저절로 이어서 실행됩니다. 지금 전원을 끄면 저장하지 않은 내용이 사라집니다.";
 "Keep Paused" = "일시정지 유지";
 "Windows cannot be suspended while your Mac's disk is almost full." = "Mac 디스크 공간이 거의 없어 Windows를 일시 중단할 수 없습니다.";
+
+/* Deleted Windows disk file (HostDiskFileGuard) */
+"Windows Disk Was Deleted" = "Windows 디스크가 삭제됨";
+"The Windows disk file was deleted from your Mac. Veil is copying it back while Windows runs. Keep Windows running until this finishes: shutting it down now would erase it." = "Mac에서 Windows 디스크 파일이 삭제되었습니다. Veil이 Windows를 켜 둔 채로 디스크를 다시 복사하고 있습니다. 끝날 때까지 Windows를 끄지 마세요. 지금 끄면 Windows가 지워집니다.";
+"Veil put the deleted Windows disk file back where it was. Windows keeps running on it." = "삭제된 Windows 디스크 파일을 원래 위치에 되살렸습니다. Windows는 그대로 계속 실행됩니다.";
+"The Windows disk file was deleted from your Mac. Veil needs %@ free to copy it back. Free up space and keep Windows running: shutting it down now would erase it." = "Mac에서 Windows 디스크 파일이 삭제되었습니다. 되살리려면 %@의 여유 공간이 필요합니다. 공간을 확보하고 Windows는 켜 두세요. 지금 끄면 Windows가 지워집니다.";
+"The Windows disk file was deleted from your Mac and Veil could not copy it back yet. It tries again in a minute. Keep Windows running: shutting it down now would erase it." = "Mac에서 Windows 디스크 파일이 삭제되었고 아직 되살리지 못했습니다. 1분 뒤에 다시 시도합니다. Windows는 켜 두세요. 지금 끄면 Windows가 지워집니다.";
+"Restoring Deleted Windows Disk…" = "삭제된 Windows 디스크 되살리는 중…";
+"Windows Disk Deleted: %@ Needed to Restore" = "Windows 디스크 삭제됨: 되살리려면 %@ 필요";
+"Windows Disk Deleted: Keep Windows Running" = "Windows 디스크 삭제됨: Windows를 끄지 마세요";
+"The Windows disk file was deleted from your Mac. Windows keeps running until Veil has put it back, because turning it off now would erase it." = "Mac에서 Windows 디스크 파일이 삭제되었습니다. 지금 끄면 Windows가 지워지므로, Veil이 디스크를 되살릴 때까지 Windows는 계속 실행됩니다.";
+"Do not shut down Windows until Veil has put its disk back." = "Veil이 디스크를 되살릴 때까지 Windows를 끄지 마세요.";

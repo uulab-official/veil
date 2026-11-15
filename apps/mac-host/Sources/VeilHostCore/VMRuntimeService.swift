@@ -228,6 +228,9 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     case resourceMutationRequiresStoppedRuntime
     case suspendNotSupported
     case restartInstallationRequiresUninstalledWindows
+    /// The running Windows' disk file was deleted on the Mac. Ending QEMU now would lose Windows; see
+    /// `HostDiskFileGuard`.
+    case systemDiskFileDeleted
 
     public var errorDescription: String? {
         switch self {
@@ -255,6 +258,8 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
             "The active local VM runtime provider cannot suspend a Windows session yet. Stop the VM instead."
         case .restartInstallationRequiresUninstalledWindows:
             "Windows is already installed on this disk, so Veil won't erase it to restart the installation."
+        case .systemDiskFileDeleted:
+            "The Windows disk file was deleted from your Mac while Windows runs. Windows keeps running until Veil has put the disk back, because turning it off now would erase it."
         }
     }
 }
