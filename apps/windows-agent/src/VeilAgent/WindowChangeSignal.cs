@@ -21,6 +21,10 @@ namespace Veil.Agent;
 /// </remarks>
 public sealed class WindowChangeSignal : IDisposable
 {
+    private static int hooksActive;
+    private static long windowChanges;
+    private static long wokenScans;
+
     private readonly object gate = new();
     private TaskCompletionSource signal = NewSource();
     private Thread? thread;
@@ -62,6 +66,20 @@ public sealed class WindowChangeSignal : IDisposable
         fired.TrySetResult();
     }
 
+    /// <summary>
+    /// Diagnostic and optional, for health: whether the hooks are set, how many top-level window changes
+    /// they reported, and how many layout scans a change started before the poll was due.
+    /// </summary>
+    public static System.Text.Json.Nodes.JsonObject Snapshot() => new()
+    {
+        ["hooks"] = Volatile.Read(ref hooksActive) == 1,
+        ["windowChanges"] = Interlocked.Read(ref windowChanges),
+        ["wokenScans"] = Interlocked.Read(ref wokenScans),
+    };
+
+    /// <summary>Counts a layout scan a change started; called by <see cref="WindowLayoutStreamer"/>.</summary>
+    internal static void NoteWokenScan() => Interlocked.Increment(ref wokenScans);
+
     /// <summary>Whether a WinEvent names a change to a top-level window's placement or visibility.</summary>
     public static bool IsWindowChange(int idObject, int idChild, bool isTopLevel) =>
         idObject == ObjidWindow && idChild == ChildidSelf && isTopLevel;
@@ -91,6 +109,7 @@ public sealed class WindowChangeSignal : IDisposable
             Console.Error.WriteLine("WindowChangeSignal: no WinEvent hook could be set; layout falls back to polling.");
             return;
         }
+        Volatile.Write(ref hooksActive, 1);
 
         try
         {
@@ -102,6 +121,7 @@ public sealed class WindowChangeSignal : IDisposable
         }
         finally
         {
+            Volatile.Write(ref hooksActive, 0);
             if (systemHook != 0)
             {
                 UnhookWinEvent(systemHook);
@@ -121,6 +141,7 @@ public sealed class WindowChangeSignal : IDisposable
         }
         if (IsWindowChange(idObject, idChild, GetAncestor(hwnd, GaRoot) == hwnd))
         {
+            Interlocked.Increment(ref windowChanges);
             Raise();
         }
     }

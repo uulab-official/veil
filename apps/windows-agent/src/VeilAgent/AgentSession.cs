@@ -1250,6 +1250,8 @@ public sealed class AgentSession
         // Also diagnostic and optional: how much processor time the agent and all of Windows have used, so
         // the cost of mirroring inside the guest can be read from two health answers a few seconds apart.
         response["processor"] = ProcessorDiagnostics.Snapshot();
+        // Also diagnostic: whether window changes wake the layout scan, and how often they have.
+        response["layoutWake"] = WindowChangeSignal.Snapshot();
         return response;
     }
 

@@ -67,4 +67,14 @@ public sealed class WindowChangeSignalTests
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stream);
     }
+
+    [Fact]
+    public void HealthReportsTheHooksAndTheirCounts()
+    {
+        var snapshot = WindowChangeSignal.Snapshot();
+        // Off Windows no hook is ever set.
+        Assert.False((bool?)snapshot["hooks"]);
+        Assert.NotNull(snapshot["windowChanges"]);
+        Assert.NotNull(snapshot["wokenScans"]);
+    }
 }

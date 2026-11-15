@@ -99,6 +99,7 @@ public sealed class WindowLayoutStreamer
             var sleep = delay(interval, iteration.Token);
             if (await Task.WhenAny(sleep, changed) == changed && !cancellationToken.IsCancellationRequested)
             {
+                WindowChangeSignal.NoteWokenScan();
                 var remaining = MinimumWakeInterval - sinceScan.Elapsed;
                 if (remaining > TimeSpan.Zero)
                 {
