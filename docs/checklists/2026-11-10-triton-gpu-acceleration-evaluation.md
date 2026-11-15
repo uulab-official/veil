@@ -398,3 +398,43 @@ Blockers that remain before an opt-in GPU mode:
 
 `~/VeilTriton/vm2` keeps the clone with viogpu3d installed (stopped with QMP `quit` from the lock screen,
 so it is crash-consistent). It is the Triton disk for the next run.
+
+## Opt-in GPU mode in Veil (2026-11-15)
+
+First implementation, on `refactor/split-large-files`:
+
+- **Setting.** `VMProfile.graphicsAcceleration` (`software` by default, `gpu`) is under Configuration >
+  Hardware > Graphics as "Draw Windows on the Mac's GPU". The switch can only change while Windows is shut
+  down, and only when the app carries the GPU runtime.
+- **Restore point.** Turning it on first takes `VMGraphicsBackup`: an APFS clone of the system disk plus
+  copies of the UEFI variables and the TPM state files, in `<machine folder>/Backups/before-gpu-<UTC time>`.
+  A volume without clones refuses it. Turning it off asks whether to go back to that copy (needed once
+  Windows has `viogpu3d`) or keep the current Windows (for one that never installed it).
+- **Runtime.** `QEMUGPURuntime` changes the software plan for `Contents/Resources/RuntimeGPU`:
+  `-accel hvf,ipa-granule-size=0x1000`, one `virtio-ramfb-gl,hostmem=8G,blob=true,venus=false,neptune=true`
+  in place of `ramfb`/`virtio-gpu-pci`, `-display egl-headless,gl=es` (kept by the launch planner), and the
+  TPM without `ppi=off`. QEMU gets `RENDER_SERVER_EXEC_PATH`, `NPT_D3D11_LIBRARY_PATH`, `NPT_BACKEND=dxmt`
+  and `ANGLE_DEFAULT_PLATFORM=metal`. No `DYLD_` variable is needed: the bundle adds an `LC_RPATH` to `lib/`,
+  where dyld looks up libepoxy's `dlopen("libEGL.dylib")` and Neptune's DXMT. A GPU profile on an app
+  without the runtime does not start, because falling back would boot a Windows that has no picture.
+  Suspend reports itself unavailable for a GPU session (the NVMe disk already blocks it today).
+- **Bundle.** `script/bundle_gpu_runtime.sh` copies the Triton prefix (QEMU, render server, virglrenderer,
+  libepoxy, DXMT, ANGLE and their Homebrew libraries, 118 MB), relinks everything to `@loader_path`, adds the
+  licenses, Veil's patch and a PROVENANCE file, and signs it. `build_and_run.sh` bundles it when the Mac
+  has `~/VeilTriton/prefix`. `release_macos.sh` bundles it only with `VEIL_RELEASE_GPU_RUNTIME=1`.
+- **Checked on the clone.** The clone booted with the user's real Veil command line, rewritten by these
+  rules, on the bundled runtime with only those four variables (no `DYLD_`, no Homebrew paths). Neptune
+  loaded DXMT from the bundle, the agent answered after about 20 seconds, Paint drew at 69.0 frames/s, and
+  `system.shutdown.request` powered Windows off in about 6 seconds.
+
+Not done yet:
+
+1. **Installing `viogpu3d` from Veil.** Today the driver goes in by hand in an elevated prompt. The next step
+   is a driver disc in the removable drive and an agent request that starts `pnputil` behind a UAC prompt
+   the user answers, like the tools update.
+2. **`veil-shm-display` on the fork**, so GPU sessions use the shared framebuffer crop instead of agent
+   frames. **Balloon patches**: they apply cleanly but have not been built into this runtime.
+3. **A reproducible build script** for the prefix (LLVM 15, ANGLE, libepoxy, virglrenderer, DXMT, QEMU)
+   instead of the manual steps in section 2.
+4. **Live use from Veil itself.** This needs a Veil relaunch and a Windows restart, which wait for the
+   user's go-ahead.
