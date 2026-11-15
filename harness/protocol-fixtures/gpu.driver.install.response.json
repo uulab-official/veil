@@ -1,0 +1,10 @@
+{
+  "type": "gpu.driver.install.response",
+  "requestId": "req_gpu_driver_install",
+  "protocolVersion": 1,
+  "install": {
+    "isSupported": true,
+    "outcome": "approval-requested",
+    "message": null
+  }
+}

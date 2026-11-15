@@ -2262,6 +2262,74 @@ Rules:
 Fixtures: `harness/protocol-fixtures/tools.update.request.json`,
 `harness/protocol-fixtures/tools.update.response.json`.
 
+## GPU Driver Install
+
+With GPU acceleration on (`VMProfile.graphicsAcceleration`), Windows runs on Veil's GPU runtime, and draws on
+the Mac's GPU once Triton's `viogpu3d` driver is installed. The host installs it the way it updates the tools:
+it puts a disc labelled `VEIL_GPU` in the removable drive and asks the agent.
+
+Request (host → agent), after the host has inserted the disc:
+
+```json
+{
+  "type": "gpu.driver.install.request",
+  "requestId": "req_gpu_driver_install",
+  "protocolVersion": 1
+}
+```
+
+Response:
+
+```json
+{
+  "type": "gpu.driver.install.response",
+  "requestId": "req_gpu_driver_install",
+  "protocolVersion": 1,
+  "install": {
+    "isSupported": true,
+    "outcome": "approval-requested",
+    "message": null
+  }
+}
+```
+
+`install.outcome` is `approval-requested`, `already-installed`, `already-running` (a prompt is already open),
+`media-missing` (no `VEIL_GPU` disc with `viogpu3d\viogpu3d.inf` yet; Windows may still be mounting it, so the
+host retries), or `unsupported`.
+
+Health reports the result:
+
+```json
+"capabilities": { "gpuDriverInstall": true },
+"gpuDriver": {
+  "installed": true,
+  "installing": false,
+  "lastInstall": { "outcome": "installed", "exitCode": 0, "message": "", "finishedAt": "2026-11-15T09:38:44.0288571Z" }
+}
+```
+
+`lastInstall.outcome` is `installed`, `failed` (with pnputil's `exitCode` and output), `declined` (the
+approval prompt was refused), `rejected-package`, or `media-missing`.
+
+Rules:
+
+- The host sends the request only while Windows runs on the GPU runtime (its launch has the
+  `virtio-ramfb-gl` Neptune device). On the software runtime the driver would take the display away.
+- The request names nothing. The agent asks Windows for administrator approval to run a PowerShell script
+  fixed in the agent (`GpuDriverInstall.InstallScript`). That script finds the `VEIL_GPU` CD-ROM itself,
+  copies `viogpu3d\` into a new folder under `%SystemRoot%\Temp`, and, on the copy, checks that
+  `viogpu3d.cat` and `viogpu3d.inf` have the SHA-256 the agent pins and that the catalog's Authenticode
+  signature is valid. Only then does it run `pnputil /add-driver viogpu3d.inf /install`. pnputil checks every
+  other file against the catalog. So a program running as the user that mounts its own `VEIL_GPU` disc can
+  get only this exact, Microsoft-signed driver installed, behind a prompt it could have raised itself.
+- The script records the outcome in `%ProgramData%\Veil\gpu-driver-install.json`. The agent reports only
+  `outcome`, `exitCode`, `message` (at most 400 characters) and `finishedAt` from it.
+- pnputil exit code 3010 counts as installed. Windows needs one restart after the install: until then the
+  driver keeps an 800x600 mode, and Paint drew at 36 frames a second instead of 66.
+
+Fixtures: `harness/protocol-fixtures/gpu.driver.install.request.json`,
+`harness/protocol-fixtures/gpu.driver.install.response.json`.
+
 ## Guest Time Sync
 
 Windows keeps its own clock once it has booted. When Veil restores a suspended session
