@@ -8,40 +8,39 @@ Veil is designed to run without a cloud or server VM backend. Like UTM, the VM l
 
 ## Project Status
 
-The first milestone is done and was proven on real media, not simulated:
+As of November 2026, Veil runs Windows 11 Arm under QEMU/HVF and shows its apps as Mac windows on a live
+guest. What is listed as working below was checked on that guest; the full record, with what each check
+did and did not cover, is `docs/checklists/2026-11-11-parallels-parity-gaps.md`.
 
-1. Start a Windows 11 Arm VM from the macOS host — local QEMU/HVF reached the Windows 11 Arm desktop.
-2. Connect to a Windows guest agent — over a loopback-scoped QEMU port forward.
-3. Launch Notepad from macOS.
-4. Track the Notepad `HWND`.
-5. Render only that Notepad window as a macOS window.
-6. Send keyboard and mouse input from macOS to Windows.
-7. Map `Cmd+C` / `Cmd+V` to `Ctrl+C` / `Ctrl+V`.
-8. Sync text clipboard both ways.
+Checked on the live guest:
 
-Calculator and Paint were proven the same way afterwards, so the loop is not Notepad-shaped.
+- **Coherence.** Each Windows app window is its own Mac window, cropped from the guest display through
+  shared memory, with the Windows desktop hidden behind them; a window another one covers fills in from captured
+  frames. Windows opened from the Start menu (Notepad, Paint, Calculator, Settings, File Explorer,
+  Character Map) get their Mac windows at their own sizes and stay where they were across Veil relaunches
+  and agent updates.
+- **Keyboard and IME.** Keys arrive by position and the Windows IME composes Korean correctly.
+- **Integration.** A Mac folder shared as a Windows drive (`Mac (M:)`), per-app launchers in
+  `~/Applications/Veil Apps`, the dark mode setting sent and confirmed, the guest clock check, and reduced visual
+  effects sent on connect.
+- **Lifecycle.** Stop shuts Windows down and finishes; the agent updates in place without closing windows.
 
-Built since, and **none of it verified against a running VM**: Unicode/IME text input, a binary frame
-channel with dirty-rect tiles, a live writable shared folder, drag-and-drop, Windows notifications bridged
-to macOS, suspend/resume, snapshots, several app windows at once, and multiple windows per app. Each has
-unit tests and a harness contract; what none of them has is a run against real Windows. Treat the list as
-"written and reviewed", not "working".
+Built and unit-tested, not yet checked on a live guest: clipboard text, images, and files both ways; drag
+and drop into Windows; Windows notifications on the Mac; trackpad gestures; suspend and resume;
+snapshots (qcow2 disks); resizing the Windows window with its Mac window; the pause before the Mac disk
+fills up; the question before quitting with Windows running; User Account Control prompts in their own Mac
+window and input to windows running as administrator; the per-user agent token; the owner-only display
+socket; and Veil updating itself with Sparkle (`docs/release-updates.md`).
 
-**What that does not mean.** This is not yet Parallels. Concretely, and each of these is reported by the
-product rather than left for you to discover:
+Not there yet:
 
-- **USB passthrough and bridged networking do not work.** Not unimplemented — unavailable. Both need root
-  on macOS. See `device-passthrough-status` below.
-- **Resizing a mirrored window does not resize the Windows window.** There is no host-to-guest resize
-  message yet, so the window is locked to the guest's aspect ratio and the image scales.
-- **Frame pipeline throughput has never been measured.** `frame-pipeline-report` exists for exactly that
-  and has not been run, so treat any performance expectation as unknown.
-- **Windows setup needs Secure Boot firmware that Homebrew QEMU does not ship.** See the prerequisites
-  below; this is the step most likely to block a first run.
-- **Whether the current tree compiles is unknown.** The development environment it was last worked in had
-  no working shell, so `swift build` could not be run. A symbol-by-symbol review stands in for it and
-  records what a compiler will still have to decide. See
-  `docs/checklists/2026-08-17-compile-readiness.md`, and expect to fix build errors on a first checkout.
+- **Graphics are software-rendered** (WARP), so busy apps draw at about 25 frames a second and dragging can
+  lag. A GPU path measured 72 fps but does not shut Windows down cleanly yet.
+- **Bridged networking** needs Apple's vmnet entitlement; NAT and port forwarding work. Dynamic memory is
+  blocked on a Windows driver bug (virtio-win/kvm-guest-drivers-windows#1719).
+- **Releases are not notarized yet**; the pipeline is ready (`script/release_macos.sh`,
+  `.github/workflows/release.yml`) and waits for the Developer ID and notarization secrets.
+- The guest can reach services on the Mac's loopback interface through QEMU's user networking.
 
 ## First Run
 
@@ -52,11 +51,12 @@ follow the step.
 Prerequisites, all user-provided:
 
 - macOS 15 or later on Apple Silicon.
-- `qemu-system-aarch64` and `swtpm` (Homebrew is what has been tested).
+- To build from source: `qemu-system-aarch64` and `swtpm` from Homebrew. `Veil.app` bundles its own QEMU,
+  swtpm, and EDK2 firmware (`script/bundle_qemu_runtime.sh`), so a release needs neither.
 - A Windows 11 Arm ISO you own. Veil bundles no Windows media, keys, or activation material.
-- **Secure Boot firmware**: a matching `edk2-aarch64-secure-code.fd` and `edk2-arm-secure-vars.fd` pair in
-  Veil's local firmware cache. Windows 11 Setup refuses to proceed without Secure Boot, and Homebrew QEMU
-  ships only the non-secure half. `qemu-doctor` names exactly which half is missing.
+- **Secure Boot firmware**: Windows 11 Setup refuses to proceed without Secure Boot, and Homebrew QEMU ships
+  only the non-secure half. `Veil.app` carries Veil's own build (`script/build_secure_firmware.sh`, from
+  TianoCore EDK2); from source, `qemu-doctor` names what is missing.
 - Optionally a `virtio-win.iso` driver ISO, which is what gets networking working during Windows setup. The
   app downloads Fedora's virtio-win ISO itself during one-click setup; `veil-vmctl prepare` still takes `--drivers`.
 
