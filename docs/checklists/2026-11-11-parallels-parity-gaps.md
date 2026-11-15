@@ -621,3 +621,18 @@ In the background, with the user's go-ahead. Nothing was opened or moved in Wind
   to the front.
 - The agent in the user's Windows is still `561da14611f0`. Installing the GPU driver from Veil needs the
   tools update first (`gpuDriverInstall` arrives with `e501dbe111b3`).
+
+## Seventeenth agent update on 2026-11-15
+
+With the user's go-ahead, through `org.uulab.veil.debug.updateTools`. The agent reported `toolsUpdate`, so
+nothing was typed into Windows and Veil was not brought forward.
+
+- The agent went from `561da14611f0` to `e501dbe111b3` in about 12 seconds, with no approval prompt. It
+  reports `gpuDriverInstall: true` and `gpuDriver: {installed: false}`, and the WinEvent hooks are live.
+- Veil ejected the tools disc, kept both agent connections, and the three mirrored Mac windows stayed open
+  where they were.
+- For about five minutes after the update Windows was busy: 190-470% of one core by the agent's count. QEMU on
+  the Mac stayed near 10%, so most of that was likely Windows itself, for example scanning the new files.
+  It then settled at 12% of one core, with the agent at 5.9%, the same as before.
+- Next for GPU acceleration: shut Windows down, turn on Configuration > Hardware > Graphics (Veil backs
+  Windows up first), start Windows, Install GPU Driver, restart Windows once.
