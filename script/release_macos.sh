@@ -172,6 +172,12 @@ stage_release_app() {
   # The Windows engine is signed with the release identity and hardened runtime like the app.
   "$ROOT_DIR/script/bundle_qemu_runtime.sh" "$APP_RESOURCES/Runtime" "$SIGNING_IDENTITY" >/dev/null \
     || fail "could not bundle the Windows engine; install qemu and swtpm on the release Mac."
+  # The GPU runtime ships only when the release Mac has a Triton build and VEIL_RELEASE_GPU_RUNTIME=1:
+  # GPU acceleration is experimental, and a release without it simply hides the setting's switch.
+  if [[ "${VEIL_RELEASE_GPU_RUNTIME:-0}" == "1" ]]; then
+    "$ROOT_DIR/script/bundle_gpu_runtime.sh" "$APP_RESOURCES/RuntimeGPU" "$SIGNING_IDENTITY" >/dev/null \
+      || fail "could not bundle the GPU runtime; build the Triton prefix or unset VEIL_RELEASE_GPU_RUNTIME."
+  fi
   # The Windows guest tools ride inside the app; a release without them could never connect apps.
   "$ROOT_DIR/script/bundle_windows_agent.sh" "$APP_RESOURCES" >/dev/null \
     || fail "could not bundle the Windows tools; install the .NET 8 SDK on the release Mac."

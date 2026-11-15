@@ -90,3 +90,16 @@ Two more defects of 0.1.302 are fixed upstream but not yet in a signed release:
 0.1.302 is still the newest release on fedorapeople.org. QEMU cannot work around the address offset
 safely, so ballooning Windows waits for a fixed driver. Reported as
 virtio-win/kvm-guest-drivers-windows#1719.
+
+## triton/: the GPU acceleration runtime
+
+Patches for UTM's QEMU fork (`utmapp/qemu` branch `utm-edition` at `2934963d`, QEMU 10.0.12), which
+`script/bundle_gpu_runtime.sh` ships as `Contents/Resources/RuntimeGPU`. The build itself is described in
+`docs/checklists/2026-11-10-triton-gpu-acceleration-evaluation.md`, section 2.
+
+| Patch | What it does |
+|---|---|
+| `triton/0001-ui-run-egl-headless-on-darwin-with-angle.patch` | Lets `-display egl-headless` run on macOS: an ANGLE-on-Metal EGL display instead of a GBM render node, GL scanouts read back as RGBA on GLES, and Neptune's Metal scanouts copied into the console surface, so VNC and `screendump` show the guest. |
+
+The balloon patches and `veil-shm-display` are not ported yet. Veil therefore sizes no balloon on this
+runtime, and it mirrors apps through the guest agent instead of the shared framebuffer.

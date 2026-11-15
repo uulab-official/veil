@@ -66,6 +66,26 @@ if [[ "${VEIL_SKIP_ENGINE_BUNDLE:-0}" != "1" ]]; then
   fi
 fi
 
+# The GPU acceleration runtime (Triton), only on a Mac that has built it (script/bundle_gpu_runtime.sh).
+# Without it the Graphics setting says this copy of Veil has no GPU runtime. Cached like the engine.
+GPU_PREFIX="${VEIL_TRITON_PREFIX:-$HOME/VeilTriton/prefix}"
+if [[ "${VEIL_SKIP_GPU_RUNTIME_BUNDLE:-0}" != "1" && -x "$GPU_PREFIX/bin/qemu-system-aarch64" ]]; then
+  GPU_CACHE="$DIST_DIR/.gpu-runtime"
+  gpu_stamp="$(shasum "$ROOT_DIR/script/bundle_gpu_runtime.sh" "$ROOT_DIR"/script/qemu-patches/triton/*.patch | cut -c1-16 | tr '\n' ' ')$(stat -f %m "$GPU_PREFIX/bin/qemu-system-aarch64" "$GPU_PREFIX/libexec/virgl_render_server" "$GPU_PREFIX/lib/libdxmt-native.dylib" 2>/dev/null | tr '\n' ' ')"
+  if [[ "$(cat "$GPU_CACHE/.stamp" 2>/dev/null || true)" != "$gpu_stamp" ]]; then
+    if "$ROOT_DIR/script/bundle_gpu_runtime.sh" "$GPU_CACHE" >/dev/null 2>&1; then
+      echo "$gpu_stamp" >"$GPU_CACHE/.stamp"
+    else
+      rm -rf "$GPU_CACHE"
+      echo "warning: Veil was built without its GPU runtime." >&2
+    fi
+  fi
+  if [[ -f "$GPU_CACHE/.stamp" ]]; then
+    ditto "$GPU_CACHE" "$APP_RESOURCES/RuntimeGPU"
+    rm -f "$APP_RESOURCES/RuntimeGPU/.stamp"
+  fi
+fi
+
 # Ship the Windows guest tools so Veil installs and updates them without this repository.
 # Without the .NET 8 SDK the app falls back to the repository's apps/windows-agent folder.
 if [[ "${VEIL_SKIP_WINDOWS_AGENT_BUNDLE:-0}" != "1" ]]; then
