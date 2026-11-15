@@ -78,7 +78,7 @@ public sealed class ToolsUpdate
     internal static string EntryPointOn(string root) =>
         (root.EndsWith('\\') ? root : root + "\\") + EntryPointRelativePath;
 
-    private static IEnumerable<ToolsUpdateDrive> ReadyOpticalDrives()
+    internal static IEnumerable<ToolsUpdateDrive> ReadyOpticalDrives()
     {
         if (!OperatingSystem.IsWindows())
         {

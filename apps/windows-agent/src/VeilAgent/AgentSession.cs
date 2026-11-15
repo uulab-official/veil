@@ -77,6 +77,7 @@ public sealed class AgentSession
     private readonly DisplayScaleManager displayScale;
     private readonly GuestTimeSync timeSync;
     private readonly GuestTimeSyncRepair timeSyncRepair;
+    private readonly GpuDriverInstall gpuDriverInstall;
     private readonly GuestAppearanceSync appearanceSync;
     private readonly GuestVisualEffects visualEffects;
     private readonly Action<string> imeModeSink;
@@ -102,6 +103,7 @@ public sealed class AgentSession
         DisplayScaleManager? displayScale = null,
         GuestTimeSync? timeSync = null,
         GuestTimeSyncRepair? timeSyncRepair = null,
+        GpuDriverInstall? gpuDriverInstall = null,
         GuestAppearanceSync? appearanceSync = null,
         GuestVisualEffects? visualEffects = null,
         Action<string>? imeModeSink = null,
@@ -121,6 +123,7 @@ public sealed class AgentSession
             ?? new DisplayScaleManager(new WindowsDisplayScaleBackend(), new UserDisplayScaleFile());
         this.timeSync = timeSync ?? new GuestTimeSync();
         this.timeSyncRepair = timeSyncRepair ?? new GuestTimeSyncRepair();
+        this.gpuDriverInstall = gpuDriverInstall ?? new GpuDriverInstall();
         this.appearanceSync = appearanceSync ?? new GuestAppearanceSync();
         this.visualEffects = visualEffects ?? new GuestVisualEffects();
         this.imeModeSink = imeModeSink ?? GuestImeMode.Set;
@@ -195,6 +198,13 @@ public sealed class AgentSession
                     ["requestId"] = requestId,
                     ["protocolVersion"] = 1,
                     ["repair"] = timeSyncRepair.Start()
+                }),
+                MessageTypes.GpuDriverInstallRequest => AgentReplies.Direct(new JsonObject
+                {
+                    ["type"] = MessageTypes.GpuDriverInstallResponse,
+                    ["requestId"] = requestId,
+                    ["protocolVersion"] = 1,
+                    ["install"] = gpuDriverInstall.Start()
                 }),
                 MessageTypes.AppearanceSetRequest => HandleAppearanceSetRequest(request, requestId),
                 MessageTypes.VisualEffectsSetRequest => HandleVisualEffectsSetRequest(request, requestId),
@@ -1227,8 +1237,12 @@ public sealed class AgentSession
                 ["hostFolder"] = OperatingSystem.IsWindows(),
                 ["desktopWindows"] = OperatingSystem.IsWindows(),
                 ["toolsUpdate"] = OperatingSystem.IsWindows(),
+                // gpu.driver.install.request: installs Triton's viogpu3d from the VEIL_GPU disc, after approval.
+                ["gpuDriverInstall"] = OperatingSystem.IsWindows(),
                 ["packageIdentity"] = hasPackageIdentity
             },
+            // Triton's GPU driver: installed, and how the last install through the agent ended.
+            ["gpuDriver"] = gpuDriverInstall.Status(),
             ["notificationListener"] = notificationAccessProbe.ReadStatus(hasPackageIdentity),
             // Read-only here. Health is polled, so it must never create folders or publish shares as a
             // side effect; shared.folder.request is the message that prepares anything.

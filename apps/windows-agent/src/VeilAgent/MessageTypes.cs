@@ -58,6 +58,8 @@ public static class MessageTypes
     public const string VisualEffectsSetRequest = "visual.effects.set.request";
     public const string VisualEffectsSetResponse = "visual.effects.set.response";
     public const string ToolsUpdateRequest = "tools.update.request";
+    public const string GpuDriverInstallRequest = "gpu.driver.install.request";
+    public const string GpuDriverInstallResponse = "gpu.driver.install.response";
     public const string ToolsUpdateResponse = "tools.update.response";
     public const string HostFolderMountRequest = "host.folder.mount.request";
     public const string HostFolderMountResponse = "host.folder.mount.response";

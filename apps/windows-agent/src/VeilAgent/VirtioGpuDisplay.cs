@@ -39,7 +39,13 @@ public static class VirtioGpuDisplay
     /// standard-user agent can answer; it stays true while the device is absent (a VM booted on ramfb
     /// alone), which is the case Veil needs to know about before choosing the next boot's display.
     /// </summary>
-    public static bool IsDriverInstalled()
+    public static bool IsDriverInstalled() => IsDriverInstalled(DriverServiceName);
+
+    /// <summary>
+    /// True when a virtio-gpu device instance has the driver service <paramref name="serviceName"/>: also
+    /// used for Triton's <c>VioGpu3D</c>, which binds the same PCI ID (<see cref="GpuDriverInstall"/>).
+    /// </summary>
+    public static bool IsDriverInstalled(string serviceName)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -49,7 +55,7 @@ public static class VirtioGpuDisplay
         try
         {
             using var service = Registry.LocalMachine.OpenSubKey(
-                "SYSTEM\\CurrentControlSet\\Services\\" + DriverServiceName);
+                "SYSTEM\\CurrentControlSet\\Services\\" + serviceName);
             if (service == null)
             {
                 return false;
@@ -78,8 +84,8 @@ public static class VirtioGpuDisplay
                 foreach (var instanceName in hardware.GetSubKeyNames())
                 {
                     using var instance = hardware.OpenSubKey(instanceName);
-                    if (instance?.GetValue("Service") is string serviceName
-                        && string.Equals(serviceName, DriverServiceName, StringComparison.OrdinalIgnoreCase))
+                    if (instance?.GetValue("Service") is string instanceService
+                        && string.Equals(instanceService, serviceName, StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }
