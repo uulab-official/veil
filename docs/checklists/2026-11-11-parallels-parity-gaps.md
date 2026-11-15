@@ -609,3 +609,15 @@ So it cannot happen silently again, Veil now guards against it (`HostDiskFileGua
   finishes the copy.
 - Not seen live in the app: this Veil build is not running yet (it needs a relaunch, with the user's
   go-ahead), and the live restore above was done by hand over QMP.
+
+## Seventeenth relaunch on 2026-11-15
+
+In the background, with the user's go-ahead. Nothing was opened or moved in Windows.
+
+- The app now carries `RuntimeGPU` (124 MB, QEMU 10.0.12 with Triton, signed, `guest-driver/viogpu3d`
+  included), so Configuration > Hardware > Graphics can turn GPU acceleration on.
+- Windows kept running on the same QEMU throughout, and on the restored disk file. Veil reconnected to the
+  agent (two connections), and the three mirrored Mac windows reopened where they were. Veil did not come
+  to the front.
+- The agent in the user's Windows is still `561da14611f0`. Installing the GPU driver from Veil needs the
+  tools update first (`gpuDriverInstall` arrives with `e501dbe111b3`).
