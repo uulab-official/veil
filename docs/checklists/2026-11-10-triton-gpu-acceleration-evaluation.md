@@ -438,3 +438,26 @@ Not done yet:
    instead of the manual steps in section 2.
 4. **Live use from Veil itself.** This needs a Veil relaunch and a Windows restart, which wait for the
    user's go-ahead.
+
+## Installing the driver from Veil (2026-11-15)
+
+Done (item 1 of "Not done yet" above): Configuration > Hardware > Graphics shows the driver state, and
+"Install GPU Driver" runs the whole install. Veil builds the `VEIL_GPU` disc from
+`RuntimeGPU/guest-driver/viogpu3d`, inserts it, sends `gpu.driver.install.request`, waits while Windows asks
+for approval, and ejects the disc. Protocol and checks: docs/protocol.md, "GPU Driver Install".
+`bundle_gpu_runtime.sh` takes the package from the v0.5 release archive after checking its SHA-256.
+
+Checked end to end on a fresh clone of the live disk, booted on the bundled GPU runtime with Veil's
+arguments:
+
+1. Agent `0.1.0+e501dbe111b3` installed through the normal tools disc and `tools.update.request`, with no
+   approval prompt.
+2. The `VEIL_GPU` disc went into the removable drive (QMP `blockdev-change-medium`), and
+   `gpu.driver.install.request` answered `approval-requested`. The agent reported the secure desktop, and the
+   consent prompt was answered with Yes. No credentials were typed.
+3. Two seconds later health reported `installed: true` with `lastInstall.outcome: installed`, exit code 0.
+   The pinned hashes and the catalog signature passed, and the scanouts switched to Metal.
+4. Right after the install Windows kept an 800x600 mode (Paint 36 frames/s). After one restart it was
+   1024x768 at 75 Hz and Paint drew at 66 frames/s, so Veil now asks for a restart when the install ends.
+
+The clone was then removed. `~/VeilTriton/vm2` remains as the Triton test disk.
