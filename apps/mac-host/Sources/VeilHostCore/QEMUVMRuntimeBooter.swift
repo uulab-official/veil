@@ -261,6 +261,9 @@ public final class QEMUVMRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
             // it booted with.
             process.arguments = (process.arguments ?? []) + tokenArguments
         }
+        if let extraEnvironment = plan.processEnvironment {
+            process.environment = ProcessInfo.processInfo.environment.merging(extraEnvironment) { _, added in added }
+        }
         process.standardOutput = logHandle
         process.standardError = logHandle
         try processRunner(process)

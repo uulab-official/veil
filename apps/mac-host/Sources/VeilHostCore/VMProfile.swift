@@ -108,6 +108,10 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
     /// a cold start begins, for the same reason as `bootsOnVirtioGPU`: a session suspended without the
     /// device must resume without it.
     public var attachesMemoryBalloon: Bool?
+    /// Whether Windows draws on the Mac's GPU (`QEMUGPURuntime`); nil is software rendering.
+    public var graphicsAcceleration: VMGraphicsAcceleration?
+    /// The copy of Windows taken before GPU acceleration was turned on (`VMGraphicsBackup`).
+    public var graphicsBackupPath: String?
     public var createdAt: Date
 
     public init(
@@ -135,6 +139,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         virtioGPUDriverInstalled: Bool? = nil,
         bootsOnVirtioGPU: Bool? = nil,
         attachesMemoryBalloon: Bool? = nil,
+        graphicsAcceleration: VMGraphicsAcceleration? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -161,6 +166,7 @@ public struct VMProfile: Codable, Equatable, Identifiable, Sendable {
         self.virtioGPUDriverInstalled = virtioGPUDriverInstalled
         self.bootsOnVirtioGPU = bootsOnVirtioGPU
         self.attachesMemoryBalloon = attachesMemoryBalloon
+        self.graphicsAcceleration = graphicsAcceleration
         self.createdAt = createdAt
     }
 

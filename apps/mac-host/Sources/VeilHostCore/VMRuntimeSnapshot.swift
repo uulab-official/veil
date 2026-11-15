@@ -41,6 +41,12 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
     public var commandKeyMapping: VMCommandKeyMapping?
     /// User port forwards QEMU adds at the next start.
     public var portForwards: [VMPortForwardRule]?
+    /// Whether Windows draws on the Mac's GPU at its next start (`QEMUGPURuntime`).
+    public var graphicsAcceleration: VMGraphicsAcceleration?
+    /// Whether this copy of Veil carries the GPU runtime.
+    public var isGPURuntimeAvailable: Bool?
+    /// Whether a copy of Windows from before GPU acceleration exists to go back to.
+    public var hasGraphicsBackup: Bool?
     public var detail: String
 
     public init(
@@ -77,6 +83,9 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         suspendOnQuit: Bool? = nil,
         commandKeyMapping: VMCommandKeyMapping? = nil,
         portForwards: [VMPortForwardRule]? = nil,
+        graphicsAcceleration: VMGraphicsAcceleration? = nil,
+        isGPURuntimeAvailable: Bool? = nil,
+        hasGraphicsBackup: Bool? = nil,
         detail: String
     ) {
         self.state = state
@@ -112,6 +121,9 @@ public struct VMRuntimeSnapshot: Codable, Equatable, Sendable {
         self.suspendOnQuit = suspendOnQuit
         self.commandKeyMapping = commandKeyMapping
         self.portForwards = portForwards
+        self.graphicsAcceleration = graphicsAcceleration
+        self.isGPURuntimeAvailable = isGPURuntimeAvailable
+        self.hasGraphicsBackup = hasGraphicsBackup
         self.detail = detail
     }
 }

@@ -42,6 +42,8 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
     public var summary: String
     public var arguments: [String]
     public var warnings: [String]
+    /// Variables added to QEMU's environment, for a runtime that needs them (`QEMUGPURuntime`).
+    public var processEnvironment: [String: String]?
 
     public init(
         kind: String = "qemuWindowsArmBootPlan",
@@ -67,7 +69,8 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         sharedFolderForwardClause: String? = QEMUWindowsSharedFolderTransport.guestSMB.hostForwardClause,
         summary: String,
         arguments: [String],
-        warnings: [String]
+        warnings: [String],
+        processEnvironment: [String: String]? = nil
     ) {
         self.kind = kind
         self.provider = provider
@@ -93,6 +96,7 @@ public struct QEMUWindowsBootPlan: Codable, Equatable, Sendable {
         self.summary = summary
         self.arguments = arguments
         self.warnings = warnings
+        self.processEnvironment = processEnvironment
     }
 }
 
@@ -718,6 +722,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
         secureVarsTemplatePaths: [String] = defaultSecureFirmwareVarsTemplatePaths(),
         firmwareVarsTemplatePaths: [String] = defaultFirmwareVarsTemplatePaths,
         isHostPortFree: @escaping @Sendable (Int) -> Bool = LocalQEMUWindowsBootPlanFactory.isLoopbackPortFree,
+        gpuRuntime: QEMUGPURuntime? = QEMUGPURuntime.bundled(),
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> QEMUWindowsBootPlan {
         let qemuProvider = providerProbe
@@ -824,7 +829,7 @@ public enum LocalQEMUWindowsBootPlanFactory {
             ),
             configurationWarnings: configurationWarnings
         )
-        return try planner.makePlan(for: profile)
+        return QEMUGPURuntime.applying(to: try planner.makePlan(for: profile), profile: profile, runtime: gpuRuntime)
     }
 }
 
@@ -1669,6 +1674,9 @@ public struct QEMUWindowsBootLaunchPlanner: Sendable {
         ])
         // Not machine state: the object only mirrors the display, so it is per launch and stays out of
         // the suspend fingerprint, which is taken from the plan's arguments.
+        if plan.processEnvironment?["RENDER_SERVER_EXEC_PATH"] != nil {
+            arguments = QEMUGPURuntime.launchArguments(arguments)
+        }
         if QEMUSharedFramebuffer.isSupported(executablePath: plan.executablePath) {
             arguments.append(contentsOf: QEMUSharedFramebuffer.objectArguments(
                 socketPath: QEMUSharedFramebuffer.socketPath(forQMPSocketPath: qmpSocketPath)

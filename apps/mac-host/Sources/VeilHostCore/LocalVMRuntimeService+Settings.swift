@@ -43,6 +43,44 @@ extension LocalVMRuntimeService {
         return try await loadSnapshot()
     }
 
+    /// Moves Windows between software rendering and the Mac's GPU, for the next start.
+    ///
+    /// Turning it on backs Windows up first (`VMGraphicsBackup`): once Windows installs its GPU driver it
+    /// shows nothing on the software runtime, and the backup is the way back. Turning it off with
+    /// `restoringBackup` puts that copy back, losing what changed in Windows since; without it, Windows
+    /// is left as it is, which suits a Windows that never installed the driver.
+    public func updateGraphicsAcceleration(
+        _ value: VMGraphicsAcceleration,
+        restoringBackup: Bool
+    ) async throws -> VMRuntimeSnapshot {
+        try await requireResourceMutationAllowed()
+        guard var profile = try await profileStore.load(),
+              let diskPath = profile.virtualDiskPath, !diskPath.isEmpty else {
+            throw VMGraphicsBackup.BackupError.noDisk
+        }
+        guard value != profile.effectiveGraphicsAcceleration else {
+            return try await loadSnapshot()
+        }
+
+        switch value {
+        case .gpu:
+            guard QEMUGPURuntime.bundled() != nil else {
+                throw VMRuntimeError.gpuRuntimeMissing
+            }
+            let backup = try VMGraphicsBackup.create(diskPath: diskPath)
+            profile.graphicsBackupPath = backup.path
+            profile.graphicsAcceleration = .gpu
+        case .software:
+            if restoringBackup, let backupPath = profile.graphicsBackupPath {
+                try VMGraphicsBackup.restore(from: URL(fileURLWithPath: backupPath), diskPath: diskPath)
+                profile.graphicsBackupPath = nil
+            }
+            profile.graphicsAcceleration = .software
+        }
+        try await profileStore.save(profile)
+        return try await loadSnapshot()
+    }
+
     public func removableMediaStatus() async -> VMRemovableMediaStatus {
         do {
             let socketPath = try await removableDriveQMPSocket()

@@ -670,6 +670,14 @@ public enum VMSessionActionReportFactory {
             )
         }
 
+        if snapshot.runningQEMUProcess?.commandLine.contains("virtio-ramfb-gl") == true {
+            return VMSessionPersistenceSummary(
+                isSupported: false,
+                mode: VMSessionPersistenceSummary.unsupportedMode,
+                detail: "Suspend is disabled while Windows draws on the Mac's GPU: QEMU cannot save the GPU renderer's state. Shut Windows down instead."
+            )
+        }
+
         if let record = snapshot.suspendedSession {
             return VMSessionPersistenceSummary(
                 isSupported: true,

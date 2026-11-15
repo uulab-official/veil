@@ -13,6 +13,7 @@ public protocol VMRuntimeService: Sendable {
     func updateStartupBehavior(autoStart: Bool, suspendOnQuit: Bool) async throws -> VMRuntimeSnapshot
     func updateCommandKeyMapping(_ mapping: VMCommandKeyMapping) async throws -> VMRuntimeSnapshot
     func updatePortForwards(_ rules: [VMPortForwardRule]) async throws -> VMRuntimeSnapshot
+    func updateGraphicsAcceleration(_ value: VMGraphicsAcceleration, restoringBackup: Bool) async throws -> VMRuntimeSnapshot
     func removableMediaStatus() async -> VMRemovableMediaStatus
     func insertRemovableMedia(path: String) async throws -> VMRemovableMediaStatus
     func ejectRemovableMedia() async throws -> VMRemovableMediaStatus
@@ -79,6 +80,10 @@ public extension VMRuntimeService {
     }
 
     func updatePortForwards(_ rules: [VMPortForwardRule]) async throws -> VMRuntimeSnapshot {
+        throw VMRuntimeError.bootNotImplemented
+    }
+
+    func updateGraphicsAcceleration(_ value: VMGraphicsAcceleration, restoringBackup: Bool) async throws -> VMRuntimeSnapshot {
         throw VMRuntimeError.bootNotImplemented
     }
 
@@ -231,6 +236,8 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
     /// The running Windows' disk file was deleted on the Mac. Ending QEMU now would lose Windows; see
     /// `HostDiskFileGuard`.
     case systemDiskFileDeleted
+    /// GPU acceleration was asked for, but this copy of Veil has no GPU runtime.
+    case gpuRuntimeMissing
 
     public var errorDescription: String? {
         switch self {
@@ -258,6 +265,8 @@ public enum VMRuntimeError: Error, LocalizedError, Equatable, Sendable {
             "The active local VM runtime provider cannot suspend a Windows session yet. Stop the VM instead."
         case .restartInstallationRequiresUninstalledWindows:
             "Windows is already installed on this disk, so Veil won't erase it to restart the installation."
+        case .gpuRuntimeMissing:
+            "This copy of Veil does not include the GPU runtime, so Windows cannot draw on the Mac's GPU."
         case .systemDiskFileDeleted:
             "The Windows disk file was deleted from your Mac while Windows runs. Windows keeps running until Veil has put the disk back, because turning it off now would erase it."
         }

@@ -434,6 +434,9 @@ struct VMRuntimeView: View {
                         await model.updateHardware(cpuCount: cpuCount, memoryMB: memoryMB)
                     }
                 }
+                GraphicsAccelerationPanel(snapshot: snapshot, canChangeResources: canChangeResources) { value, restoring in
+                    await model.updateGraphicsAcceleration(value, restoringBackup: restoring)
+                }
                 DisplayResolutionPanel()
                 RemovableMediaPanel(
                     snapshot: snapshot,

@@ -241,6 +241,18 @@ public final class VMRuntimeModel {
         }
     }
 
+    /// Switches Windows between software rendering and the Mac's GPU for the next start. Returns the
+    /// refusal for the settings panel to show.
+    @discardableResult
+    public func updateGraphicsAcceleration(_ value: VMGraphicsAcceleration, restoringBackup: Bool) async -> String? {
+        do {
+            snapshot = try await service.updateGraphicsAcceleration(value, restoringBackup: restoringBackup)
+            return nil
+        } catch {
+            return userMessage(for: error)
+        }
+    }
+
     /// Saves the user port forwards for the next start. Returns the refusal for the editor to show.
     @discardableResult
     public func updatePortForwards(_ rules: [VMPortForwardRule]) async -> String? {

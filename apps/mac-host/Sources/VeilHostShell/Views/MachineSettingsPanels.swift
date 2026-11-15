@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VeilHostCore
 
@@ -109,5 +110,106 @@ struct StartupBehaviorPanel: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+/// Whether Windows draws on the Mac's GPU. Experimental: turning it on backs Windows up first, and turning
+/// it off offers to go back to that copy, since a Windows with the GPU driver has no picture without it.
+struct GraphicsAccelerationPanel: View {
+    var snapshot: VMRuntimeSnapshot
+    var canChangeResources: Bool
+    var applyAction: (_ value: VMGraphicsAcceleration, _ restoringBackup: Bool) async -> String?
+
+    @State private var isWorking = false
+    @State private var refusal: String?
+
+    var body: some View {
+        ShellPanel(spacing: 12) {
+            ShellPanelHeader(
+                title: "Graphics",
+                subtitle: "Experimental. Windows uses this the next time it starts.",
+                symbolName: "cpu.fill"
+            )
+
+            Toggle("Draw Windows on the Mac's GPU", isOn: Binding(
+                get: { snapshot.graphicsAcceleration == .gpu },
+                set: { change(to: $0 ? .gpu : .software) }
+            ))
+            .disabled(!canChangeResources || isWorking || !(snapshot.isGPURuntimeAvailable ?? false) && snapshot.graphicsAcceleration != .gpu)
+
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let refusal {
+                Text(refusal)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var caption: String {
+        if !(snapshot.isGPURuntimeAvailable ?? false) {
+            return String(localized: "This copy of Veil does not include the GPU runtime.")
+        }
+        if !canChangeResources {
+            return String(localized: "Shut down Windows to change this.")
+        }
+        return String(localized: "Uses UTM's Triton DirectX 11 driver. Apps draw about three times as fast, but the driver is new, suspend is not available, and Windows needs its GPU driver installed once. Veil keeps a copy of Windows from before, so you can go back.")
+    }
+
+    private func change(to value: VMGraphicsAcceleration) {
+        let restoring: Bool
+        switch value {
+        case .gpu:
+            guard confirm(
+                title: String(localized: "Turn On GPU Acceleration?"),
+                message: String(localized: "Veil first keeps a copy of Windows as it is now. GPU acceleration is experimental: once Windows installs the GPU driver, Windows shows nothing without GPU acceleration, and turning it off goes back to that copy."),
+                button: String(localized: "Turn On")
+            ) == .alertFirstButtonReturn else {
+                return
+            }
+            restoring = false
+        case .software:
+            if snapshot.hasGraphicsBackup == true {
+                let answer = confirm(
+                    title: String(localized: "Go Back to Windows from Before GPU Acceleration?"),
+                    message: String(localized: "Windows with the GPU driver shows nothing without GPU acceleration. Going back restores the copy Veil kept when you turned it on; files and apps changed in Windows since then are lost. Keep the current Windows only if it never installed the GPU driver."),
+                    button: String(localized: "Go Back"),
+                    alternate: String(localized: "Keep Current Windows")
+                )
+                switch answer {
+                case .alertFirstButtonReturn:
+                    restoring = true
+                case .alertSecondButtonReturn:
+                    restoring = false
+                default:
+                    return
+                }
+            } else {
+                restoring = false
+            }
+        }
+        isWorking = true
+        refusal = nil
+        Task { @MainActor in
+            refusal = await applyAction(value, restoring)
+            isWorking = false
+        }
+    }
+
+    private func confirm(title: String, message: String, button: String, alternate: String? = nil) -> NSApplication.ModalResponse {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: button)
+        if let alternate {
+            alert.addButton(withTitle: alternate)
+        }
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        return alert.runModal()
     }
 }

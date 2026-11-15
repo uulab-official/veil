@@ -196,6 +196,9 @@ public struct LocalVMRuntimeService: VMRuntimeService {
                 suspendOnQuit: profile.suspendOnQuit,
                 commandKeyMapping: profile.commandKeyMapping ?? .default,
                 portForwards: profile.portForwards ?? [],
+                graphicsAcceleration: profile.effectiveGraphicsAcceleration,
+                isGPURuntimeAvailable: QEMUGPURuntime.bundled() != nil,
+                hasGraphicsBackup: profile.graphicsBackupPath.map { FileManager.default.fileExists(atPath: $0) } ?? false,
                 detail: inferredRuntimeState.map(Self.runtimeDetail(for:)) ?? (
                     Self.stoppedDetail(
                         bootPathReadiness: bootPathReadiness,
