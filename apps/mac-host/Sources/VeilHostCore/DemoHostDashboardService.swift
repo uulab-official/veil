@@ -157,6 +157,10 @@ public struct FallbackHostDashboardService: HostDashboardService, Sendable {
         try await primary.startToolsUpdate(request)
     }
 
+    public func startGPUDriverInstall(_ request: GPUDriverInstallRequest) async throws -> GPUDriverInstallResponse {
+        try await primary.startGPUDriverInstall(request)
+    }
+
     private var fallbackDetail: String {
         "No Windows agent reachable at \(primaryEndpointDescription). Showing built-in demo data."
     }

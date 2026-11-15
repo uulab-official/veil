@@ -19,6 +19,7 @@ public protocol VMRuntimeService: Sendable {
     func ejectRemovableMedia() async throws -> VMRemovableMediaStatus
     /// Puts a disc with the tools this Veil ships into the running Windows' removable drive.
     func insertGuestToolsUpdateMedia() async throws -> VMRemovableMediaStatus
+    func insertGPUDriverMedia() async throws -> VMRemovableMediaStatus
     /// Presses the running VM's ACPI power button.
     func pressPowerButton() async throws
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
@@ -100,6 +101,10 @@ public extension VMRuntimeService {
     }
 
     func insertGuestToolsUpdateMedia() async throws -> VMRemovableMediaStatus {
+        throw VMRemovableMediaError.notRunning
+    }
+
+    func insertGPUDriverMedia() async throws -> VMRemovableMediaStatus {
         throw VMRemovableMediaError.notRunning
     }
 

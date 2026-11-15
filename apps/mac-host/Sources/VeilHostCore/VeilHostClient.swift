@@ -1072,6 +1072,11 @@ public struct VeilHostClient: HostDashboardService, Sendable {
         try await requestRejectingErrors(request, context: "tools update requires one response")
     }
 
+    /// Has the agent ask Windows for approval to install Triton's GPU driver from the GPU driver disc.
+    public func startGPUDriverInstall(_ request: GPUDriverInstallRequest) async throws -> GPUDriverInstallResponse {
+        try await requestRejectingErrors(request, context: "GPU driver install requires one response")
+    }
+
     /// Removes the drive mapping for the Mac folder. The reply has the mount reply's shape.
     public func unmountHostFolder(_ request: HostFolderUnmountRequest) async throws -> HostFolderMountResponse {
         try await requestRejectingErrors(request, context: "host folder unmount requires one response")

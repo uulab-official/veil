@@ -60,6 +60,7 @@ public protocol HostDashboardService: Sendable {
     func unmountHostFolder(_ request: HostFolderUnmountRequest) async throws -> HostFolderMountResponse
     /// Asks the agent to start the tools update from the disc in the removable drive.
     func startToolsUpdate(_ request: ToolsUpdateRequest) async throws -> ToolsUpdateResponse
+    func startGPUDriverInstall(_ request: GPUDriverInstallRequest) async throws -> GPUDriverInstallResponse
 }
 
 public extension HostDashboardService {
@@ -115,6 +116,10 @@ public extension HostDashboardService {
     }
 
     func startToolsUpdate(_ request: ToolsUpdateRequest) async throws -> ToolsUpdateResponse {
+        throw HostDashboardServiceError.guestStateSyncUnsupported
+    }
+
+    func startGPUDriverInstall(_ request: GPUDriverInstallRequest) async throws -> GPUDriverInstallResponse {
         throw HostDashboardServiceError.guestStateSyncUnsupported
     }
 

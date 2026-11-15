@@ -118,6 +118,8 @@ struct StartupBehaviorPanel: View {
 struct GraphicsAccelerationPanel: View {
     var snapshot: VMRuntimeSnapshot
     var canChangeResources: Bool
+    var driverStatus: GuestGPUDriverStatus? = nil
+    var installDriverAction: () -> Void = {}
     var applyAction: (_ value: VMGraphicsAcceleration, _ restoringBackup: Bool) async -> String?
 
     @State private var isWorking = false
@@ -147,6 +149,27 @@ struct GraphicsAccelerationPanel: View {
                     .font(.caption)
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if snapshot.graphicsAcceleration == .gpu, snapshot.state == .running, let driverStatus {
+                Divider()
+                HStack(alignment: .firstTextBaseline) {
+                    Label(
+                        GPUDriverStatusCopy.title(driverStatus),
+                        systemImage: driverStatus.installed ? "checkmark.circle" : "exclamationmark.circle"
+                    )
+                    Spacer()
+                    if !driverStatus.installed {
+                        Button("Install GPU Driver", action: installDriverAction)
+                            .disabled(driverStatus.installing == true)
+                    }
+                }
+                if let detail = GPUDriverStatusCopy.detail(driverStatus) {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -211,5 +234,34 @@ struct GraphicsAccelerationPanel: View {
         }
         alert.addButton(withTitle: String(localized: "Cancel"))
         return alert.runModal()
+    }
+}
+
+/// What the Graphics panel says about Triton's driver in Windows.
+enum GPUDriverStatusCopy {
+    static func title(_ status: GuestGPUDriverStatus) -> String {
+        if status.installed {
+            return String(localized: "GPU driver installed in Windows")
+        }
+        if status.installing == true {
+            return String(localized: "Waiting for Windows approval…")
+        }
+        return String(localized: "GPU driver not installed in Windows")
+    }
+
+    static func detail(_ status: GuestGPUDriverStatus) -> String? {
+        guard !status.installed else {
+            return nil
+        }
+        switch status.lastInstall?.outcome {
+        case "declined":
+            return String(localized: "The Windows approval prompt was declined. Install again and choose Yes.")
+        case "rejected-package":
+            return String(localized: "Windows refused the driver package because it is not the one Veil ships.")
+        case "failed":
+            return String(localized: "The driver could not be installed: \(status.lastInstall?.message ?? String(localized: "unknown error"))")
+        default:
+            return String(localized: "Until it is installed, Windows still draws on the CPU. Installing asks for Windows approval once.")
+        }
     }
 }

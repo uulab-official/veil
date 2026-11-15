@@ -301,6 +301,17 @@ public final class VMRuntimeModel {
         }
     }
 
+    /// Inserts the GPU driver disc. Returns the refusal for the caller to show.
+    @discardableResult
+    public func insertGPUDriverMedia() async -> String? {
+        do {
+            removableMedia = try await service.insertGPUDriverMedia()
+            return nil
+        } catch {
+            return userMessage(for: error)
+        }
+    }
+
     @discardableResult
     public func ejectRemovableMedia() async -> String? {
         do {

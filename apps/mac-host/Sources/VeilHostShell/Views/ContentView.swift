@@ -36,6 +36,7 @@ struct ContentView: View {
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var updateGuestToolsAction: () -> Void = {}
+    var installGPUDriverAction: () -> Void = {}
     var displayMessage: String?
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var showsStopConfirmation = false
@@ -90,6 +91,7 @@ struct ContentView: View {
                 runMultiAppProofAction: runMultiAppProofAction,
                 quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
                 updateGuestToolsAction: updateGuestToolsAction,
+                installGPUDriverAction: installGPUDriverAction,
                 displayMessage: displayMessage
             )
             .background(Color(red: 0.055, green: 0.061, blue: 0.071))

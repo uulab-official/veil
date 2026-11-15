@@ -43,6 +43,9 @@ struct VMRuntimeView: View {
     var quietWindowsWhenIdleAction: () -> Void
     var guestToolsUpdateAvailable = false
     var updateGuestToolsAction: () -> Void = {}
+    /// Triton's GPU driver in Windows, from the connected agent; nil without one.
+    var gpuDriverStatus: GuestGPUDriverStatus? = nil
+    var installGPUDriverAction: () -> Void = {}
     var displayResizeAction: ((Int, Int) -> Void)?
     var displayMessage: String?
     @Binding var showsFullDesktop: Bool
@@ -434,7 +437,12 @@ struct VMRuntimeView: View {
                         await model.updateHardware(cpuCount: cpuCount, memoryMB: memoryMB)
                     }
                 }
-                GraphicsAccelerationPanel(snapshot: snapshot, canChangeResources: canChangeResources) { value, restoring in
+                GraphicsAccelerationPanel(
+                    snapshot: snapshot,
+                    canChangeResources: canChangeResources,
+                    driverStatus: gpuDriverStatus,
+                    installDriverAction: installGPUDriverAction
+                ) { value, restoring in
                     await model.updateGraphicsAcceleration(value, restoringBackup: restoring)
                 }
                 DisplayResolutionPanel()

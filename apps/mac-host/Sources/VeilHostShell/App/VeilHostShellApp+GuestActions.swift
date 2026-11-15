@@ -764,6 +764,73 @@ extension VeilHostShellApp {
         }
     }
 
+    /// Installs Triton's GPU driver into a Windows running on the GPU runtime: inserts the GPU driver disc,
+    /// asks the agent to install it, waits while Windows asks the user for approval, and ejects the disc.
+    func installGPUDriver() {
+        Task { @MainActor in
+            cancelAutomaticQuietRuntime()
+            await vmModel.refreshRuntimeEvidence()
+            guard vmModel.snapshot?.state == .running else {
+                displayMessage = String(localized: "Start Windows before installing the GPU driver.")
+                return
+            }
+            guard model.agentInstallsGPUDriver else {
+                displayMessage = String(localized: "Update the Windows tools first: this version of them cannot install the GPU driver.")
+                return
+            }
+            if let refusal = await vmModel.insertGPUDriverMedia() {
+                displayMessage = String(localized: "The GPU driver could not be installed: \(refusal)")
+                return
+            }
+
+            // The approval prompt appears on the Windows desktop, which Veil shows on the Mac.
+            activateMainWindow()
+            let viewModeBeforeInstall = shellNavigation.viewMode
+            shellNavigation.showsWindowsDesktop = true
+            displayMessage = String(localized: "Installing the GPU driver. When Windows asks for approval, choose Yes.")
+            let answer = await model.startGPUDriverInstallThroughAgent()
+            switch answer?.outcome {
+            case "approval-requested", "already-running":
+                break
+            case "already-installed":
+                await vmModel.ejectRemovableMedia()
+                shellNavigation.viewMode = viewModeBeforeInstall
+                displayMessage = String(localized: "The GPU driver is already installed in Windows.")
+                return
+            default:
+                await vmModel.ejectRemovableMedia()
+                displayMessage = String(localized: "The GPU driver could not be installed: \(answer?.message ?? String(localized: "Windows did not answer."))")
+                return
+            }
+
+            let started = ContinuousClock.now
+            while true {
+                try? await Task.sleep(for: .seconds(3))
+                await model.load()
+                let status = model.health?.gpuDriver
+                if status?.installed == true {
+                    break
+                }
+                let finished = status?.installing != true && status?.lastInstall != nil
+                    && started.duration(to: .now) > .seconds(6)
+                if finished || started.duration(to: .now) / .seconds(1) >= GuestToolsUpdatePolicy.approvalWaitSeconds {
+                    break
+                }
+            }
+
+            await vmModel.ejectRemovableMedia()
+            let status = model.health?.gpuDriver
+            if status?.installed == true {
+                shellNavigation.viewMode = viewModeBeforeInstall
+                displayMessage = String(localized: "The GPU driver is installed. Restart Windows once to finish: until then it keeps an 800x600 screen and draws at about half speed.")
+            } else if let status {
+                displayMessage = GPUDriverStatusCopy.detail(status)
+            } else {
+                displayMessage = String(localized: "The GPU driver is not installed yet. If the Windows approval prompt is still open, choose Yes; otherwise install it again.")
+            }
+        }
+    }
+
     func markWindowsInstalledFromSetup() {
         Task { @MainActor in
             activateMainWindow()

@@ -52,6 +52,8 @@ public enum MessageType: String, Codable, Sendable {
     case visualEffectsSetResponse = "visual.effects.set.response"
     case toolsUpdateRequest = "tools.update.request"
     case toolsUpdateResponse = "tools.update.response"
+    case gpuDriverInstallRequest = "gpu.driver.install.request"
+    case gpuDriverInstallResponse = "gpu.driver.install.response"
     case hostFolderMountRequest = "host.folder.mount.request"
     case hostFolderMountResponse = "host.folder.mount.response"
     case hostFolderUnmountRequest = "host.folder.unmount.request"
@@ -90,6 +92,37 @@ public struct AgentHealthResponse: Codable, Equatable, Sendable {
     public var packageIdentityStatus: PackageIdentityStatus? = nil
     public var notificationListener: WindowsNotificationListenerStatus? = nil
     public var sharedFolder: WindowsSharedFolderStatus? = nil
+    /// Triton's GPU driver in Windows (`gpu.driver.install.request`); nil from an agent that predates it.
+    public var gpuDriver: GuestGPUDriverStatus? = nil
+}
+
+/// Whether Windows has Triton's `viogpu3d` driver, and how the last install through the agent ended.
+public struct GuestGPUDriverStatus: Codable, Equatable, Sendable {
+    public struct LastInstall: Codable, Equatable, Sendable {
+        /// `installed`, `failed`, `declined`, `rejected-package` or `media-missing`.
+        public var outcome: String
+        public var exitCode: Int?
+        public var message: String?
+        public var finishedAt: String?
+
+        public init(outcome: String, exitCode: Int? = nil, message: String? = nil, finishedAt: String? = nil) {
+            self.outcome = outcome
+            self.exitCode = exitCode
+            self.message = message
+            self.finishedAt = finishedAt
+        }
+    }
+
+    public var installed: Bool
+    /// True while Windows is still asking for approval.
+    public var installing: Bool?
+    public var lastInstall: LastInstall?
+
+    public init(installed: Bool, installing: Bool? = nil, lastInstall: LastInstall? = nil) {
+        self.installed = installed
+        self.installing = installing
+        self.lastInstall = lastInstall
+    }
 }
 
 public struct AgentSession: Codable, Equatable, Sendable {
@@ -174,6 +207,8 @@ public struct AgentCapabilities: Codable, Equatable, Sendable {
     /// True when the agent starts the tools update from the tools disc itself (`tools.update.request`), so
     /// the host does not type a command into Windows.
     public var toolsUpdate: Bool? = nil
+    /// True when the agent installs Triton's GPU driver from the GPU driver disc (`gpu.driver.install.request`).
+    public var gpuDriverInstall: Bool? = nil
 }
 
 public struct PackageIdentityStatus: Codable, Equatable, Sendable {
@@ -544,6 +579,47 @@ public struct ToolsUpdateResponse: Codable, Equatable, Sendable {
         self.protocolVersion = protocolVersion
         self.accepted = accepted
         self.entryPoint = entryPoint
+    }
+}
+
+/// Asks the agent to install Triton's GPU driver from the disc in the removable drive. Like the tools update
+/// it names nothing: the elevated script finds the disc and checks the package itself.
+public struct GPUDriverInstallRequest: Codable, Equatable, Sendable {
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int
+
+    public init(requestId: String = "req_gpu_driver_install", protocolVersion: Int = 1) {
+        self.type = .gpuDriverInstallRequest
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+    }
+}
+
+public struct GPUDriverInstallResponse: Codable, Equatable, Sendable {
+    public struct Install: Codable, Equatable, Sendable {
+        public var isSupported: Bool
+        /// `approval-requested`, `already-installed`, `already-running`, `media-missing` or `unsupported`.
+        public var outcome: String
+        public var message: String?
+
+        public init(isSupported: Bool, outcome: String, message: String? = nil) {
+            self.isSupported = isSupported
+            self.outcome = outcome
+            self.message = message
+        }
+    }
+
+    public var type: MessageType
+    public var requestId: String
+    public var protocolVersion: Int?
+    public var install: Install
+
+    public init(requestId: String, install: Install, protocolVersion: Int? = 1) {
+        self.type = .gpuDriverInstallResponse
+        self.requestId = requestId
+        self.protocolVersion = protocolVersion
+        self.install = install
     }
 }
 

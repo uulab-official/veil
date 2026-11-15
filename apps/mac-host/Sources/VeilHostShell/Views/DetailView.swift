@@ -24,6 +24,7 @@ struct DetailView: View {
     var runMultiAppProofAction: () -> Void
     var quietWindowsWhenIdleAction: () -> Void
     var updateGuestToolsAction: () -> Void = {}
+    var installGPUDriverAction: () -> Void = {}
     var displayMessage: String?
     @Environment(ShellNavigation.self) private var navigation
 
@@ -70,6 +71,8 @@ struct DetailView: View {
                 quietWindowsWhenIdleAction: quietWindowsWhenIdleAction,
                 guestToolsUpdateAvailable: guestToolsUpdateAvailable,
                 updateGuestToolsAction: updateGuestToolsAction,
+                gpuDriverStatus: model.hasLiveAgentConnection ? model.health?.gpuDriver : nil,
+                installGPUDriverAction: installGPUDriverAction,
                 displayResizeAction: { width, height in
                     Task { @MainActor in
                         _ = await model.resizeDisplay(width: width, height: height)

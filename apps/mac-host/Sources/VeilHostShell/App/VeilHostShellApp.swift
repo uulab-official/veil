@@ -114,6 +114,7 @@ struct VeilHostShellApp: App {
             runMultiAppProofAction: runMultiAppProof,
             quietWindowsWhenIdleAction: quietWindowsWhenIdle,
             updateGuestToolsAction: { updateGuestTools() },
+            installGPUDriverAction: { installGPUDriver() },
             displayMessage: displayMessage
         )
             .frame(

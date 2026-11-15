@@ -208,6 +208,41 @@ extension HostDashboardModel {
         return nil
     }
 
+    /// Whether the connected agent can install Triton's GPU driver.
+    public var agentInstallsGPUDriver: Bool {
+        hasLiveAgentConnection && health?.capabilities.gpuDriverInstall == true
+    }
+
+    /// Asks the agent to install Triton's GPU driver from the disc the host just inserted. Returns the
+    /// agent's answer, or nil when it cannot or did not answer. Windows takes a moment to mount the disc, and
+    /// until then the agent answers `media-missing`, so that answer is retried for a while.
+    public func startGPUDriverInstallThroughAgent(
+        attempts: Int = 10,
+        retryDelay: Duration = .milliseconds(1_500)
+    ) async -> GPUDriverInstallResponse.Install? {
+        guard agentInstallsGPUDriver else {
+            return nil
+        }
+        var last: GPUDriverInstallResponse.Install?
+        for attempt in 1...max(1, attempts) {
+            do {
+                let install = try await service.startGPUDriverInstall(GPUDriverInstallRequest()).install
+                last = install
+                if install.outcome != "media-missing" {
+                    return install
+                }
+            } catch {
+                VeilLog.runtime.notice(
+                    "GPU driver install through the agent, attempt \(attempt, privacy: .public): \(String(describing: error), privacy: .public)"
+                )
+            }
+            if attempt < attempts {
+                try? await Task.sleep(for: retryDelay)
+            }
+        }
+        return last
+    }
+
     /// Removes the Windows drive for the Mac folder. Nil when the agent cannot, or did not answer.
     public func unmountHostFolder(driveLetter: String) async -> HostFolderStatus? {
         guard hasLiveAgentConnection, health?.capabilities.hostFolder == true else {
