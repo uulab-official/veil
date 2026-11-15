@@ -129,6 +129,22 @@ done
 cp -R "$PREFIX/share/qemu/keymaps" "$RUNTIME_DIR/share/qemu/keymaps"
 cp "$PREFIX/share/qemu/efi-virtio.rom" "$PREFIX/share/qemu/vgabios-ramfb.bin" "$RUNTIME_DIR/share/qemu/"
 
+# Triton's Windows driver, which Veil puts on the GPU driver disc (GPUDriverMedia). Only the release Veil
+# pins: osy/kvm-guest-drivers-windows v0.5, attestation-signed by Microsoft. The agent checks the catalog and
+# INF again inside Windows (GpuDriverInstall.PinnedHashes).
+DRIVER_ZIP="${VEIL_TRITON_DRIVER_ZIP:-$(dirname "$PREFIX")/drivers/v0.5/viogpu3d-arm64x-signed.zip}"
+DRIVER_ZIP_SHA256="155695ab7820f71e75c369aeae7b8c060691ba43646ac37edef72aa2428506d5"
+[[ -f "$DRIVER_ZIP" ]] || fail "$DRIVER_ZIP is missing; download viogpu3d-arm64x-signed.zip from https://github.com/osy/kvm-guest-drivers-windows/releases/tag/v0.5."
+[[ "$(shasum -a 256 "$DRIVER_ZIP" | cut -d' ' -f1)" == "$DRIVER_ZIP_SHA256" ]] \
+  || fail "$DRIVER_ZIP does not match the pinned SHA-256 of the v0.5 release."
+driver_staging="$(mktemp -d)"
+unzip -q "$DRIVER_ZIP" -d "$driver_staging"
+mkdir -p "$RUNTIME_DIR/guest-driver"
+cp -R "$driver_staging/drivers/viogpu3d" "$RUNTIME_DIR/guest-driver/viogpu3d"
+rm -rf "$driver_staging"
+[[ "$(shasum -a 256 "$RUNTIME_DIR/guest-driver/viogpu3d/viogpu3d.cat" | cut -d' ' -f1)" == "a7a8f2b5ae8c323b5a8108a9793f3f6b4ecf2103f317c02038351ff3300380b9" ]] \
+  || fail "the driver catalog does not match the one the Windows agent pins."
+
 # Licenses and the exact sources.
 cp -R "$ROOT_DIR/script/qemu-patches/triton" "$RUNTIME_DIR/licenses/qemu-patches"
 copy_license() {
@@ -154,6 +170,7 @@ commit() {
   echo "- libepoxy: https://github.com/utmapp/libepoxy branch macos-venus at $(commit libepoxy) (MIT)."
   echo "- DXMT: https://github.com/utmapp/dxmt at $(commit dxmt) (LGPL-2.1-or-later; a separate, replaceable libdxmt-native.dylib). LLVM 15.0.7 is linked into it (Apache-2.0 with LLVM exception)."
   echo "- ANGLE: https://github.com/utmapp/WebKit at $(commit WebKit) (BSD-3-Clause)."
+  echo "- Windows driver (guest-driver/viogpu3d): https://github.com/osy/kvm-guest-drivers-windows release v0.5, viogpu3d-arm64x-signed.zip (SHA-256 $DRIVER_ZIP_SHA256), BSD-3-Clause; user-mode parts from https://github.com/osy/virtio-win-mesa (MIT)."
   echo "- Libraries:"
   for library in "$RUNTIME_DIR"/lib/*.dylib; do
     echo "  - $(basename "$library")"
