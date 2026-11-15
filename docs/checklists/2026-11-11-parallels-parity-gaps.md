@@ -20,7 +20,7 @@ the docs, corrected by what was measured on the live Windows 11 Arm guest during
 | 10 | Notifications | Implemented (unit) | Delivery on the live guest is unchecked. |
 | 11 | Network | Partial | NAT and port forwarding work. Bridged networking needs Apple's vmnet entitlement. |
 | 12 | Time, battery, dark mode sync | Implemented (live, partly) | Time: `time.sync.request` on agent connect, Mac wake, and session resume; correcting the clock needs the elevated-install `VeilTimeSync` task. Dark mode: `appearance.set.request`, on by default. Battery: not feasible, because QEMU `virt` has no ACPI battery (`docs/research/guest-host-state-sync.md`). Live, with agent `0.1.0+92b4061b37aa`: the agent reports `timeSync` and `appearanceSync`; with the Mac in dark mode Windows was already dark (`changed: false`), and the guest clock was 159 ms from the Mac's. Correcting a skewed clock and switching while Veil runs are unchecked. |
-| 13 | DirectX acceleration | Missing (experiment measured) | Software rendering (WARP): Paint at 23.5 fps, DWM presents 40.6 ms apart. With Triton on the same VM: 72 fps and 13.6 ms (the 75 Hz cap). Not shippable yet: with the driver installed Windows does not shut down, and the default runtime shows no display. The VM was restored to `snapshots/pre-triton-20261111-1506`; the Triton disk is kept as `snapshots/post-triton-20261111-1617`. |
+| 13 | DirectX acceleration | Missing (experiment measured) | Software rendering (WARP): Paint at 23.5 fps, DWM presents 40.6 ms apart. With Triton on the same VM: 72 fps and 13.6 ms (the 75 Hz cap). Not shippable yet: with the driver installed Windows does not shut down, and the default runtime shows no display. The VM was restored to `snapshots/pre-triton-20261111-1506`. Both snapshot disk images were deleted on 2026-11-13 (see the 2026-11-15 section), so a new experiment starts from a fresh copy. |
 | 14 | Dynamic memory | Blocked (live) | The host side is done, but virtio-win 0.1.302's ARM64 Balloon driver gives wrong buffer addresses. Reported as virtio-win/kvm-guest-drivers-windows#1719. |
 
 ## Order of work
@@ -574,3 +574,38 @@ In the background, with the user's go-ahead; nothing was opened or moved in Wind
   was due. Thirty seconds at rest added none, so idle Windows does not keep waking the scan.
 - At rest Windows used 13% of one core and the agent 6.2%, as before. Veil did not come to the front; the
   three Mac windows opened where they were.
+
+## The running Windows disk had been deleted (found and restored on 2026-11-15)
+
+Found while preparing the GPU acceleration follow-up, before anything was started.
+
+- `~/Virtual Machines/Veil/Windows 11 Arm.img` no longer existed, yet QEMU (running since 2026-11-11 16:22)
+  still had it open: `lsof +L1` showed the descriptor with a link count of 0. The file went on 2026-11-13
+  around 21:30, together with the disk images in `snapshots/pre-triton-*`, `snapshots/post-triton-*` and
+  `~/VeilTriton/vm/win.img` (the folders still hold their UEFI variables and TPM state). There was no copy
+  in the Trash, in Time Machine (its destination does not mount) or anywhere else in the home folder.
+- That made the running QEMU the only copy of Windows. Any end of QEMU (a shut down, a suspend, a quit,
+  a Mac restart) would have freed the file and lost Windows with everything in it.
+- **Restored live, with Windows running.** Over QMP: a sparse file of the disk's size at the original
+  path, `blockdev-add` (raw, `locking=off`, as the launch had it), `blockdev-mirror` (`sync=full`,
+  `target-is-zero`, 300 MiB/s) from the `system` drive, then `block-job-complete` once it was ready
+  (about two minutes). The drive now reads the new file (link count 1, 39 GB allocated, inode changed),
+  QEMU let go of the deleted one and the volume got its space back. Windows reported `running`
+  throughout.
+- **The Triton disk state is gone** with the deleted snapshots: going back to it would need the driver
+  installed again on a new copy. The pre-Triton snapshot disk is gone too; the live disk is now the only one.
+
+So it cannot happen silently again, Veil now guards against it (`HostDiskFileGuard`):
+
+- While Windows runs, each disk-space pass also checks that the system disk file still exists. When it
+  does not, Veil copies the running drive back to the same path with QEMU's `drive-mirror` (in the
+  drive's own format, `absolute-paths`, 512 MiB/s) and `job-complete`, and says so in a notification.
+  It needs the disk's allocated size plus 4 GiB free; otherwise it says how much to free and tries again
+  every minute. A copy an earlier Veil left running is finished, not started again. Internal qcow2
+  snapshots do not come along: a mirror copies what the guest sees.
+- Until the file is back, Shut Down, Suspend, the idle quiet policy and the suspend on quit do nothing
+  but explain why; `LocalVMRuntimeService.stop()` and `suspend()` refuse with
+  `VMRuntimeError.systemDiskFileDeleted`. Quitting Veil leaves Windows running, and the next Veil
+  finishes the copy.
+- Not seen live in the app: this Veil build is not running yet (it needs a relaunch, with the user's
+  go-ahead), and the live restore above was done by hand over QMP.

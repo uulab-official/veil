@@ -339,3 +339,12 @@ Host build: section 2, then apply `~/VeilTriton/qemu-egl-headless-darwin.patch` 
 rebuild. Scripts outside the repo: `~/VeilTriton/run-triton-existing-vm.sh` (Triton boot),
 `~/VeilTriton/run-triton-install.sh` (same plus the driver ISO), `~/VeilTriton/run-compat-bundled.sh`
 (bundled QEMU, headless, for compatibility checks). Logs land in `~/VeilTriton/run/`.
+
+## Update 2026-11-15: snapshot disks deleted
+
+The disk images in `snapshots/pre-triton-20261111-1506`, `snapshots/post-triton-20261111-1617` and
+`~/VeilTriton/vm/win.img` were deleted on 2026-11-13 (only the UEFI variables and TPM state remain), and
+with them the main disk file, which was restored live from the running QEMU (see the parity checklist,
+2026-11-15). The revert and "go back to the Triton state" commands above no longer work. A new Triton run
+has to clone the live disk while Windows is shut down, which needs the user's go-ahead. Upstream had no
+newer driver than v0.5 and no shutdown report on 2026-11-15.
