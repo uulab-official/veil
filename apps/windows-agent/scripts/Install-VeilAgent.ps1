@@ -271,6 +271,20 @@ try {
         -Execute "powershell.exe" `
         -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$StartScript`" -InstallRoot `"$InstallRoot`" -Port $Port"
     $Trigger = New-ScheduledTaskTrigger -AtLogOn
+    # Also on unlock: a shutdown that an app with unsaved changes cancels has already closed the agent and
+    # returns Windows to the lock screen, and the session that continues after unlock is no new logon.
+    # Start-VeilAgent.ps1 leaves an agent that is already running alone.
+    $Triggers = @($Trigger)
+    try {
+        $UnlockTriggerClass = Get-CimClass -ClassName MSFT_TaskSessionStateChangeTrigger -Namespace Root/Microsoft/Windows/TaskScheduler
+        $Triggers += New-CimInstance -CimClass $UnlockTriggerClass -ClientOnly -Property @{
+            StateChange = 8 # TASK_SESSION_UNLOCK
+            UserId = "$env:USERDOMAIN\$env:USERNAME"
+            Enabled = $true
+        }
+    } catch {
+        Write-Warning "VeilAgent unlock trigger could not be created: $($_.Exception.Message)"
+    }
     $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
     $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
@@ -279,7 +293,7 @@ try {
         Register-ScheduledTask `
             -TaskName $TaskName `
             -Action $Action `
-            -Trigger $Trigger `
+            -Trigger $Triggers `
             -Principal $Principal `
             -Settings $Settings `
             -Force | Out-Null

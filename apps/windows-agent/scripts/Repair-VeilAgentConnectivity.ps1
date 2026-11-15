@@ -397,6 +397,18 @@ function Start-VeilAgentAsStandardUser {
         -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$StartScriptPath`" -InstallRoot `"$InstallRoot`" -Port $Port"
     $Trigger = New-ScheduledTaskTrigger -AtLogOn
     $InteractiveUser = "$env:USERDOMAIN\$env:USERNAME"
+    # Also on unlock, as Install-VeilAgent.ps1 does: a cancelled shutdown closes the agent and locks the session.
+    $Triggers = @($Trigger)
+    try {
+        $UnlockTriggerClass = Get-CimClass -ClassName MSFT_TaskSessionStateChangeTrigger -Namespace Root/Microsoft/Windows/TaskScheduler
+        $Triggers += New-CimInstance -CimClass $UnlockTriggerClass -ClientOnly -Property @{
+            StateChange = 8 # TASK_SESSION_UNLOCK
+            UserId = $InteractiveUser
+            Enabled = $true
+        }
+    } catch {
+        Write-Warning "VeilAgent unlock trigger could not be created: $($_.Exception.Message)"
+    }
     $Principal = New-ScheduledTaskPrincipal `
         -UserId $InteractiveUser `
         -LogonType Interactive `
@@ -406,7 +418,7 @@ function Start-VeilAgentAsStandardUser {
     Register-ScheduledTask `
         -TaskName $TaskName `
         -Action $Action `
-        -Trigger $Trigger `
+        -Trigger $Triggers `
         -Principal $Principal `
         -Settings $Settings `
         -Force | Out-Null

@@ -559,6 +559,12 @@ test("windows agent includes user-logon install and uninstall scripts", async ()
 
   assert.match(install, /Register-ScheduledTask/);
   assert.match(install, /New-ScheduledTaskTrigger\s+-AtLogOn/);
+  // A shutdown cancelled by an unsaved document closes the agent and leaves a locked session: unlock restarts it.
+  assert.match(install, /MSFT_TaskSessionStateChangeTrigger/);
+  assert.match(install, /StateChange = 8/);
+  assert.match(install, /-Trigger \$Triggers/);
+  assert.match(repair, /MSFT_TaskSessionStateChangeTrigger/);
+  assert.match(repair, /-Trigger \$Triggers/);
   assert.match(install, /VeilAgent/);
   assert.match(install, /dotnet publish/);
   assert.match(install, /BundledAgentExe/);
