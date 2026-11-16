@@ -65,7 +65,12 @@ extension LocalVMRuntimeService {
     }
 
     public func recordVirtioGPUDriverInstalled(_ installed: Bool) async throws {
+        // On the GPU runtime the virtio-gpu device is bound to Triton's VioGpu3D, so the agent reports
+        // viogpudo missing. That says nothing about the software runtime's display: turning GPU
+        // acceleration off restores the Windows from before, which still has viogpudo, and recording
+        // false here would cold-boot it on ramfb and virtio-gpu together, as two monitors.
         guard var profile = try await profileStore.load(),
+              profile.effectiveGraphicsAcceleration == .software,
               profile.virtioGPUDriverInstalled != installed else {
             return
         }

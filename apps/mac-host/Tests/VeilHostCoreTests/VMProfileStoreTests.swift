@@ -2225,6 +2225,26 @@ struct VMProfileStoreTests {
         #expect(bootRunner.startedProfile?.bootsOnVirtioGPU == false)
     }
 
+    @Test("on the GPU runtime the missing-viogpudo report keeps the software runtime's display choice")
+    func gpuProfileIgnoresViogpudoReport() async throws {
+        let (service, store, _) = try await Self.installedRuntime(currentState: nil)
+        try await service.recordVirtioGPUDriverInstalled(true)
+        var profile = try #require(try await store.load())
+        profile.graphicsAcceleration = .gpu
+        try await store.save(profile)
+
+        // VioGpu3D now binds the virtio-gpu device, so the agent reports viogpudo missing.
+        try await service.recordVirtioGPUDriverInstalled(false)
+        #expect(try await store.load()?.virtioGPUDriverInstalled == true)
+
+        // Back on software (the restored Windows has viogpudo again), reports count once more.
+        profile = try #require(try await store.load())
+        profile.graphicsAcceleration = .software
+        try await store.save(profile)
+        try await service.recordVirtioGPUDriverInstalled(false)
+        #expect(try await store.load()?.virtioGPUDriverInstalled == false)
+    }
+
     @Test("a start that finds Windows running keeps the display devices QEMU already has")
     func runningStartKeepsDisplayDevices() async throws {
         let (service, store, _) = try await Self.installedRuntime(currentState: .running)
