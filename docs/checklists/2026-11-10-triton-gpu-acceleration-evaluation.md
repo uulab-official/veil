@@ -482,3 +482,41 @@ first switch on the user's Windows did, and it stopped twice:
 The backup had been taken (`Backups/before-gpu-20261115-134427`). The profile was set back to software, and
 Windows started again on the software runtime with its disk unchanged. The switch needs a Veil build with
 `1811645b`, so a relaunch, and then the same steps again.
+
+## Switch on the user's Windows (2026-11-16): done, and the boot screen was upside down
+
+Veil with `1811645b` started the GPU plan. The steps, all from the Mac without a Mac window or Mac input:
+
+1. Notepad held two unsaved, never-saved tabs, so the agent's window close request closed it first (the user
+   chose not to save; Windows 11 Notepad keeps such tabs in its own session and asked nothing). Then
+   `system.shutdown.request` shut Windows down in about 12 s.
+2. A new backup, as `VMGraphicsBackup.create` makes it: `Backups/before-gpu-20261116-023649` (APFS clone of
+   the disk, `uefi-vars.fd`, `tpm/tpm2-00.permall`), and the profile set to `gpu` with that path. The
+   2026-11-15 backup is stale and still on disk.
+3. Veil started the GPU plan: `RuntimeGPU/bin/qemu-system-aarch64` with `hvf,ipa-granule-size=0x1000`,
+   `tpm-tis-device,tpmdev=tpm0`, `egl-headless,gl=es` and the `virtio-ramfb-gl` device.
+4. The `VEIL_GPU` disc was built from the bundled package (catalog and INF hashes match the pinned ones) and
+   inserted, and `gpu.driver.install.request` answered `approval-requested`. The consent prompt (Windows
+   PowerShell 5.1, verified publisher Microsoft Windows, no credentials) was checked on screen and approved
+   with Alt+Y; Left did not move the focus off No on the secure desktop. Health reported `installed`,
+   `exitCode` 0, and the disc was ejected. Scanouts switched to Metal at 1024x768 right away.
+5. Windows was shut down and started again on the fixed runtime (below): 1024x768 Metal scanouts, Neptune
+   loaded DXMT, the agent reconnected with `gpuDriver.installed` true.
+
+**The display before the driver was upside down.** The user saw Veil's Windows view flipped vertically
+(the sign-in screen, then the desktop), and the VNC readback was flipped the same way. The darwin readback
+in `0001-ui-run-egl-headless-on-darwin-with-angle.patch` reads the guest texture with `glReadPixels` and
+flipped rows when `y_0_top` was false. The scanouts here are virtio-gpu 2D resources with `y_0_top` 1
+(logged now: `gl scanout tex … y0top 1`), and through ANGLE on Metal their rows still came back bottom
+first, so they were not flipped and showed upside down. The patch now flips when `y_0_top` is set. After
+the fix the firmware and boot scanouts read back upright; Metal scanouts (after the driver) were upright
+before and after. This was missed in the clone checks because their pre-driver screendumps were black, and
+the windows were read through the agent, which never goes through this path.
+
+Also seen:
+
+- Once, after the first shutdown, Veil was no longer running and had left no crash report; the reason is
+  unknown. Opening it again started the GPU plan by itself (`autoStart`). It did not happen on the second
+  shutdown.
+- Windows 11 Notepad reopened the discarded tabs at the next app launch, from its own session store.
+- The agent on this Windows still lacks the session unlock trigger (`e54f1dcb`) until a tools update.
