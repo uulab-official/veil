@@ -96,12 +96,16 @@ extension VeilHostShellApp {
                 startAgentEventPumpIfNeeded()
             }
         }
-        // Switching the Mac input source while a Windows app is in front switches Windows too, with its Hangul key.
+        // The Windows Korean/English mode follows the Mac input source: when it changes while a Windows app
+        // is in front, and whenever a Windows app comes forward (GuestHangulModeTracker).
+        windowsAppWindowPresenter.macInputSourceIsKorean = {
+            GuestHangulModeTracker.isKorean(languages: MacInputSource.current().languages)
+        }
         MacInputSource.observeChanges {
-            guard NSApp.isActive, model.hasLiveAgentConnection, model.health?.capabilities.imeMode == true else {
+            guard NSApp.isActive else {
                 return
             }
-            windowsAppWindowPresenter.pressWindowsHangulKeyInKeyWindow()
+            windowsAppWindowPresenter.alignWindowsHangulModeInKeyWindow()
         }
     }
 }

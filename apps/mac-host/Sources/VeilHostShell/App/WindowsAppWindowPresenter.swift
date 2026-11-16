@@ -73,14 +73,43 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         windowOrder.filter { windowsById[$0] != nil }
     }
 
-    /// Presses the Windows Hangul key in the mirrored window that is key on the Mac, if one is.
-    func pressWindowsHangulKeyInKeyWindow() {
+    /// Whether the macOS input source is Korean right now. Supplied by the app, which reads it from Carbon.
+    var macInputSourceIsKorean: (() -> Bool)?
+    /// What the host last made each Windows app's Korean/English mode.
+    private var hangulMode = GuestHangulModeTracker()
+
+    /// Brings the Windows Korean/English mode of the mirrored window that is key on the Mac, if one is, to
+    /// the macOS input source.
+    func alignWindowsHangulModeInKeyWindow() {
         guard let keyWindow = NSApp.keyWindow,
               let windowId = keyWindow.identifier?.rawValue,
               windowsById[windowId] === keyWindow else {
             return
         }
+        alignWindowsHangulMode(windowId: windowId)
+    }
+
+    /// Presses the Windows Hangul key in the window when its app's mode differs from the Mac's. Only while
+    /// keys reach Windows by position for its IME to compose (`capabilities.imeMode`).
+    private func alignWindowsHangulMode(windowId: String) {
+        guard keysPassThrough?() == true,
+              let macIsKorean = macInputSourceIsKorean?(),
+              let processId = sessionProvider?(windowId)?.window.processId else {
+            return
+        }
+        if hangulMode.align(windowId: windowId, processId: processId, macIsKorean: macIsKorean) {
+            WindowsHangulKey.press(windowId: windowId, send: onKeyInput)
+        }
+    }
+
+    /// The right Command key pressed alone switched Windows only, which the user does to bring it back to the Mac.
+    private func windowsHangulKeyPressedAlone(windowId: String) {
         WindowsHangulKey.press(windowId: windowId, send: onKeyInput)
+        guard let macIsKorean = macInputSourceIsKorean?(),
+              let processId = sessionProvider?(windowId)?.window.processId else {
+            return
+        }
+        hangulMode.realigned(windowId: windowId, processId: processId, macIsKorean: macIsKorean)
     }
 
     /// Fires after a mirrored window is created or removed, on whatever path did it, so the Veil window can
@@ -334,6 +363,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         windowsById.removeAll()
         windowOrder.removeAll()
         identitiesById.removeAll()
+        hangulMode.reset()
         windowsWithFirstFrame.removeAll()
         foregroundWindowId = nil
         minimizedBeforeDesktop.removeAll()
@@ -393,6 +423,8 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
         WindowsAppDockIcon.showInDock(identitiesById[windowId])
         observeOtherWindowsBecomingKey()
         onWindowBecameKey?(windowId)
+        // Each Windows app keeps its own Korean/English mode; the one coming forward follows the Mac.
+        alignWindowsHangulMode(windowId: windowId)
     }
 
 #if DEBUG
@@ -791,6 +823,7 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
 
     private func forgetWindowId(_ windowId: String) {
         windowOrder.removeAll { $0 == windowId }
+        hangulMode.windowClosed(windowId: windowId)
         minimizedBeforeDesktop.remove(windowId)
         windowsWithFirstFrame.remove(windowId)
         identitiesById[windowId] = nil
@@ -957,6 +990,9 @@ final class WindowsAppWindowPresenter: NSObject, NSWindowDelegate {
             onKeyInput: { [weak self] windowId, event, key, windowsVirtualKey, modifiers in
                 self?.onKeyInput?(windowId, event, key, windowsVirtualKey, modifiers)
             },
+            onWindowsHangulKey: { [weak self] windowId in
+                self?.windowsHangulKeyPressedAlone(windowId: windowId)
+            },
             onTextInput: { [weak self] windowId, text, replaceLength in
                 self?.onTextInput?(windowId, text, replaceLength)
             },
@@ -1106,6 +1142,8 @@ private struct WindowsAppMirrorView: View {
     var onMouseInput: (String, String, Int, Int) -> Void
     var onScrollInput: (String, Int, Int, Int, Int, [String]) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
+    /// The right Command key alone: the Windows Hangul key, in that window only.
+    var onWindowsHangulKey: (String) -> Void
     var onTextInput: (String, String, Int) -> Void
     var textCompositionSupported: () -> Bool
     var keysPassThrough: () -> Bool
@@ -1132,6 +1170,7 @@ private struct WindowsAppMirrorView: View {
                 onMouseInput: onMouseInput,
                 onScrollInput: onScrollInput,
                 onKeyInput: onKeyInput,
+                onWindowsHangulKey: onWindowsHangulKey,
                 onTextInput: onTextInput,
                 textCompositionSupported: textCompositionSupported,
                 keysPassThrough: keysPassThrough,
@@ -1183,6 +1222,8 @@ private struct InputCaptureView: NSViewRepresentable {
     var onMouseInput: (String, String, Int, Int) -> Void
     var onScrollInput: (String, Int, Int, Int, Int, [String]) -> Void
     var onKeyInput: (String, String, String, Int, [String]) -> Void
+    /// The right Command key alone: the Windows Hangul key, in that window only.
+    var onWindowsHangulKey: (String) -> Void
     var onTextInput: (String, String, Int) -> Void
     var textCompositionSupported: () -> Bool
     var keysPassThrough: () -> Bool
@@ -1197,6 +1238,7 @@ private struct InputCaptureView: NSViewRepresentable {
         nsView.onMouseInput = onMouseInput
         nsView.onScrollInput = onScrollInput
         nsView.onKeyInput = onKeyInput
+        nsView.onWindowsHangulKey = onWindowsHangulKey
         nsView.onTextInput = onTextInput
         nsView.textCompositionSupported = textCompositionSupported
         nsView.keysPassThrough = keysPassThrough
@@ -1209,6 +1251,7 @@ private final class InputCaptureNSView: NSView {
     var onMouseInput: ((String, String, Int, Int) -> Void)?
     var onScrollInput: ((String, Int, Int, Int, Int, [String]) -> Void)?
     var onKeyInput: ((String, String, String, Int, [String]) -> Void)?
+    var onWindowsHangulKey: ((String) -> Void)?
     var onTextInput: ((String, String, Int) -> Void)?
     var textCompositionSupported: (() -> Bool)?
     var keysPassThrough: (() -> Bool)?
@@ -1488,7 +1531,7 @@ private final class InputCaptureNSView: NSView {
                 rightCommandAlone = true
             } else if rightCommandAlone, keysPassThrough?() == true, let session {
                 rightCommandAlone = false
-                WindowsHangulKey.press(windowId: session.id, send: onKeyInput)
+                onWindowsHangulKey?(session.id)
                 return
             }
         } else {
