@@ -1675,10 +1675,17 @@ Windows turned the same keys into jamo.
   of the tools update), with `alphanumeric`, and sends `unmanaged` afterwards.
 - **Korean/English with the Mac:** keys reach Windows by position (`input.key` with the virtual key for the
   Mac key code, ANSI layout) and the Windows IME composes, as in UTM and Parallels; the composition shows
-  inline because the host crops the guest display. When the user switches the macOS input source while a
-  mirrored window is key, the host also presses the Windows Hangul key (`VK_HANGUL`) in that window, so both
-  switch together. The right Command key alone presses the Hangul key in Windows only, to realign them,
-  like the right Alt key on a Korean Windows keyboard. Caps Lock and the other modifiers are not sent.
+  inline because the host crops the guest display. The Windows Korean/English mode follows the macOS input
+  source as a state, not as a toggle: the host remembers what it last made each Windows process's mode
+  (`GuestHangulModeTracker`, keyed by `processId`, which a dialog shares with its app) and presses the
+  Windows Hangul key (`VK_HANGUL`) in a mirrored window only when that differs from the Mac. It checks when
+  the macOS input source changes while a mirrored window is key, and whenever a mirrored window becomes key,
+  which catches a switch made in another Mac app and a Windows app that opened while the Mac was on Korean.
+  A process the host has not seen is taken to start in English, as the Windows Korean IME starts a new app,
+  and is forgotten when its last mirrored window closes. Pressing the key on every Mac switch, as before,
+  left the two opposite after any one of those. The right Command key alone still presses the Hangul key in
+  Windows only, to realign them, like the right Alt key on a Korean Windows keyboard; the host then takes
+  that app as matching the Mac. Caps Lock and the other modifiers are not sent.
 - Composing on the Mac and correcting the guest's text with `input.text` `replaceLength` (§ Input Text)
   swapped and duplicated syllables. It remains only for an agent without `imeMode`.
 - The reply is `operation.ack`. An unknown `mode` is rejected with `invalid_message`. For diagnostics the ack
