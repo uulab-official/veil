@@ -113,7 +113,7 @@ index 000000000..5841790a6
 +    return true;
 +}
 diff --git a/ui/egl-headless.c b/ui/egl-headless.c
-index ef5cc02dc..428d98295 100644
+index ef5cc02dc..713c8d4dc 100644
 --- a/ui/egl-headless.c
 +++ b/ui/egl-headless.c
 @@ -6,6 +6,9 @@
@@ -227,7 +227,7 @@ index ef5cc02dc..428d98295 100644
 +        return;
 +    }
 +
-+    fprintf(stderr, "egl-headless: gl scanout tex %u %ux%u\n", backing_id, backing_width, backing_height);
++    fprintf(stderr, "egl-headless: gl scanout tex %u %ux%u y0top %d\n", backing_id, backing_width, backing_height, backing_y_0_top);
      edpy->y_0_top = backing_y_0_top;
 +    {
 +    EGL_HL_ENTER();
@@ -243,7 +243,7 @@ index ef5cc02dc..428d98295 100644
  }
  
  #ifdef CONFIG_GBM
-@@ -145,11 +226,64 @@ static void egl_scanout_flush(DisplayChangeListener *dcl,
+@@ -145,11 +226,70 @@ static void egl_scanout_flush(DisplayChangeListener *dcl,
  {
      egl_dpy *edpy = container_of(dcl, egl_dpy, dcl);
  
@@ -291,7 +291,13 @@ index ef5cc02dc..428d98295 100644
 +                p[2] = t;
 +            }
 +        }
-+        if (!edpy->y_0_top) {
++        /*
++         * Measured with Windows on virtio-gpu 2D resources before viogpu3d:
++         * read back through ANGLE on Metal, rows already come out in the
++         * order GL's y_0_top says they do not, so the flip is the inverse
++         * of the stock egl_fb_blit/egl_fb_read pair.
++         */
++        if (edpy->y_0_top) {
 +            g_autofree uint8_t *tmp = g_malloc(stride);
 +            for (int r = 0; r < sh / 2; r++) {
 +                uint8_t *a = base + r * stride;
@@ -308,7 +314,7 @@ index ef5cc02dc..428d98295 100644
      if (edpy->cursor_fb.texture) {
          /* have cursor -> render using textures */
          egl_texture_blit(edpy->gls, &edpy->blit_fb, &edpy->guest_fb,
-@@ -162,7 +296,14 @@ static void egl_scanout_flush(DisplayChangeListener *dcl,
+@@ -162,7 +302,14 @@ static void egl_scanout_flush(DisplayChangeListener *dcl,
          egl_fb_blit(&edpy->blit_fb, &edpy->guest_fb, edpy->y_0_top);
      }
  
