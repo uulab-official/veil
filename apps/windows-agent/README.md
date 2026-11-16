@@ -65,6 +65,36 @@ apps\windows-agent\scripts\Publish-VeilAgentBundle.ps1
 
 That creates `apps\windows-agent\app\VeilAgent.exe` and its runtime payload. The installer prefers that packaged `app` folder and does not need the .NET SDK inside Windows. If no packaged `app` folder exists, the installer falls back to `dotnet publish`, which requires the .NET 8 SDK in the guest. The `app` folder is a local build artifact and is intentionally ignored by Git.
 
+The macOS/Linux Bash publisher builds in a temporary sibling directory first. A
+failed compiler or incomplete output leaves `app` and its backup untouched. After
+successful publishing, it checks for nonempty `VeilAgent.exe`, `VeilAgent.dll`,
+`VeilAgent.deps.json`, and `VeilAgent.runtimeconfig.json`, promotes the whole folder,
+and retains the previous bundle at `apps/windows-agent/app.previous`. The older
+backup is rotated only after promotion; stale files are not overlaid into the new
+bundle. These checks establish complete publish outputs, not live Windows health.
+
+Concurrent Bash publishers are refused using `.app-publish.lock`. Promotion uses
+two same-filesystem renames with a brief gap: it is not a crash-atomic transaction.
+Do not rebuild or read guest tools media concurrently with publication. An ordinary
+promotion error attempts to restore the old folder. If rollback cannot complete,
+the script prints the retained `.app-publish.*/previous` recovery path rather than
+deleting it. After a hard kill or host crash, inspect `owner.pid` and the retained
+folders before manually clearing a stale lock; never delete a lock held by a live
+publisher. Backups, locks, and staging directories are ignored by Git.
+
+The Windows PowerShell publisher and in-guest installer use the same staging
+principle: they validate a complete bundle before promoting it and retain the
+previous installed bundle at `app.previous` for recovery. A failed compile or
+copy therefore leaves the last usable agent available. A failure after the new
+bundle is promoted can leave the previous bundle in the staging/recovery path;
+keep that path until the incident is understood. This protects the app bundle,
+not the separate support scripts, scheduled-task registration, firewall rule, or
+sparse package registration. The PowerShell publisher, installer, and
+connectivity-repair app replacement share an atomic `.veil-agent-bundle.lock`;
+concurrent operations stop before touching the live bundle. A hard kill can leave
+that lock behind, so inspect its recorded PID before manual removal. Publishing
+locally neither refreshes the attached ISO nor upgrades a running guest.
+
 To enable package-identity-gated Windows APIs, also build and sign the sparse identity package on Windows with the Windows SDK installed:
 
 ```powershell
@@ -94,7 +124,7 @@ cd C:\Path\To\veil\apps\windows-agent
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-VeilAgent.ps1
 ```
 
-The installer copies or publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/repair/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST=0.0.0.0` and `VEIL_AGENT_PORT`, registers a user logon scheduled task named `VeilAgent` when Windows allows it, and starts the agent immediately. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation. The start script is idempotent: it reuses an already-running installed `VeilAgent.exe`, waits briefly for a guest-local `ws://127.0.0.1:18444/` probe to succeed, and writes agent stdout/stderr logs for diagnosis. The agent process itself also enforces one instance per configured port. Pass `-NoStart` to install without starting the agent in the current session.
+The installer copies or publishes the agent to `%LOCALAPPDATA%\Veil\Agent\app`, copies the start/repair/uninstall scripts to `%LOCALAPPDATA%\Veil\Agent\scripts`, sets user-level `VEIL_AGENT_HOST=0.0.0.0` and `VEIL_AGENT_PORT`, registers a user logon scheduled task named `VeilAgent` when Windows allows it, and starts the agent immediately. The logon task points at the installed script copy, so agent auto-start does not depend on the original shared-folder path after installation. The start script is idempotent: it reuses an already-running installed `VeilAgent.exe`, requires loopback health for the host-forwarded product path, and writes agent stdout/stderr logs for diagnosis. Pass `-RequireGuestAddress` when running a diagnostic that also needs a non-loopback guest IPv4 health probe; the elevated connectivity-repair script uses that stricter mode. The agent process itself also enforces one instance per configured port. Pass `-NoStart` to install without starting the agent in the current session.
 
 Bootstrap, install, and start logs are written under:
 

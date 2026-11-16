@@ -46,6 +46,19 @@ struct QEMUConsoleVisualStateTests {
             metrics: metrics,
             recognizedText: ["사용자 계정 컨트롤", "이 앱이 디바이스를 변경하도록 허용하시겠어요?"]
         ) == .uacPrompt)
+        // Text read from a Korean Windows 11 UAC prompt; the elevated app's name must not win.
+        #expect(QEMUConsoleVisualStateClassifier.classify(
+            metrics: metrics,
+            recognizedText: [
+                "사용자 계정 컨트롤",
+                "이 앱이 디바이스를 변경할 수 있도록 허용하",
+                "시겠어요?",
+                "Windows PowerShell",
+                "확인된 게시자: Microsoft Windows",
+                "예",
+                "아니요"
+            ]
+        ) == .uacPrompt)
     }
 
     @Test("detects a centered bright modal on a dimmed console")

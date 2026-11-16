@@ -24,6 +24,13 @@ enum KnownWindowsAppCatalog {
             exePath: "C:\\Windows\\System32\\mspaint.exe",
             publisher: "Microsoft",
             iconId: "icon_paint"
+        ),
+        WindowsApp(
+            id: "winapp_explorer",
+            name: "File Explorer",
+            exePath: "C:\\Windows\\explorer.exe",
+            publisher: "Microsoft",
+            iconId: "icon_explorer"
         )
     ]
 }

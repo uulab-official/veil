@@ -1,0 +1,11 @@
+{
+  "type": "host.folder.mount.response",
+  "requestId": "req_host_folder",
+  "protocolVersion": 1,
+  "hostFolder": {
+    "isMounted": true,
+    "driveLetter": "M",
+    "uncPath": "\\\\10.0.2.2@50123\\6f1d0c9a2b7e4f30a8d5c1e9b2f47a60",
+    "message": null
+  }
+}

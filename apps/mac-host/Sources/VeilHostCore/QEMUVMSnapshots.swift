@@ -224,23 +224,39 @@ public enum QEMUSnapshotTagPolicy {
 
 /// Drives QEMU internal snapshots.
 ///
-/// Create, restore, and delete go through QMP `human-monitor-command` (`savevm`/`loadvm`/`delvm`)
-/// against a running machine, because those commands keep guest RAM and disk state consistent with
-/// each other. Listing also works while the VM is off, through `qemu-img`, so a user can inspect
-/// what they have without booting Windows.
+/// Create, restore, and delete run as QMP `snapshot-save`/`snapshot-load`/`snapshot-delete` jobs
+/// against a running machine, so guest RAM and disk state stay consistent with each other. They name
+/// only the system disk's qcow2 node: HMP `savevm` would also snapshot the writable raw UEFI
+/// variable store and refuses to. Listing also works while the VM is off, through `qemu-img`, so a
+/// user can inspect what they have without booting Windows.
 public struct QEMUSnapshotController: Sendable {
+    public static let defaultJobPollAttempts = 600
+    public static let defaultJobPollIntervalNanoseconds: UInt64 = 500_000_000
+
     private let qmp: any QEMUQMPControlling
     private let fileExists: @Sendable (String) -> Bool
     private let processRunner: @Sendable (String, [String]) -> QEMUProcessOutcome
+    private let nodeName: String
+    private let jobPollAttempts: Int
+    private let sleeper: @Sendable (UInt64) async -> Void
+    private let makeJobID: @Sendable () -> String
 
     public init(
         qmp: any QEMUQMPControlling = QEMUQMPClient(),
         fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
-        processRunner: @escaping @Sendable (String, [String]) -> QEMUProcessOutcome = QEMUQMPClient.runProcess
+        processRunner: @escaping @Sendable (String, [String]) -> QEMUProcessOutcome = QEMUQMPClient.runProcess,
+        nodeName: String = QEMUWindowsBootPlan.systemDiskNodeName,
+        jobPollAttempts: Int = QEMUSnapshotController.defaultJobPollAttempts,
+        sleeper: @escaping @Sendable (UInt64) async -> Void = { try? await Task.sleep(nanoseconds: $0) },
+        makeJobID: @escaping @Sendable () -> String = { "veil-snapshot-\(UUID().uuidString.prefix(8).lowercased())" }
     ) {
         self.qmp = qmp
         self.fileExists = fileExists
         self.processRunner = processRunner
+        self.nodeName = nodeName
+        self.jobPollAttempts = jobPollAttempts
+        self.sleeper = sleeper
+        self.makeJobID = makeJobID
     }
 
     public func list(qmpSocketPath: String) async throws -> [VMSnapshotSummary] {
@@ -270,22 +286,64 @@ public struct QEMUSnapshotController: Sendable {
     @discardableResult
     public func create(tag: String, qmpSocketPath: String) async throws -> String {
         let validated = try QEMUSnapshotTagPolicy.validate(tag)
-        _ = try await monitorText("savevm \(validated)", qmpSocketPath: qmpSocketPath)
+        let jobID = makeJobID()
+        try await runJob(.snapshotSave(jobID: jobID, tag: validated, node: nodeName), jobID: jobID, tag: validated, qmpSocketPath: qmpSocketPath)
         return validated
     }
 
     @discardableResult
     public func restore(tag: String, qmpSocketPath: String) async throws -> String {
         let validated = try QEMUSnapshotTagPolicy.validate(tag)
-        _ = try await monitorText("loadvm \(validated)", qmpSocketPath: qmpSocketPath)
+        let jobID = makeJobID()
+        try await runJob(.snapshotLoad(jobID: jobID, tag: validated, node: nodeName), jobID: jobID, tag: validated, qmpSocketPath: qmpSocketPath)
         return validated
     }
 
     @discardableResult
     public func delete(tag: String, qmpSocketPath: String) async throws -> String {
         let validated = try QEMUSnapshotTagPolicy.validate(tag)
-        _ = try await monitorText("delvm \(validated)", qmpSocketPath: qmpSocketPath)
+        let jobID = makeJobID()
+        try await runJob(.snapshotDelete(jobID: jobID, tag: validated, node: nodeName), jobID: jobID, tag: validated, qmpSocketPath: qmpSocketPath)
         return validated
+    }
+
+    /// Starts a snapshot job and waits for it to conclude. The job's own reply is only "accepted";
+    /// whether it worked is in `query-jobs`.
+    private func runJob(_ command: QEMUQMPCommand, jobID: String, tag: String, qmpSocketPath: String) async throws {
+        try await qmpRun(command, qmpSocketPath: qmpSocketPath)
+        for attempt in 0..<max(1, jobPollAttempts) {
+            if attempt > 0 {
+                await sleeper(Self.defaultJobPollIntervalNanoseconds)
+            }
+            let reply = try await qmpRun(.queryJobs, qmpSocketPath: qmpSocketPath)
+            guard let job = reply.jobsReturn?.first(where: { $0.id == jobID }), job.isConcluded else {
+                continue
+            }
+
+            _ = try? await qmp.run(.jobDismiss(jobID: jobID), socketPath: qmpSocketPath)
+            if let error = job.error {
+                if error.lowercased().contains("does not exist") || error.lowercased().contains("not found") {
+                    throw VMSnapshotError.snapshotNotFound(tag)
+                }
+                throw VMSnapshotError.monitorRejected(command: command.executeName, message: error)
+            }
+            return
+        }
+        throw VMSnapshotError.monitorRejected(command: command.executeName, message: "QEMU did not finish the job in time.")
+    }
+
+    @discardableResult
+    private func qmpRun(_ command: QEMUQMPCommand, qmpSocketPath: String) async throws -> QEMUQMPReply {
+        do {
+            return try await qmp.run(command, socketPath: qmpSocketPath)
+        } catch let error as QEMUQMPClientError {
+            switch error {
+            case .socketUnavailable, .transportUnavailable:
+                throw VMSnapshotError.qmpUnavailable
+            case .noReply, .commandFailed:
+                throw VMSnapshotError.monitorRejected(command: command.executeName, message: error.localizedDescription)
+            }
+        }
     }
 
     /// Runs an HMP command and surfaces monitor-level failures.
@@ -377,7 +435,7 @@ public enum VMSnapshotCapabilityFactory {
                 systemDiskPath: virtualDiskPath,
                 convertedDiskPath: convertedPath,
                 conversionCommand: conversionCommand(from: virtualDiskPath, to: convertedPath),
-                detail: "Veil's default system disk is \(format ?? "an unknown format"), and QEMU internal snapshots can only be stored inside a \(VMSnapshotCapability.requiredDiskFormat) image. Suspend and resume still work on this disk because they stream guest memory to a separate file."
+                detail: "This Windows system disk is \(format ?? "an unknown format"), and QEMU internal snapshots can only be stored inside a \(VMSnapshotCapability.requiredDiskFormat) image. Disks Veil creates now are \(VMSnapshotCapability.requiredDiskFormat); older ones are raw. Suspend and resume still work on this disk because they stream guest memory to a separate file."
             )
         }
 
@@ -479,8 +537,8 @@ public enum VMSnapshotActionReportFactory {
             actions.append(capability.detail)
             if let conversionCommand = capability.conversionCommand,
                let convertedDiskPath = capability.convertedDiskPath {
-                actions.append("Convert the system disk with: \(conversionCommand)")
-                actions.append("Then point the VM profile's virtual disk at \(convertedDiskPath) and keep the original file until Windows boots from the converted disk.")
+                actions.append("Shut down Windows and choose Configuration > Disk > Convert to qcow2, which converts the disk, switches the VM to \(convertedDiskPath), and moves the raw file to the Trash.")
+                actions.append("The equivalent manual command is: \(conversionCommand)")
             }
             actions.append("Use veil-vmctl vm-suspend --json when you only need to keep the current Windows session, which works on the current disk format.")
         case .failed:

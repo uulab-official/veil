@@ -24,24 +24,12 @@ public enum WindowsAppWindowPlacement {
         let sourceHeight = max(Double(bounds.height), 1)
         let maximumWidth = max(320, visibleFrame.width * 0.92)
         let maximumHeight = max(240, visibleFrame.height * 0.88)
-        let isCompactUtilityWindow = sourceWidth <= 640
-            && sourceHeight >= 640
-            && sourceHeight >= sourceWidth * 1.1
-        // Preserve a readable native-like scale for normal Windows apps instead of enlarging a
-        // small guest HWND until its text looks like a full-screen VM console.
-        let preferredMinimumWidth = isCompactUtilityWindow ? 520.0 : 720.0
-        let preferredMinimumHeight = isCompactUtilityWindow ? 360.0 : 480.0
-        let minimumWidth = min(preferredMinimumWidth, maximumWidth)
-        let minimumHeight = min(preferredMinimumHeight, maximumHeight)
 
+        // The Mac window starts at the Windows window's own size. The window's picture is drawn unscaled,
+        // so a Mac window made larger than a small Windows window, as an earlier version did up to
+        // 720 x 480, showed the app in one corner of an empty frame. Character Map is 477 x 430.
         var targetWidth = sourceWidth
         var targetHeight = sourceHeight
-
-        if targetWidth < minimumWidth || targetHeight < minimumHeight {
-            let scale = max(minimumWidth / targetWidth, minimumHeight / targetHeight)
-            targetWidth *= scale
-            targetHeight *= scale
-        }
 
         if targetWidth > maximumWidth || targetHeight > maximumHeight {
             let scale = min(maximumWidth / targetWidth, maximumHeight / targetHeight)
@@ -60,6 +48,49 @@ public enum WindowsAppWindowPlacement {
             y: y,
             width: targetWidth,
             height: targetHeight
+        )
+    }
+
+    /// The frame that puts a Mac window where its Windows window already is, or nil when the guest display
+    /// does not stand for the Mac screen.
+    ///
+    /// In the apps view the guest display is the Mac screen, point for point or two pixels a point
+    /// (`CoherencePlacement.displayMatching`), so a place on one is a place on the other. Opening every Mac
+    /// window in the middle of the screen instead meant that each time Veil started, the windows landed
+    /// somewhere new and every Windows window was then moved to follow. A window that would sit under the
+    /// menu bar or the Dock is brought inside `visibleFrame`; Veil then moves the Windows window to match,
+    /// as it does when the Mac window is dragged.
+    ///
+    /// - Parameters:
+    ///   - guestFrame: The Windows window on the guest display, in guest pixels from its top-left.
+    ///   - size: The Mac window's content size, as `initialFrame` gives it.
+    ///   - screenFrame: The Mac screen, AppKit coordinates (bottom-left origin, points).
+    ///   - display: The guest display from `window.layout`.
+    public static func frameMatchingGuest(
+        guestFrame: GuestPixelRect,
+        size: (width: Double, height: Double),
+        screenFrame: HostVisibleFrameGeometry,
+        visibleFrame: HostVisibleFrameGeometry,
+        display: GuestPixelRect
+    ) -> HostVisibleFrameGeometry? {
+        guard screenFrame.width > 0, screenFrame.height > 0, display.width > 0, display.height > 0 else {
+            return nil
+        }
+        let scaleX = Double(display.width) / screenFrame.width
+        let scaleY = Double(display.height) / screenFrame.height
+        // The same whole number of pixels a point both ways: the display was sized to this screen.
+        guard abs(scaleX - scaleY) < 0.01,
+              [1.0, 2.0].contains(where: { abs(scaleX - $0) < 0.01 }) else {
+            return nil
+        }
+
+        let left = screenFrame.x + Double(guestFrame.x - display.x) / scaleX
+        let top = screenFrame.y + screenFrame.height - Double(guestFrame.y - display.y) / scaleY
+        return HostVisibleFrameGeometry(
+            x: clamp(left, lower: visibleFrame.x, upper: visibleFrame.x + visibleFrame.width - size.width),
+            y: clamp(top - size.height, lower: visibleFrame.y, upper: visibleFrame.y + visibleFrame.height - size.height),
+            width: size.width,
+            height: size.height
         )
     }
 

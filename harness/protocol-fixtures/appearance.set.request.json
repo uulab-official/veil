@@ -1,0 +1,6 @@
+{
+  "type": "appearance.set.request",
+  "requestId": "req_appearance_set",
+  "protocolVersion": 1,
+  "theme": "dark"
+}

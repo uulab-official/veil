@@ -1,0 +1,5 @@
+{
+  "type": "gpu.driver.install.request",
+  "requestId": "req_gpu_driver_install",
+  "protocolVersion": 1
+}

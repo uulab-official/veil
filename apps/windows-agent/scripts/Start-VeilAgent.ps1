@@ -1,7 +1,8 @@
 param(
     [string]$InstallRoot = "$env:LOCALAPPDATA\Veil\Agent",
     [int]$Port = 18444,
-    [switch]$RequirePackageIdentity
+    [switch]$RequirePackageIdentity,
+    [switch]$RequireGuestAddress
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,7 +15,7 @@ $StdErrLogPath = Join-Path $LogRoot "agent.stderr.log"
 $ListenHost = "0.0.0.0"
 $ProbeHost = "127.0.0.1"
 New-Item -ItemType Directory -Force -Path $LogRoot | Out-Null
-Add-Content -Path $StartLogPath -Value "VeilAgent start requested at $(Get-Date -Format o). InstallRoot=$InstallRoot Port=$Port RequirePackageIdentity=$RequirePackageIdentity"
+Add-Content -Path $StartLogPath -Value "VeilAgent start requested at $(Get-Date -Format o). InstallRoot=$InstallRoot Port=$Port RequirePackageIdentity=$RequirePackageIdentity RequireGuestAddress=$RequireGuestAddress"
 if (-not (Test-Path $AgentExe)) {
     Add-Content -Path $StartLogPath -Value "VeilAgent.exe was not found at $AgentExe."
     throw "VeilAgent.exe was not found at $AgentExe. Run Install-VeilAgent.ps1 first."
@@ -169,7 +170,7 @@ function Test-VeilAgentGuestAddressHealth {
     return $false
 }
 
-$GuestIPv4Addresses = @(Get-VeilGuestIPv4Addresses)
+$GuestIPv4Addresses = if ($RequireGuestAddress) { @(Get-VeilGuestIPv4Addresses) } else { @() }
 if ($GuestIPv4Addresses.Count -gt 0) {
     $GuestIPv4Text = $GuestIPv4Addresses -join ", "
 } else {
@@ -183,21 +184,24 @@ $RunningAgent = Get-Process -Name "VeilAgent" -ErrorAction SilentlyContinue |
     Select-Object -First 1
 if ($RunningAgent) {
     Add-Content -Path $StartLogPath -Value "VeilAgent is already running from the installed app. PID=$($RunningAgent.Id)"
-    if (
-        (Test-VeilAgentPort -Port $Port -ProbeAddress $ProbeHost) -and
-        (Test-VeilAgentHealth -Port $Port -ProbeAddress $ProbeHost -RequirePackageIdentity:$RequirePackageIdentity) -and
-        $GuestIPv4Addresses.Count -gt 0 -and
-        (Test-VeilAgentGuestAddressHealth -Port $Port -Addresses $GuestIPv4Addresses -RequirePackageIdentity:$RequirePackageIdentity)
-    ) {
+    $LoopbackReady = (Test-VeilAgentPort -Port $Port -ProbeAddress $ProbeHost) -and
+        (Test-VeilAgentHealth -Port $Port -ProbeAddress $ProbeHost -RequirePackageIdentity:$RequirePackageIdentity)
+    $GuestAddressReady = $false
+    if ($RequireGuestAddress -and $GuestIPv4Addresses.Count -gt 0) {
+        $GuestAddressReady = Test-VeilAgentGuestAddressHealth -Port $Port -Addresses $GuestIPv4Addresses -RequirePackageIdentity:$RequirePackageIdentity
+    }
+    if ($LoopbackReady -and ($GuestAddressReady -or -not $RequireGuestAddress)) {
         $ReadyDetail = if ($RequirePackageIdentity) { " with package identity" } else { "" }
-        Add-Content -Path $StartLogPath -Value "Existing VeilAgent answered agent.health.response on loopback and a guest IPv4 address$ReadyDetail."
-        Write-Host "VeilAgent is already running on ${ListenHost}:$Port; loopback and guest IPv4 agent.health.response probes succeeded$ReadyDetail."
+        $AddressDetail = if ($GuestAddressReady) { " and a guest IPv4 address" } else { "; guest IPv4 verification was not required" }
+        Add-Content -Path $StartLogPath -Value "Existing VeilAgent answered agent.health.response on loopback$AddressDetail$ReadyDetail."
+        Write-Host "VeilAgent is already running on ${ListenHost}:$Port; loopback health succeeded$AddressDetail$ReadyDetail."
         exit 0
     }
 
     $FailureDetail = if ($RequirePackageIdentity) { " or package identity was not ready" } else { "" }
-    Add-Content -Path $StartLogPath -Value "Existing VeilAgent process is present, but loopback plus guest IPv4 agent.health.response did not both succeed$FailureDetail."
-    throw "VeilAgent process is already running, but loopback plus guest IPv4 agent.health.response did not both succeed$FailureDetail. Guest IPv4 addresses: $GuestIPv4Text. Run Collect-VeilAgentDiagnostics.ps1."
+    $AddressRequirement = if ($RequireGuestAddress) { " and guest IPv4 health was required" } else { "" }
+    Add-Content -Path $StartLogPath -Value "Existing VeilAgent process is present, but loopback health$AddressRequirement did not succeed$FailureDetail."
+    throw "VeilAgent process is already running, but loopback health$AddressRequirement did not succeed$FailureDetail. Guest IPv4 addresses: $GuestIPv4Text. Run Collect-VeilAgentDiagnostics.ps1."
 }
 
 $env:VEIL_AGENT_HOST = $ListenHost
@@ -213,17 +217,103 @@ $Process = Start-Process `
 
 Add-Content -Path $StartLogPath -Value "VeilAgent process started. PID=$($Process.Id)"
 
-if (
-    (Test-VeilAgentPort -Port $Port -ProbeAddress $ProbeHost) -and
-    (Test-VeilAgentHealth -Port $Port -ProbeAddress $ProbeHost -RequirePackageIdentity:$RequirePackageIdentity) -and
-    $GuestIPv4Addresses.Count -gt 0 -and
-    (Test-VeilAgentGuestAddressHealth -Port $Port -Addresses $GuestIPv4Addresses -RequirePackageIdentity:$RequirePackageIdentity)
-) {
+# Restarts the agent when it dies by itself. The agent only starts at logon, so a crash left Windows
+# without it until the next restart; on the live guest an access violation in frame capture did that
+# twice in one day. A hidden PowerShell waits for this agent process and reads how it ended.
+#
+# The supervisor runs from a copy of this text, with the values below filled in, so it does not depend
+# on the console or the script that started it.
+$SupervisorTemplate = @'
+$ErrorActionPreference = "Stop"
+$AgentProcessId = __AGENT_PID__
+$StartScript = '__START_SCRIPT__'
+$InstallRoot = '__INSTALL_ROOT__'
+$Port = __PORT__
+$LogPath = '__LOG_PATH__'
+$RestartsPath = '__RESTARTS_PATH__'
+try {
+    $Agent = Get-Process -Id $AgentProcessId -ErrorAction Stop
+    # Opening the handle now is what keeps the exit code readable after the process is gone.
+    $null = $Agent.Handle
+    $Agent.WaitForExit()
+    $ExitCode = $Agent.ExitCode
+} catch {
+    exit 0
+}
+# Not restarted: 0 is the agent leaving by itself; -1 is Stop-Process, which is how an update or a
+# repair stops it before starting the new one; -1073741510 is Windows closing it at sign-out or
+# shutdown.
+if ($ExitCode -eq 0 -or $ExitCode -eq -1 -or $ExitCode -eq -1073741510) {
+    Add-Content -Path $LogPath -Value "VeilAgent $AgentProcessId ended with code $ExitCode at $(Get-Date -Format o); left stopped."
+    exit 0
+}
+# At most five restarts in ten minutes, so an agent that dies at once does not start forever.
+$Now = Get-Date
+$Recent = @()
+try {
+    if (Test-Path $RestartsPath) {
+        $Recent = @(Get-Content -Path $RestartsPath | Where-Object { $_ } | ForEach-Object { [datetime]::Parse($_) } | Where-Object { ($Now - $_).TotalMinutes -lt 10 })
+    }
+} catch {
+    $Recent = @()
+}
+if ($Recent.Count -ge 5) {
+    Add-Content -Path $LogPath -Value "VeilAgent $AgentProcessId ended with code $ExitCode at $(Get-Date -Format o); restarted five times in ten minutes already, so left stopped."
+    exit 0
+}
+$Stamps = @($Recent | ForEach-Object { $_.ToString("o") }) + @($Now.ToString("o"))
+Set-Content -Path $RestartsPath -Value $Stamps
+Add-Content -Path $LogPath -Value "VeilAgent $AgentProcessId ended with code $ExitCode at $(Get-Date -Format o); restarting."
+# Windows needs a moment to release the port and the agent's files.
+Start-Sleep -Seconds 2
+& $StartScript -InstallRoot $InstallRoot -Port $Port
+'@
+
+function Start-VeilAgentSupervisor {
+    param([int]$AgentProcessId)
+
+    # The installed copy, not the disc this script may be running from: the disc is ejected after an update.
+    $InstalledStartScript = Join-Path $InstallRoot "scripts\Start-VeilAgent.ps1"
+    $RestartScript = if (Test-Path $InstalledStartScript) { $InstalledStartScript } else { $PSCommandPath }
+    $RestartsPath = Join-Path $LogRoot "restarts.log"
+    # Single quotes are doubled because each value lands inside a single-quoted string.
+    $Source = $SupervisorTemplate
+    $Source = $Source.Replace("__AGENT_PID__", "$AgentProcessId")
+    $Source = $Source.Replace("__START_SCRIPT__", $RestartScript.Replace("'", "''"))
+    $Source = $Source.Replace("__INSTALL_ROOT__", $InstallRoot.Replace("'", "''"))
+    $Source = $Source.Replace("__PORT__", "$Port")
+    $Source = $Source.Replace("__LOG_PATH__", $StartLogPath.Replace("'", "''"))
+    $Source = $Source.Replace("__RESTARTS_PATH__", $RestartsPath.Replace("'", "''"))
+    $Encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Source))
+    $Supervisor = Start-Process `
+        -FilePath "powershell.exe" `
+        -WindowStyle Hidden `
+        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", $Encoded) `
+        -PassThru
+    Add-Content -Path $StartLogPath -Value "VeilAgent supervisor started. PID=$($Supervisor.Id) watching PID=$AgentProcessId"
+}
+
+try {
+    Start-VeilAgentSupervisor -AgentProcessId $Process.Id
+} catch {
+    # The agent runs without a supervisor rather than not at all.
+    Add-Content -Path $StartLogPath -Value "VeilAgent supervisor could not be started: $($_.Exception.Message)"
+}
+
+$LoopbackReady = (Test-VeilAgentPort -Port $Port -ProbeAddress $ProbeHost) -and
+    (Test-VeilAgentHealth -Port $Port -ProbeAddress $ProbeHost -RequirePackageIdentity:$RequirePackageIdentity)
+$GuestAddressReady = $false
+if ($RequireGuestAddress -and $GuestIPv4Addresses.Count -gt 0) {
+    $GuestAddressReady = Test-VeilAgentGuestAddressHealth -Port $Port -Addresses $GuestIPv4Addresses -RequirePackageIdentity:$RequirePackageIdentity
+}
+if ($LoopbackReady -and ($GuestAddressReady -or -not $RequireGuestAddress)) {
     $ReadyDetail = if ($RequirePackageIdentity) { " with package identity" } else { "" }
-    Add-Content -Path $StartLogPath -Value "VeilAgent answered agent.health.response on loopback and a guest IPv4 address$ReadyDetail."
-    Write-Host "VeilAgent started on ${ListenHost}:$Port; loopback and guest IPv4 agent.health.response probes succeeded$ReadyDetail."
+    $AddressDetail = if ($GuestAddressReady) { " and a guest IPv4 address" } else { "; guest IPv4 verification was not required" }
+    Add-Content -Path $StartLogPath -Value "VeilAgent answered agent.health.response on loopback$AddressDetail$ReadyDetail."
+    Write-Host "VeilAgent started on ${ListenHost}:$Port; loopback health succeeded$AddressDetail$ReadyDetail."
 } else {
     $FailureDetail = if ($RequirePackageIdentity) { " or package identity was not ready" } else { "" }
-    Add-Content -Path $StartLogPath -Value "VeilAgent process started, but loopback plus guest IPv4 agent.health.response did not both succeed$FailureDetail. Guest IPv4 addresses: $GuestIPv4Text. See $StdOutLogPath and $StdErrLogPath."
-    throw "VeilAgent process started, but loopback plus guest IPv4 agent.health.response did not both succeed$FailureDetail. Guest IPv4 addresses: $GuestIPv4Text. Run Collect-VeilAgentDiagnostics.ps1."
+    $AddressRequirement = if ($RequireGuestAddress) { " and guest IPv4 health was required" } else { "" }
+    Add-Content -Path $StartLogPath -Value "VeilAgent process started, but loopback health$AddressRequirement did not succeed$FailureDetail. Guest IPv4 addresses: $GuestIPv4Text. See $StdOutLogPath and $StdErrLogPath."
+    throw "VeilAgent process started, but loopback health$AddressRequirement did not succeed$FailureDetail. Guest IPv4 addresses: $GuestIPv4Text. Run Collect-VeilAgentDiagnostics.ps1."
 }

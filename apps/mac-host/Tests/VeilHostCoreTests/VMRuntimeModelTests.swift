@@ -33,6 +33,67 @@ struct VMRuntimeModelTests {
         #expect(model.capabilitySummary == "Virtualization.framework available on arm64")
     }
 
+    @Test("a boot-ready failed VM exposes a safe retry start action")
+    @MainActor
+    func failedBootReadyVMCanRetryStart() async throws {
+        let model = VMRuntimeModel(
+            service: FakeVMRuntimeService(
+                snapshot: VMRuntimeSnapshot(
+                    state: .failed,
+                    virtualizationAvailable: true,
+                    architecture: "arm64",
+                    minimumOSSupported: true,
+                    profileName: "Windows 11 Arm",
+                    installerMediaPath: "/Users/test/Downloads/Windows.iso",
+                    virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx",
+                    bootReady: true,
+                    detail: "The last Windows start failed."
+                )
+            )
+        )
+
+        await model.load()
+
+        #expect(model.canStart)
+    }
+
+    @Test("retrying a failed runtime uses the normal start service path")
+    @MainActor
+    func retriesFailedRuntimeThroughServiceBoundary() async throws {
+        let service = FakeVMRuntimeService(
+            snapshot: VMRuntimeSnapshot(
+                state: .failed,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: "/Users/test/Downloads/Windows.iso",
+                virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx",
+                bootReady: true,
+                detail: "The last Windows start failed."
+            ),
+            startedSnapshot: VMRuntimeSnapshot(
+                state: .starting,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: "/Users/test/Downloads/Windows.iso",
+                virtualDiskPath: "/Users/test/Virtual Machines/Windows.vhdx",
+                bootReady: true,
+                detail: "VM boot requested."
+            )
+        )
+        let model = VMRuntimeModel(service: service)
+
+        await model.load()
+        await model.start()
+
+        #expect(model.phase == .loaded)
+        #expect(model.snapshot?.state == .starting)
+        #expect(service.startCount == 1)
+    }
+
     @Test("loads unsupported host capability message")
     @MainActor
     func loadsUnsupportedHostCapabilityMessage() async throws {
@@ -169,6 +230,93 @@ struct VMRuntimeModelTests {
         #expect(model.snapshot?.profileName == "Windows 11 Arm")
         #expect(model.canStart == false)
         #expect(service.createCount == 1)
+    }
+
+    @Test("ignores a duplicate runtime operation while the first one is in flight")
+    @MainActor
+    func ignoresDuplicateRuntimeOperationWhileFirstIsInFlight() async throws {
+        let service = FakeVMRuntimeService(
+            createdSnapshot: VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: nil,
+                virtualDiskPath: nil,
+                bootReady: false,
+                detail: "Installer media and virtual disk paths are required before boot."
+            ),
+            operationDelayNanoseconds: 0
+        )
+        service.holdCreate = true
+        let model = VMRuntimeModel(service: service)
+
+        let first = Task { @MainActor in
+            await model.createDefaultProfile()
+        }
+        // The suite runs many @MainActor tests concurrently. A fixed sleep does not prove that
+        // the first task reached the service before the second task is enqueued, so wait for an
+        // explicit service barrier instead of relying on scheduler timing.
+        while service.createCount == 0 {
+            await Task.yield()
+        }
+        #expect(service.createCount == 1)
+        let second = Task { @MainActor in
+            await model.createDefaultProfile()
+        }
+        for _ in 0..<100 {
+            await Task.yield()
+        }
+        service.releaseCreate()
+
+        await first.value
+        await second.value
+
+        #expect(service.createCount == 1)
+        #expect(model.phase == .loaded)
+        #expect(model.snapshot?.profileName == "Windows 11 Arm")
+    }
+
+    @Test("discards a stale refresh after a newer runtime mutation completes")
+    @MainActor
+    func discardsStaleRefreshAfterNewerRuntimeMutation() async throws {
+        let service = FakeVMRuntimeService(
+            snapshot: VMRuntimeSnapshot(
+                state: .stopped,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: "/Users/test/Windows.iso",
+                virtualDiskPath: "/Users/test/Windows.img",
+                bootReady: true,
+                detail: "The old stopped snapshot."
+            ),
+            startedSnapshot: VMRuntimeSnapshot(
+                state: .running,
+                virtualizationAvailable: true,
+                architecture: "arm64",
+                minimumOSSupported: true,
+                profileName: "Windows 11 Arm",
+                installerMediaPath: "/Users/test/Windows.iso",
+                virtualDiskPath: "/Users/test/Windows.img",
+                bootReady: true,
+                detail: "The newer running snapshot."
+            ),
+            loadDelayNanoseconds: 100_000_000
+        )
+        let model = VMRuntimeModel(service: service)
+
+        let refresh = Task { @MainActor in
+            await model.refreshRuntimeEvidence()
+        }
+        try await Task.sleep(nanoseconds: 10_000_000)
+        await model.start()
+        await refresh.value
+
+        #expect(model.snapshot?.state == .running)
+        #expect(model.snapshot?.detail == "The newer running snapshot.")
     }
 
     @Test("prepares default VM and refreshes runtime state")
@@ -331,8 +479,8 @@ struct VMRuntimeModelTests {
                 installEvidence: VMInstallEvidenceSummary(
                     kind: .guestAgent,
                     isInstalled: true,
-                    title: "Guest agent connected",
-                    detail: "Windows is running the Veil guest agent 0.1.0 over the local runtime channel."
+                    title: "Guest agent installed",
+                    detail: "The Veil guest agent 0.1.0 is installed in Windows."
                 ),
                 bootReady: true,
                 windowsInstalled: true,
@@ -632,6 +780,10 @@ private final class FakeVMRuntimeService: VMRuntimeService {
     private(set) var diagnosticsDirectory: URL?
     private(set) var pointerTapCoordinates: [(Double, Double)] = []
     private(set) var consoleKeys: [String] = []
+    private let operationDelayNanoseconds: UInt64
+    private let loadDelayNanoseconds: UInt64
+    var holdCreate = false
+    private var createContinuations: [CheckedContinuation<Void, Never>] = []
 
     init(
         snapshot: VMRuntimeSnapshot? = nil,
@@ -647,7 +799,9 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         pointerTapRecord: QEMUPointerTapRecord? = nil,
         keySendRecord: QEMUKeySendRecord? = nil,
         error: (any Error)? = nil,
-        startError: (any Error)? = nil
+        startError: (any Error)? = nil,
+        operationDelayNanoseconds: UInt64 = 0,
+        loadDelayNanoseconds: UInt64 = 0
     ) {
         self.snapshot = snapshot
         self.createdSnapshot = createdSnapshot
@@ -663,6 +817,8 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         self.keySendRecord = keySendRecord
         self.error = error
         self.startError = startError
+        self.operationDelayNanoseconds = operationDelayNanoseconds
+        self.loadDelayNanoseconds = loadDelayNanoseconds
     }
 
     func loadSnapshot() async throws -> VMRuntimeSnapshot {
@@ -671,7 +827,11 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         }
 
         loadCount += 1
-        return try #require(snapshot)
+        let snapshot = try #require(snapshot)
+        if loadDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: loadDelayNanoseconds)
+        }
+        return snapshot
     }
 
     func createDefaultProfile() async throws -> VMRuntimeSnapshot {
@@ -680,9 +840,23 @@ private final class FakeVMRuntimeService: VMRuntimeService {
         }
 
         createCount += 1
+        if holdCreate {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                createContinuations.append(continuation)
+            }
+        }
+        if operationDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: operationDelayNanoseconds)
+        }
         let createdSnapshot = try #require(createdSnapshot)
         snapshot = createdSnapshot
         return createdSnapshot
+    }
+
+    func releaseCreate() {
+        let continuations = createContinuations
+        createContinuations.removeAll()
+        continuations.forEach { $0.resume() }
     }
 
     func createDefaultVirtualDisk() async throws -> VMRuntimeSnapshot {

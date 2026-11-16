@@ -175,6 +175,7 @@ struct FramePipelineMetricsTests {
         metrics.recordDropped(windowId: "hwnd:0003029A", reason: .noSurface, at: Self.startedAt)
         metrics.recordDropped(windowId: "hwnd:0003029A", reason: .noSurface, at: Self.startedAt)
         metrics.recordDropped(windowId: "hwnd:0003029A", reason: .surfaceSizeChanged, at: Self.startedAt)
+        metrics.recordDropped(windowId: "hwnd:0003029A", reason: .sequenceGap, at: Self.startedAt)
 
         let report = metrics.report(generatedAt: Self.startedAt.addingTimeInterval(1))
         let window = report.windows.first
@@ -183,7 +184,8 @@ struct FramePipelineMetricsTests {
         #expect(!report.didObserveFrames)
         #expect(window?.droppedTiles.noSurface == 2)
         #expect(window?.droppedTiles.surfaceSizeChanged == 1)
-        #expect(window?.droppedTiles.total == 3)
+        #expect(window?.droppedTiles.sequenceGap == 1)
+        #expect(window?.droppedTiles.total == 4)
         #expect(window?.keyFrameCount == 0)
         #expect(window?.tileCount == 0)
     }

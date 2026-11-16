@@ -1,0 +1,17 @@
+{
+  "appId": "winapp_paint",
+  "bounds": {
+    "height": 84,
+    "width": 942,
+    "x": 140,
+    "y": 120
+  },
+  "focused": false,
+  "ownerWindowId": "hwnd:000F0254",
+  "popup": true,
+  "processId": 4912,
+  "state": "normal",
+  "title": "Popup Host",
+  "type": "window.created",
+  "windowId": "hwnd:000F0300"
+}

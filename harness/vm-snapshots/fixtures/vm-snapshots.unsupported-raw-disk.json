@@ -13,13 +13,13 @@
     "systemDiskPath": "/Users/example/Virtual Machines/Veil/Windows 11 Arm.img",
     "convertedDiskPath": "/Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2",
     "conversionCommand": "qemu-img convert -p -O qcow2 '/Users/example/Virtual Machines/Veil/Windows 11 Arm.img' '/Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2'",
-    "detail": "Veil's default system disk is raw, and QEMU internal snapshots can only be stored inside a qcow2 image. Suspend and resume still work on this disk because they stream guest memory to a separate file."
+    "detail": "This Windows system disk is raw, and QEMU internal snapshots can only be stored inside a qcow2 image. Disks Veil creates now are qcow2; older ones are raw. Suspend and resume still work on this disk because they stream guest memory to a separate file."
   },
   "snapshots": [],
   "nextActions": [
-    "Veil's default system disk is raw, and QEMU internal snapshots can only be stored inside a qcow2 image. Suspend and resume still work on this disk because they stream guest memory to a separate file.",
-    "Convert the system disk with: qemu-img convert -p -O qcow2 '/Users/example/Virtual Machines/Veil/Windows 11 Arm.img' '/Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2'",
-    "Then point the VM profile's virtual disk at /Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2 and keep the original file until Windows boots from the converted disk.",
+    "This Windows system disk is raw, and QEMU internal snapshots can only be stored inside a qcow2 image. Disks Veil creates now are qcow2; older ones are raw. Suspend and resume still work on this disk because they stream guest memory to a separate file.",
+    "Shut down Windows and choose Configuration > Disk > Convert to qcow2, which converts the disk, switches the VM to /Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2, and moves the raw file to the Trash.",
+    "The equivalent manual command is: qemu-img convert -p -O qcow2 '/Users/example/Virtual Machines/Veil/Windows 11 Arm.img' '/Users/example/Virtual Machines/Veil/Windows 11 Arm.qcow2'",
     "Use veil-vmctl vm-suspend --json when you only need to keep the current Windows session, which works on the current disk format."
   ]
 }

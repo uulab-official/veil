@@ -1,0 +1,61 @@
+--- a/hw/virtio/virtio-balloon.c
++++ b/hw/virtio/virtio-balloon.c
+@@ -75,6 +75,20 @@
+      */
+     return ram_block_discard_is_disabled() || migration_in_incoming_postcopy() ||
+             migration_in_bg_snapshot();
++}
++
++/*
++ * Darwin's MADV_DONTNEED only lowers a page's priority: the page stays
++ * resident, keeps its contents and still counts against QEMU's footprint, so
++ * an inflated balloon gave nothing back to macOS. MADV_FREE_REUSABLE lets the
++ * kernel take the pages and drops them from the footprint at once.
++ */
++static void balloon_discard_range(RAMBlock *rb, ram_addr_t offset, size_t size)
++{
++    ram_block_discard_range(rb, offset, size);
++#ifdef __APPLE__
++    madvise(qemu_map_ram_ptr(rb, offset), size, MADV_FREE_REUSABLE);
++#endif
+ }
+ 
+ static void balloon_inflate_page(VirtIOBalloon *balloon,
+@@ -95,7 +109,7 @@
+     if (rb_page_size == BALLOON_PAGE_SIZE) {
+         /* Easy case */
+ 
+-        ram_block_discard_range(rb, rb_offset, rb_page_size);
++        balloon_discard_range(rb, rb_offset, rb_page_size);
+         /* We ignore errors from ram_block_discard_range(), because it
+          * has already reported them, and failing to discard a balloon
+          * page is not fatal */
+@@ -134,7 +148,7 @@
+         /* We've accumulated a full host page, we can actually discard
+          * it now */
+ 
+-        ram_block_discard_range(rb, rb_aligned_offset, rb_page_size);
++        balloon_discard_range(rb, rb_aligned_offset, rb_page_size);
+         /* We ignore errors from ram_block_discard_range(), because it
+          * has already reported them, and failing to discard a balloon
+          * page is not fatal */
+@@ -161,6 +175,10 @@
+ 
+     /* When a page is deflated, we hint the whole host page it lives
+      * on, since we can't do anything smaller */
++#ifdef __APPLE__
++    /* Counts the page against the footprint again before the guest reuses it. */
++    madvise(host_addr, rb_page_size, MADV_FREE_REUSE);
++#endif
+     ret = qemu_madvise(host_addr, rb_page_size, QEMU_MADV_WILLNEED);
+     if (ret != 0) {
+         warn_report("Couldn't MADV_WILLNEED on balloon deflate: %s",
+@@ -390,7 +408,7 @@
+                 continue;
+             }
+ 
+-            ram_block_discard_range(rb, ram_offset, size);
++            balloon_discard_range(rb, ram_offset, size);
+         }
+ 
+ skip_element:

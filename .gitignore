@@ -12,6 +12,12 @@ bin/
 obj/
 TestResults/
 apps/windows-agent/app/
+apps/windows-agent/app.previous/
+apps/windows-agent/.app-publish.*/
+apps/windows-agent/.veil-agent-bundle.lock
+apps/windows-agent/.publish-staging-*/
+apps/windows-agent/.install-staging-*/
+apps/windows-agent/.repair-staging-*/
 apps/windows-agent/package/*.cer
 apps/windows-agent/package/*.msix
 apps/windows-agent/package/*.pfx
@@ -28,6 +34,7 @@ npm-debug.log*
 local/
 tmp/
 dist/
+.worktrees/
 
 # VM artifacts
 *.vhdx

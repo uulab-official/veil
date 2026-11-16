@@ -1521,6 +1521,46 @@ test("validates app runtime type-text actions", () => {
   assert.equal(validateAppRuntimeAction(report), report);
 });
 
+test("validates app runtime type-unicode actions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  report.action = "type-unicode";
+  report.accepted = true;
+  delete report.launch;
+  delete report.window;
+  report.windowId = "hwnd:0003029A";
+  report.typedTextCharacterCount = 2;
+  report.textInputs = [
+    {
+      type: "input.text",
+      windowId: "hwnd:0003029A",
+      text: "안녕"
+    }
+  ];
+
+  assert.equal(validateAppRuntimeAction(report), report);
+});
+
+test("rejects control characters in accepted type-unicode actions", () => {
+  const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
+  report.action = "type-unicode";
+  report.accepted = true;
+  delete report.launch;
+  delete report.window;
+  report.windowId = "hwnd:0003029A";
+  report.textInputs = [
+    {
+      type: "input.text",
+      windowId: "hwnd:0003029A",
+      text: "a\u0008b"
+    }
+  ];
+
+  assert.throws(
+    () => validateAppRuntimeAction(report),
+    /must not contain Unicode control characters/
+  );
+});
+
 test("validates app runtime click actions", () => {
   const report = JSON.parse(readFileSync(new URL("../fixtures/app-runtime-action.launch-demo.json", import.meta.url), "utf8"));
   report.action = "click";

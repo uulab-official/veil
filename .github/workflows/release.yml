@@ -1,0 +1,177 @@
+name: Release
+
+# Push a tag such as v0.2.0, or run it by hand with a version, to publish Veil.zip with the
+# corresponding engine sources. With the signing secrets below the app is Developer ID signed and
+# notarized; without them it is an ad-hoc signed open source build.
+#
+# Optional secrets:
+#   MACOS_CERTIFICATE_P12       base64 Developer ID Application certificate (.p12)
+#   MACOS_CERTIFICATE_PASSWORD  its password
+#   VEIL_DEVELOPER_ID_APPLICATION  "Developer ID Application: Name (TEAMID)"
+#   APPLE_API_KEY_P8            base64 App Store Connect API key (.p8) for notarytool
+#   APPLE_API_KEY_ID            its key ID
+#   APPLE_API_ISSUER_ID         its issuer ID
+#   SPARKLE_ED_PRIVATE_KEY      EdDSA private key for Veil's own updates (docs/release-updates.md); with it
+#                               and the signing secrets, the release is also published to the update feed
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the leading v, for example 0.2.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    env:
+      VERSION: ${{ inputs.version || github.ref_name }}
+      HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12 != '' && secrets.APPLE_API_KEY_P8 != '' }}
+      HAS_UPDATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Builds the Windows guest tools that ship inside Veil.app.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Version
+        run: |
+          version="${VERSION#v}"
+          {
+            echo "VEIL_RELEASE_VERSION=$version"
+            echo "VEIL_RELEASE_BUILD=$(date -u +%Y%m%d%H%M%S)"
+            echo "TAG=v$version"
+          } >> "$GITHUB_ENV"
+
+      - name: Engine build tools
+        run: brew install qemu swtpm llvm lld acpica meson ninja pkgconf glib pixman libslirp dtc capstone zstd libpng jpeg-turbo
+
+      - name: Patched QEMU cache
+        uses: actions/cache@v4
+        with:
+          path: dist/.patched-qemu
+          key: patched-qemu-${{ hashFiles('script/build_patched_qemu.sh', 'script/qemu-patches/*.patch') }}
+
+      - name: Secure Boot firmware cache
+        uses: actions/cache@v4
+        with:
+          path: dist/.secure-firmware
+          key: secure-firmware-${{ hashFiles('script/build_secure_firmware.sh') }}
+
+      - name: Test gate
+        run: ./script/test_all.sh --skip-app-verify --skip-windows-agent
+
+      - name: Import signing identity
+        if: env.HAS_SIGNING == 'true'
+        env:
+          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          keychain="$RUNNER_TEMP/veil-release.keychain-db"
+          keychain_password="$(uuidgen)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          echo "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+          rm "$RUNNER_TEMP/certificate.p12"
+          echo "$API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          xcrun notarytool store-credentials veil-notary --key "$RUNNER_TEMP/notary.p8" \
+            --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID" --keychain "$keychain"
+          rm "$RUNNER_TEMP/notary.p8"
+          echo "VEIL_NOTARY_KEYCHAIN_PROFILE=veil-notary" >> "$GITHUB_ENV"
+
+      - name: Build Veil.app
+        env:
+          VEIL_DEVELOPER_ID_APPLICATION: ${{ secrets.VEIL_DEVELOPER_ID_APPLICATION }}
+        run: |
+          if [[ "$HAS_SIGNING" == "true" ]]; then
+            ./script/release_macos.sh --notarize
+          else
+            ./script/release_macos.sh --unsigned
+          fi
+
+      - name: Engine sources
+        run: ./script/collect_engine_sources.sh dist/release/sources
+
+      - name: Assets
+        run: |
+          mkdir -p dist/assets
+          cp dist/release/Veil.zip "dist/assets/Veil-$VEIL_RELEASE_VERSION.zip"
+          cp dist/release/sources/engine-sources.tar "dist/assets/Veil-$VEIL_RELEASE_VERSION-engine-sources.tar"
+          cp dist/release/sources/SOURCES.md dist/assets/SOURCES.md
+          (cd dist/assets && shasum -a 256 Veil-* SOURCES.md > SHA256SUMS.txt)
+
+      # Only a notarized build goes to the update feed: an update replaces Veil on the user's Mac, and
+      # Gatekeeper would refuse an ad-hoc one there anyway.
+      - name: Update feed
+        if: env.HAS_SIGNING == 'true' && env.HAS_UPDATE_KEY == 'true'
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          echo "$SPARKLE_ED_PRIVATE_KEY" | ./script/make_appcast.sh \
+            "dist/assets/Veil-$VEIL_RELEASE_VERSION.zip" "$VEIL_RELEASE_VERSION" "$VEIL_RELEASE_BUILD" \
+            "https://github.com/${{ github.repository }}/releases/download/$TAG/Veil-$VEIL_RELEASE_VERSION.zip" \
+            dist/appcast.xml
+
+      - name: Release notes
+        run: |
+          {
+            echo "Veil $VEIL_RELEASE_VERSION for Apple Silicon Macs running macOS 15 or later."
+            echo
+            if [[ "$HAS_SIGNING" == "true" ]]; then
+              echo "Developer ID signed and notarized by Apple."
+            else
+              echo "This build is ad-hoc signed, not notarized. On first launch, Control-click Veil.app in the Finder, choose Open, and confirm."
+            fi
+            echo
+            echo "Windows is not included; Veil downloads it from Microsoft and it needs your own license."
+            echo "The bundled Windows engine (QEMU, swtpm, EDK2) and its corresponding source are listed in SOURCES.md and attached as the engine-sources archive."
+            echo
+            echo "Built from $GITHUB_SHA."
+          } > dist/release-notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/assets/* --clobber
+          else
+            flags=(--title "Veil $VEIL_RELEASE_VERSION" --notes-file dist/release-notes.md --target "$GITHUB_SHA")
+            # 0.x releases are previews until the install-to-desktop path is verified end to end.
+            [[ "$VEIL_RELEASE_VERSION" == 0.* ]] && flags+=(--prerelease)
+            gh release create "$TAG" dist/assets/* "${flags[@]}"
+          fi
+
+      # The feed lives at a fixed URL, an asset of the "appcast" release, because 0.x releases are
+      # pre-releases and GitHub's releases/latest skips those.
+      - name: Publish update feed
+        if: env.HAS_SIGNING == 'true' && env.HAS_UPDATE_KEY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view appcast >/dev/null 2>&1; then
+            gh release create appcast --prerelease --title "Veil update feed" \
+              --notes "Sparkle update feed for Veil. Not a release; download Veil from the newest versioned release." \
+              --target "$GITHUB_SHA"
+          fi
+          gh release upload appcast dist/appcast.xml --clobber
+
+      - name: Remove signing keychain
+        if: always() && env.HAS_SIGNING == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/veil-release.keychain-db" || true

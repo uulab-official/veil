@@ -55,6 +55,9 @@ typical change touches, and what compositing costs.
 
 - [x] Add `veil-vmctl frame-pipeline-report` that opens the frame channel, collects for
       a bounded window, and emits the report as JSON, optionally saving it to a file.
+- [x] Make the human-readable report break dropped tiles down by reason (`noSurface`,
+      `surfaceSizeChanged`, `undecodablePayload`, `payloadRectMismatch`, and `sequenceGap`)
+      so an operator can choose recovery without opening the raw JSON.
 - [x] Cap the duration at 300 seconds, so the command cannot become an accidental
       unbounded profiler.
 - [x] Report honestly when no frames arrived at all, rather than emitting zeroes that

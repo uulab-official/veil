@@ -29,9 +29,15 @@ enum AppRuntimeProviderSelection: String, Equatable {
 
 enum AppRuntimeBooterError: LocalizedError {
     case qemuGuestAutomationUnavailable
+    case windowsAppsAreOpen
+    case windowsToolsDoNotAnswer
 
     var errorDescription: String? {
         switch self {
+        case .windowsAppsAreOpen:
+            String(localized: "Close your Windows apps first. Veil types a command into Windows for this, and an open app could receive it.")
+        case .windowsToolsDoNotAnswer:
+            String(localized: "The Windows tools are not answering. Restart Windows to start them again.")
         case .qemuGuestAutomationUnavailable:
             "Automatic guest setup requires QEMU control. Continue in the Apple Virtualization Windows console or install QEMU and restart Veil."
         }
@@ -44,6 +50,25 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private let qemuBooter: QEMUVMRuntimeBooter
     private let virtualizationBooter: VirtualizationVMRuntimeBooter
     @MainActor private var virtualizationConsolePresenter: VMConsoleWindowPresenter?
+    /// Turns the Windows IME off before Veil types a command into Windows (Run dialog). With the IME following a
+    /// Korean Mac input source, `D:\\U.cmd` was typed as Hangul and the tools update failed.
+    /// Set once at launch, before any automation runs.
+    nonisolated(unsafe) var prepareGuestForTyping: (@MainActor @Sendable () async -> Void)?
+    /// Why no command may be typed into Windows now, or nil when it may. See `GuestTypingSafety`: the typed
+    /// commands click a fixed place on the Windows screen, select everything with Ctrl+A, and type, so they
+    /// are only for a desktop known to be empty.
+    nonisolated(unsafe) var typingRefusal: (@MainActor @Sendable () -> GuestTypingRefusal?)?
+
+    private func refuseTypingOverOpenApps() async throws {
+        switch await MainActor.run(body: { typingRefusal?() }) {
+        case .appsAreOpen:
+            throw AppRuntimeBooterError.windowsAppsAreOpen
+        case .toolsDoNotAnswer:
+            throw AppRuntimeBooterError.windowsToolsDoNotAnswer
+        case nil:
+            return
+        }
+    }
 
     init(
         provider: AppRuntimeProviderSelection,
@@ -166,13 +191,26 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
         }
+        try await refuseTypingOverOpenApps()
+        await prepareGuestForTyping?()
         return try await qemuBooter.installGuestAgentFromAttachedMedia()
+    }
+
+    func updateGuestToolsFromRemovableMedia() async throws -> QEMUKeySendRecord {
+        guard provider == .qemu else {
+            throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
+        }
+        try await refuseTypingOverOpenApps()
+        await prepareGuestForTyping?()
+        return try await qemuBooter.updateGuestToolsFromRemovableMedia()
     }
 
     func prepareSparsePackageFromAttachedMedia() async throws -> QEMUKeySendRecord {
         guard provider == .qemu else {
             throw AppRuntimeBooterError.qemuGuestAutomationUnavailable
         }
+        try await refuseTypingOverOpenApps()
+        await prepareGuestForTyping?()
         return try await qemuBooter.prepareSparsePackageFromAttachedMedia()
     }
 
@@ -190,5 +228,25 @@ final class AppRuntimeBooter: VMRuntimeBooting, @unchecked Sendable {
     private func closeVirtualizationConsole() {
         virtualizationConsolePresenter?.closeConsole()
         virtualizationConsolePresenter = nil
+    }
+}
+
+extension AppRuntimeBooter {
+    /// Installs or repairs Windows tools with the build this Veil ships. VEIL_AUTO was attached at
+    /// boot and can hold an older agent, so the current bundle goes in on the tools update disc;
+    /// a Windows started without the removable drive falls back to VEIL_AUTO's V.cmd.
+    @MainActor
+    func installCurrentGuestTools(vmModel: VMRuntimeModel) async throws -> QEMUKeySendRecord {
+        guard await vmModel.insertGuestToolsUpdateMedia() == nil else {
+            return try await installGuestAgentFromAttachedMedia()
+        }
+        let record = try await updateGuestToolsFromRemovableMedia()
+        // The repair copies the bundle right after the Windows approval, which can come minutes
+        // later; the disc stays until well after the update wait gives up.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(GuestToolsUpdatePolicy.approvalWaitSeconds + 60))
+            await vmModel.ejectRemovableMedia()
+        }
+        return record
     }
 }

@@ -31,6 +31,17 @@ struct RFBFrameReceiverTests {
             2, 128,
             1, 224
         ]))
+
+        #expect(RFBClientMessageBuilder.keyEvent(keysym: 0xff0d, isDown: true) == Data([
+            4, 1, 0, 0,
+            0, 0, 0xff, 0x0d
+        ]))
+        // RFC 6143 7.5.5: six bytes, with no padding between the button mask and the coordinates.
+        #expect(RFBClientMessageBuilder.pointerEvent(buttonMask: 1, x: 640, y: 480) == Data([
+            5, 1,
+            2, 128,
+            1, 224
+        ]))
     }
 
     @Test("parses QEMU-style server init")
@@ -155,6 +166,11 @@ struct RFBFrameReceiverTests {
             0, 0, 255, 0,
             0, 255, 0, 0
         ]))
+
+        try client.sendKeyEvent(keysym: 0x61, isDown: true)
+        try client.sendPointerEvent(buttonMask: 1, x: 1, y: 0)
+        #expect(stream.writes[5] == RFBClientMessageBuilder.keyEvent(keysym: 0x61, isDown: true))
+        #expect(stream.writes[6] == RFBClientMessageBuilder.pointerEvent(buttonMask: 1, x: 1, y: 0))
     }
 
     @Test("framebuffer renderer applies raw rectangles into RGBA pixels")

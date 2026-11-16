@@ -674,6 +674,9 @@ swift run veil-vmctl app-runtime-action --json --action repair-agent --wait-seco
 swift run veil-vmctl app-runtime-action --json --action click --window-id hwnd:0003029A --x 240 --y 130 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action clipboard --text "hello from macOS" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action type-text --window-id hwnd:0003029A --text "veil" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
+
+# Committed Unicode/IME text uses input.text; interactive Enter and Tab stay on input.key.
+swift run veil-vmctl app-runtime-action --json --action type-unicode --window-id hwnd:0003029A --text "안녕하세요" | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action proof-recommended | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action proof-multi-app | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
 swift run veil-vmctl app-runtime-action --json --action proof-notifications --wait-seconds 30 | node ../../harness/app-runtime-action/src/validate-app-runtime-action.mjs
@@ -928,7 +931,7 @@ The macOS app's QEMU launch boundary writes process logs under `~/Library/Applic
 
 `veil-vmctl qemu-capture [--json] [--output /path/to/console.png]` refreshes the latest launch record's VM-console screenshot through the recorded QEMU monitor socket. Use this instead of manually typing monitor commands: it sends only `screendump`, preserves the running VM, updates `qemu-launch-latest.json` when an output path is chosen, and returns a small capture record for evidence collection.
 
-`veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5]` validates the UTM-style embedded display path for the latest app-launched or default `qemu-start` QEMU session. It reads the loopback VNC endpoint from `qemu-launch-latest.json`, opens an RFB session, requests raw encoding, reads one framebuffer update, renders it to RGBA in memory, and reports the frame dimensions plus byte count. Use the harness validator to keep the evidence shape stable:
+`veil-vmctl qemu-display-smoke [--json] [--wait-seconds 5]` validates the UTM-style embedded display path for the latest app-launched or default `qemu-start` QEMU session. It reads the loopback VNC endpoint from `qemu-launch-latest.json`, opens an RFB session, requests raw encoding, and retries blank or transiently unavailable framebuffer observations until the bounded wait expires. The first usable frame (or the final blank frame at timeout) is rendered to RGBA in memory and reported with its dimensions plus byte count. Use the harness validator to keep the evidence shape stable:
 
 ```bash
 cd apps/mac-host
@@ -1004,7 +1007,8 @@ same Core activation and key-sequence path for its Install Guest Agent button an
 menu bar item.
 
 `veil-vmctl qemu-display-smoke --json` reports the active VNC frame's
-`visualState`, pixel metrics, bounded OCR text, and latest PNG path. Treat this
+`visualState`, pixel metrics, bounded OCR text, latest PNG path, and the bounded
+wait used to avoid classifying a boot-time blank frame prematurely. Treat this
 as the authoritative embedded-display evidence. HMP `screendump` remains a
 compatibility fallback because it can capture an inactive QEMU display head
 after Windows switches to the VirtIO display.

@@ -43,10 +43,10 @@
       "detail": "The shipping default. The guest reaches the internet, and this Mac reaches guest services through loopback-scoped port forwards. Nothing on the local network can reach the guest, which is the intended isolation."
     }
   ],
-  "privilegedHelperDecision": "Parallels ships a signed system extension and a privileged helper; Veil runs QEMU as the logged-in user, which is why it needs no admin password. USB passthrough and the bridged and host-only network modes all require root on macOS, so closing them means adopting a privileged helper installed with SMAppService, or Apple-granted vm.networking entitlements. Running QEMU under sudo is refused: it would put a user-controlled command line and a network-reachable guest behind root. The decision is open and deliberately not made by this report.",
+  "privilegedHelperDecision": "Parallels ships a signed system extension and a privileged helper; Veil runs QEMU as the logged-in user, which is why it needs no admin password. The bridged and host-only network modes require root on macOS, as does taking a USB device away from a macOS driver, so closing them means adopting a privileged helper installed with SMAppService, or the Apple-granted vm.networking and vm.device-access entitlements. Running QEMU under sudo is refused: it would put a user-controlled command line and a network-reachable guest behind root. The decision is open and deliberately not made by this report.",
   "nextActions": [
     "Run veil-vmctl qemu-doctor --json to resolve the local QEMU installation, then re-run this report.",
-    "USB passthrough and the bridged and host-only network modes need a root-privileged helper that Veil does not ship. This is an open product decision, not pending implementation work.",
+    "The bridged and host-only network modes need a root-privileged helper that Veil does not ship. This is an open product decision, not pending implementation work.",
     "Do not work around it by running QEMU under sudo. That puts a user-controlled command line and a network-reachable guest behind root.",
     "USB device passthrough: For moving files, use the live shared folder instead: veil-vmctl shared-folder-status --json. It needs no privileges and has no size cap.",
     "Bridged networking: Usermode NAT already gives the guest outbound network access. Reaching the guest from this Mac works through a loopback port forward, which is how the guest agent and the shared folder are reached.",

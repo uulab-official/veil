@@ -1,3 +1,4 @@
+import Compression
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -28,12 +29,16 @@ public final class WindowFrameCompositor: @unchecked Sendable {
         case undecodablePayload
         /// The decoded image dimensions disagree with the declared rectangle.
         case payloadRectMismatch
+        /// A delta skipped or repeated a sequence number, so the retained surface is no longer a
+        /// trustworthy base for this update.
+        case sequenceGap
     }
 
     private struct Surface {
         var context: CGContext
         var width: Int
         var height: Int
+        var sequence: Int
         var generation: Int
     }
 
@@ -63,13 +68,20 @@ public final class WindowFrameCompositor: @unchecked Sendable {
     /// Applies a tile, creating or replacing the surface when the tile is a key frame.
     @discardableResult
     public func apply(_ tile: WindowFrameTile) -> ApplyResult {
-        guard let image = decodeImage(tile.payload) else {
+        let decoded = tile.payloadFormat == VeilFrameChannelCodec.bgraDeflateFormat
+            ? Self.decodeBGRADeflate(tile.payload, width: tile.rect.width, height: tile.rect.height)
+            : decodeImage(tile.payload)
+        guard let image = decoded else {
+            // Later deltas depend on every earlier update. Once one is lost, retaining the old base
+            // would let unrelated updates make an incomplete picture appear healthy indefinitely.
+            forget(windowId: tile.windowId)
             return .needsKeyFrame(reason: .undecodablePayload)
         }
 
         // The rectangle is what tells the compositor where to draw. If the payload's real size disagrees,
         // one of the two is wrong and scaling to fit would silently distort the window.
         guard image.width == tile.rect.width, image.height == tile.rect.height else {
+            forget(windowId: tile.windowId)
             return .needsKeyFrame(reason: .payloadRectMismatch)
         }
 
@@ -80,6 +92,8 @@ public final class WindowFrameCompositor: @unchecked Sendable {
 
         if tile.isKeyFrame {
             guard let context = Self.makeContext(width: tile.surfaceWidth, height: tile.surfaceHeight) else {
+                surfacesByWindowId.removeValue(forKey: tile.windowId)
+                surfaceOrder.removeAll { $0 == tile.windowId }
                 return .needsKeyFrame(reason: .noSurface)
             }
             // Evicted before allocating, so the peak is the bound rather than the bound plus one.
@@ -90,6 +104,7 @@ public final class WindowFrameCompositor: @unchecked Sendable {
                 context: context,
                 width: tile.surfaceWidth,
                 height: tile.surfaceHeight,
+                sequence: tile.sequence,
                 generation: (surface?.generation ?? 0)
             )
         }
@@ -106,6 +121,17 @@ public final class WindowFrameCompositor: @unchecked Sendable {
             return .needsKeyFrame(reason: .surfaceSizeChanged)
         }
 
+        if !tile.isKeyFrame {
+            // Deltas are patches against the immediately preceding surface. If one was lost, applying a
+            // later patch would leave a plausible-looking but permanently wrong window. Key frames reset
+            // the sequence base above; only deltas need this strict adjacency check.
+            guard tile.sequence == existing.sequence + 1 else {
+                surfacesByWindowId.removeValue(forKey: tile.windowId)
+                surfaceOrder.removeAll { $0 == tile.windowId }
+                return .needsKeyFrame(reason: .sequenceGap)
+            }
+        }
+
         // CoreGraphics origin is bottom-left; guest rectangles are top-left. Flipping here keeps the tile
         // coordinate space identical to what Windows reported.
         let drawRect = CGRect(
@@ -118,6 +144,7 @@ public final class WindowFrameCompositor: @unchecked Sendable {
         // a partially transparent capture leave the previous content showing through.
         existing.context.setBlendMode(.copy)
         existing.context.draw(image, in: drawRect)
+        existing.sequence = tile.sequence
         existing.generation += 1
         surfacesByWindowId[tile.windowId] = existing
         touchSurfaceOrder(tile.windowId)
@@ -195,6 +222,53 @@ public final class WindowFrameCompositor: @unchecked Sendable {
             bytesPerRow: 0,
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        )
+    }
+
+    /// Inflates a `bgraDeflateFormat` payload into an image of exactly `width` by `height`, or nil when the
+    /// payload does not inflate to that many pixels.
+    public static func decodeBGRADeflate(_ data: Data, width: Int, height: Int) -> CGImage? {
+        guard width > 0, height > 0, !data.isEmpty,
+              width <= VeilFrameChannelCodec.maximumSurfaceDimension,
+              height <= VeilFrameChannelCodec.maximumSurfaceDimension else {
+            return nil
+        }
+
+        let byteCount = width * height * 4
+        var pixels = Data(count: byteCount)
+        let inflated = pixels.withUnsafeMutableBytes { destination in
+            data.withUnsafeBytes { source in
+                compression_decode_buffer(
+                    destination.bindMemory(to: UInt8.self).baseAddress!,
+                    byteCount,
+                    source.bindMemory(to: UInt8.self).baseAddress!,
+                    data.count,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+            }
+        }
+        guard inflated == byteCount,
+              let provider = CGDataProvider(data: pixels as CFData) else {
+            return nil
+        }
+
+        return CGImage(
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            // GDI capture leaves the alpha byte unreliable, so it is ignored: a mirrored surface is opaque, and
+            // popup transparency comes from clearing their black backdrop instead.
+            bitmapInfo: CGBitmapInfo(
+                rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+            ),
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
         )
     }
 

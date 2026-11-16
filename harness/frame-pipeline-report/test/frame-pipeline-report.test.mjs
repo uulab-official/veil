@@ -114,6 +114,7 @@ test("accepts a negative savings percentage", () => {
 test("rejects dropped tiles that are not called out in next actions", () => {
   const report = readFixture("frame-pipeline-report.typing.json");
   report.windows[0].droppedTiles.noSurface = 3;
+  report.windows[0].droppedTiles.sequenceGap = 1;
 
   assert.throws(() => validateFramePipelineReport(report), /call them out in nextActions/);
 });

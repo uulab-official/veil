@@ -166,12 +166,13 @@ enum AppRuntimeDockMenuFactory {
                 menu.addItem(
                     item(
                         WindowsShellCopy.prefixedMenuItemTitle(
-                            prefix: "Focus",
+                            prefix: String(localized: "Focus"),
                             title: session.window.title
                         ),
                         action: #selector(AppRuntimeDockMenuTarget.focusWindowsAppWindow(_:)),
                         target: target,
                         representedObject: session.id,
+                        image: appIcon(for: session.window.appId, model: model),
                         isEnabled: model.canFocusMirrorSession(windowId: session.id)
                     )
                 )
@@ -181,12 +182,13 @@ enum AppRuntimeDockMenuFactory {
                 menu.addItem(
                     item(
                         WindowsShellCopy.prefixedMenuItemTitle(
-                            prefix: "Close",
+                            prefix: String(localized: "Close"),
                             title: session.window.title
                         ),
                         action: #selector(AppRuntimeDockMenuTarget.closeWindowsAppWindow(_:)),
                         target: target,
                         representedObject: session.id,
+                        image: appIcon(for: session.window.appId, model: model),
                         isEnabled: model.canCloseMirrorSession(windowId: session.id)
                     )
                 )
@@ -265,17 +267,54 @@ enum AppRuntimeDockMenuFactory {
                 menu.addItem(
                     item(
                         WindowsShellCopy.prefixedMenuItemTitle(
-                            prefix: "Open",
+                            prefix: String(localized: "Open"),
                             title: app.name
                         ),
                         action: #selector(AppRuntimeDockMenuTarget.launchWindowsApp(_:)),
                         target: target,
                         representedObject: app.id,
+                        image: appIcon(for: app.id, model: model),
                         isEnabled: (!canRecoverRuntimeDisplay(vmModel: vmModel) || model.hasLiveAgentConnection)
                             && model.canRequestAppLaunch(appId: app.id)
                     )
                 )
             }
+        }
+
+        // Like the Windows Start menu in Parallels' Dock menu: every app Windows lists, in its folders.
+        if model.apps.count > 0 {
+            let canLaunch = !canRecoverRuntimeDisplay(vmModel: vmModel) || model.hasLiveAgentConnection
+            let startMenu = NSMenu(title: String(localized: "Windows Start Menu"))
+            let layout = WindowsStartMenuLayout(apps: model.apps)
+            func appItem(_ app: WindowsApp) -> NSMenuItem {
+                let entry = item(
+                    app.name,
+                    action: #selector(AppRuntimeDockMenuTarget.launchWindowsApp(_:)),
+                    target: target,
+                    representedObject: app.id,
+                    image: appIcon(for: app.id, model: model),
+                    isEnabled: canLaunch && model.canRequestAppLaunch(appId: app.id)
+                )
+                // App names are Windows' own; they are not localized keys.
+                entry.title = app.name
+                return entry
+            }
+            layout.topLevel.forEach { startMenu.addItem(appItem($0)) }
+            if !layout.topLevel.isEmpty, !layout.folders.isEmpty {
+                startMenu.addItem(.separator())
+            }
+            for folder in layout.folders {
+                let submenu = NSMenu(title: folder.name)
+                folder.apps.forEach { submenu.addItem(appItem($0)) }
+                let folderItem = NSMenuItem(title: folder.name, action: nil, keyEquivalent: "")
+                folderItem.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
+                folderItem.submenu = submenu
+                startMenu.addItem(folderItem)
+            }
+            let startItem = NSMenuItem(title: String(localized: "Windows Start Menu"), action: nil, keyEquivalent: "")
+            startItem.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)
+            startItem.submenu = startMenu
+            menu.addItem(startItem)
         }
 
         if model.canQuietRuntimeWhenIdle {
@@ -339,13 +378,37 @@ enum AppRuntimeDockMenuFactory {
         action: Selector,
         target: AppRuntimeDockMenuTarget,
         representedObject: Any? = nil,
+        image: NSImage? = nil,
         isEnabled: Bool = true
     ) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        let item = NSMenuItem(title: String(localized: String.LocalizationValue(title)), action: action, keyEquivalent: "")
         item.target = target
         item.representedObject = representedObject
+        item.image = image
         item.isEnabled = isEnabled
         return item
+    }
+
+    private static func appIcon(for appId: String, model: HostDashboardModel) -> NSImage? {
+        let identity = WindowsAppWindowIdentity.resolve(appId: appId, apps: model.apps)
+        let image = identity.iconData.flatMap(NSImage.init(data:))
+            ?? NSImage(systemSymbolName: "app.window", accessibilityDescription: identity.appName)
+        guard let image else {
+            return nil
+        }
+
+        let nativeSize = image.size
+        guard nativeSize.width > 0, nativeSize.height > 0 else {
+            image.size = NSSize(width: 16, height: 16)
+            return image
+        }
+
+        let scale = min(16 / nativeSize.width, 16 / nativeSize.height)
+        image.size = NSSize(
+            width: max(1, nativeSize.width * scale),
+            height: max(1, nativeSize.height * scale)
+        )
+        return image
     }
 
     private static func selector(for kind: AppQueuedLaunchMenuState.Kind) -> Selector {
@@ -503,7 +566,7 @@ struct AppQueuedLaunchMenuState: Equatable {
 
         if canRecoverRuntimeDisplay {
             return AppQueuedLaunchMenuState(
-                title: "Refresh Display",
+                title: String(localized: "Refresh Display"),
                 kind: .recoverRuntimeDisplay,
                 isEnabled: true
             )
@@ -525,6 +588,6 @@ struct AppQueuedLaunchMenuState: Equatable {
     }
 
     private static func title(prefix: String, appName: String) -> String {
-        WindowsShellCopy.prefixedMenuItemTitle(prefix: prefix, title: appName)
+        WindowsShellCopy.prefixedMenuItemTitle(prefix: String(localized: String.LocalizationValue(prefix)), title: appName)
     }
 }

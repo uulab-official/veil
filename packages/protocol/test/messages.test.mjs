@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -10,16 +11,28 @@ import {
   validateAgentHealthResponse,
   validateAppLaunchAcceptance,
   validateClipboardTextSet,
+  validateClipboardImageSet,
+  validateClipboardFilesSet,
+  MAX_CLIPBOARD_IMAGE_BYTES,
   validateFileOpenRequest,
+  validateSharedFileOpenRequest,
   validateFileOpenResponse,
   MAX_INPUT_TEXT_UTF16_LENGTH,
   validateInputKey,
   validateInputMouse,
   validateInputText,
+  validateInputImeSet,
+  validateHostFolderMountRequest,
+  validateHostFolderMountResponse,
   validateNotificationListenerRequest,
   validateNotificationListenerResponse,
   validateNotificationReceived,
+  validateOperationAck,
   validateSharedFolderRequest,
+  validateAppearanceSetRequest,
+  validateAppearanceSetResponse,
+  validateTimeSyncRequest,
+  validateTimeSyncResponse,
   validateSharedFolderResponse,
   validateWindowClosed,
   validateWindowCloseRequest,
@@ -32,6 +45,15 @@ import {
   validateWindowFocusResponse,
   validateWindowResizeRequest,
   validateWindowResizeResponse,
+  validateDisplayResizeRequest,
+  validateDisplayResizeResponse,
+  validateSystemShutdownRequest,
+  validateSystemShutdownResponse,
+  validateToolsUpdateRequest,
+  validateToolsUpdateResponse,
+  validateWindowListRequest,
+  validateWindowListResponse,
+  validateWindowLifecycleMetadata,
   validateWindowUpdated
 } from "../src/messages.mjs";
 
@@ -50,6 +72,7 @@ test("parses every stable fixture", async () => {
     "app.launch.request.json",
     "app.launch.response.json",
     "file.open.request.json",
+    "file.open.shared.request.json",
     "file.open.response.json",
     "window.created.json",
     "window.updated.json",
@@ -64,16 +87,40 @@ test("parses every stable fixture", async () => {
     "window.close.response.json",
     "window.resize.request.json",
     "window.resize.response.json",
+    "display.resize.request.json",
+    "display.resize.response.json",
+    "system.shutdown.request.json",
+    "system.shutdown.response.json",
     "input.mouse.left-down.json",
+    "input.mouse.pinch-zoom.json",
     "input.key.copy.json",
+    "input.key.browser-back.json",
     "input.text.json",
+    "input.text.acknowledged.json",
+    "input.text.composition.json",
+    "input.ime.set.json",
+    "host.folder.mount.request.json",
+    "host.folder.mount.response.json",
+    "operation.ack.json",
     "clipboard.text.set.host.json",
     "clipboard.text.set.guest.json",
+    "clipboard.image.set.host.json",
+    "clipboard.image.set.guest.json",
+    "clipboard.files.set.host.json",
+    "clipboard.files.set.guest.json",
     "notification.listener.request.json",
     "notification.listener.response.json",
     "notification.received.json",
     "shared.folder.request.json",
     "shared.folder.response.json",
+    "time.sync.request.json",
+    "time.sync.response.json",
+    "appearance.set.request.json",
+    "appearance.set.response.json",
+    "window.list.request.json",
+    "window.list.response.json",
+    "tools.update.request.json",
+    "tools.update.response.json",
     "error.app_not_found.json"
   ];
 
@@ -163,6 +210,20 @@ test("rejects a malformed optional window resize capability", async () => {
   );
 });
 
+test("validates the optional VirtIO GPU display capability", async () => {
+  const health = validateAgentHealthResponse(await readFixture("agent.health.response.json"));
+  assert.equal(health.capabilities.virtioGpuDisplay, true);
+
+  delete health.capabilities.virtioGpuDisplay;
+  assert.equal(validateAgentHealthResponse(health).capabilities.virtioGpuDisplay, undefined);
+
+  health.capabilities.virtioGpuDisplay = "true";
+  assert.throws(
+    () => validateAgentHealthResponse(health),
+    /capabilities\.virtioGpuDisplay/
+  );
+});
+
 test("validates notification listener consent request and response", async () => {
   const request = validateNotificationListenerRequest(await readFixture("notification.listener.request.json"));
   const response = validateNotificationListenerResponse(await readFixture("notification.listener.response.json"));
@@ -194,6 +255,41 @@ test("rejects an unsafe window resize request", () => {
       height: 900
     }),
     /width.*between 320 and 8192/
+  );
+});
+
+test("validates a desktop display resize request and applied response", async () => {
+  const request = validateDisplayResizeRequest(await readFixture("display.resize.request.json"));
+  const response = validateDisplayResizeResponse(await readFixture("display.resize.response.json"));
+
+  assert.equal(request.width, 1920);
+  assert.equal(request.height, 1080);
+  assert.equal(response.accepted, true);
+  assert.equal(response.width, 1920);
+  assert.equal(response.height, 1080);
+});
+
+test("rejects an unsafe desktop display resize request", () => {
+  assert.throws(
+    () => validateDisplayResizeRequest({
+      type: MessageType.DisplayResizeRequest,
+      requestId: "req_display_resize_invalid",
+      width: 3_841,
+      height: 900
+    }),
+    /width.*between 640 and 3840/
+  );
+});
+
+test("validates a guest shutdown request and its reply", async () => {
+  const request = validateSystemShutdownRequest(await readFixture("system.shutdown.request.json"));
+  const response = validateSystemShutdownResponse(await readFixture("system.shutdown.response.json"));
+
+  assert.equal(request.requestId, response.requestId);
+  assert.equal(response.accepted, true);
+  assert.throws(
+    () => validateSystemShutdownResponse({ ...response, accepted: "yes" }),
+    /accepted/
   );
 });
 
@@ -424,6 +520,22 @@ test("validates one host key input fixture", async () => {
   assert.deepEqual(input.modifiers, ["ctrl"]);
 });
 
+test("validates a trackpad pinch as a Ctrl+wheel scroll fixture", async () => {
+  const input = validateInputMouse(await readFixture("input.mouse.pinch-zoom.json"));
+
+  assert.equal(input.event, "scroll");
+  assert.deepEqual(input.modifiers, ["ctrl"]);
+  assert.equal(input.deltaY, 40);
+});
+
+test("validates a page swipe as a browser back key fixture", async () => {
+  const input = validateInputKey(await readFixture("input.key.browser-back.json"));
+
+  assert.equal(input.key, "browserBack");
+  assert.equal(input.windowsVirtualKey, 166);
+  assert.deepEqual(input.modifiers, []);
+});
+
 test("validates committed Unicode text input fixture", async () => {
   const input = validateInputText(await readFixture("input.text.json"));
 
@@ -449,6 +561,26 @@ test("rejects empty committed text", () => {
     () => validateInputText({ type: MessageType.InputText, windowId: "hwnd:0003029A", text: "" }),
     /text/
   );
+});
+
+test("accepts a composition that replaces what it typed before", async () => {
+  const input = validateInputText(await readFixture("input.text.composition.json"));
+  assert.equal(input.text, "녕");
+  assert.equal(input.replaceLength, 1);
+  assert.equal(
+    validateInputText({ type: MessageType.InputText, windowId: "hwnd:0003029A", text: "", replaceLength: 1 }).text,
+    ""
+  );
+});
+
+test("rejects a replaceLength that is negative, fractional, or too large", () => {
+  for (const replaceLength of [-1, 1.5, MAX_INPUT_TEXT_UTF16_LENGTH + 1, "1"]) {
+    assert.throws(
+      () => validateInputText({ type: MessageType.InputText, windowId: "hwnd:0003029A", text: "a", replaceLength }),
+      /replaceLength/,
+      String(replaceLength)
+    );
+  }
 });
 
 test("rejects committed text beyond the posted-message bound", () => {
@@ -499,6 +631,84 @@ test("validates guest clipboard text fixture", async () => {
   assert.equal(clipboard.text, "hello from Windows");
 });
 
+test("validates host and guest clipboard image fixtures against their PNG bytes", async () => {
+  for (const name of ["clipboard.image.set.host.json", "clipboard.image.set.guest.json"]) {
+    const clipboard = validateClipboardImageSet(await readFixture(name));
+    const bytes = Buffer.from(clipboard.pngBase64, "base64");
+
+    assert.equal(bytes.length, clipboard.byteLength);
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), clipboard.sha256);
+    assert.deepEqual([...bytes.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    assert.equal(bytes.readUInt32BE(16), clipboard.width);
+    assert.equal(bytes.readUInt32BE(20), clipboard.height);
+  }
+});
+
+test("rejects clipboard images above the byte and pixel bounds", async () => {
+  const clipboard = await readFixture("clipboard.image.set.host.json");
+
+  assert.throws(
+    () => validateClipboardImageSet({ ...clipboard, byteLength: MAX_CLIPBOARD_IMAGE_BYTES + 1 }),
+    /byteLength/
+  );
+  assert.throws(() => validateClipboardImageSet({ ...clipboard, width: 16_384, height: 16_384 }), /pixel/);
+  assert.throws(() => validateClipboardImageSet({ ...clipboard, format: "jpeg" }), /format/);
+  assert.throws(() => validateClipboardImageSet({ ...clipboard, sha256: "ABC" }), /sha256/);
+});
+
+test("validates the clipboard files fixture and rejects paths that escape the batch folder", async () => {
+  const clipboard = validateClipboardFilesSet(await readFixture("clipboard.files.set.host.json"));
+  assert.equal(clipboard.relativePaths.length, 1);
+
+  for (const relativePath of [
+    "Veil Clipboard\\..\\..\\Windows\\win.ini",
+    "C:\\Windows\\win.ini",
+    "Veil Clipboard\\batch\\file.txt:secret",
+    "Other\\file.txt",
+    "Veil Clipboard\\\\file.txt"
+  ]) {
+    assert.throws(
+      () => validateClipboardFilesSet({ ...clipboard, relativePaths: [relativePath] }),
+      /Clipboard file path/,
+      relativePath
+    );
+  }
+  assert.throws(() => validateClipboardFilesSet({ ...clipboard, origin: "guest" }), /Clipboard file path/);
+  assert.throws(() => validateClipboardFilesSet({ ...clipboard, origin: "other" }), /origin/);
+});
+
+test("validates guest clipboard files and pins them to one batch in the guest staging folder", async () => {
+  const clipboard = validateClipboardFilesSet(await readFixture("clipboard.files.set.guest.json"));
+  assert.equal(clipboard.origin, "guest");
+
+  const batch = "Veil Clipboard from Windows\\20261111-050102-4D5E6F";
+  for (const relativePath of [
+    "Veil Clipboard\\20261111-050102-4D5E6F\\a.txt",
+    "Veil Clipboard from Windows\\a.txt",
+    "Veil Clipboard from Windows\\not-a-batch\\a.txt",
+    `${batch}\\sub\\a.txt`,
+    `${batch}\\..`,
+    `${batch}\\a.txt:stream`
+  ]) {
+    assert.throws(
+      () => validateClipboardFilesSet({ ...clipboard, relativePaths: [relativePath] }),
+      /Clipboard file path/,
+      relativePath
+    );
+  }
+  assert.throws(
+    () => validateClipboardFilesSet({
+      ...clipboard,
+      relativePaths: [`${batch}\\a.txt`, "Veil Clipboard from Windows\\20261111-050103-4D5E6F\\b.txt"]
+    }),
+    /one batch/
+  );
+  assert.throws(
+    () => validateClipboardFilesSet({ ...clipboard, relativePaths: [`${batch}\\a.txt`, `${batch}\\A.TXT`] }),
+    /distinct names/
+  );
+});
+
 test("validates file open request and response fixtures", async () => {
   const request = validateFileOpenRequest(await readFixture("file.open.request.json"));
   assert.equal(request.appId, "winapp_notepad");
@@ -508,6 +718,23 @@ test("validates file open request and response fixtures", async () => {
   const response = validateFileOpenResponse(await readFixture("file.open.response.json"));
   assert.equal(response.accepted, true);
   assert.equal(response.processId, 4931);
+});
+
+test("validates shared-folder file open requests without carrying file bytes", async () => {
+  const request = validateSharedFileOpenRequest(await readFixture("file.open.shared.request.json"));
+  assert.equal(request.appId, "winapp_notepad");
+  assert.equal(request.fileName, "large-report.txt");
+  assert.equal(request.guestPath, "C:\\VeilShared\\large-report.txt");
+});
+
+test("rejects shared-folder file paths that escape the fixed guest root", () => {
+  assert.throws(() => validateSharedFileOpenRequest({
+    type: MessageType.SharedFileOpenRequest,
+    requestId: "req_bad_shared",
+    appId: "winapp_notepad",
+    fileName: "report.txt",
+    guestPath: "C:\\VeilShared\\..\\Windows\\System32\\report.txt"
+  }), TypeError);
 });
 
 test("rejects a file open request whose fileName carries a path", () => {
@@ -640,4 +867,193 @@ test("rejects a non-boolean sharedFolder capability", async () => {
   health.capabilities.sharedFolder = "true";
 
   assert.throws(() => validateAgentHealthResponse(health), /capabilities\.sharedFolder/);
+});
+
+test("validates the operation.ack fixture", async () => {
+  const ack = await readFixture("operation.ack.json");
+
+  assert.equal(validateOperationAck(ack), ack);
+  assert.equal(validateOperationAck(ack).type, MessageType.OperationAck);
+});
+
+test("rejects an operation.ack without a request id or accepted flag", async () => {
+  assert.throws(() => validateOperationAck({ type: "operation.ack", accepted: true }), /requestId/);
+  assert.throws(
+    () => validateOperationAck({ type: "operation.ack", requestId: "req_clipboard_42" }),
+    /accepted/
+  );
+});
+
+test("accepts an optional operationAcks capability on agent health", async () => {
+  const health = await readFixture("agent.health.response.json");
+  assert.equal(health.capabilities.operationAcks, true);
+
+  assert.equal(validateAgentHealthResponse(health), health);
+
+  const legacyHealth = { ...health, capabilities: { ...health.capabilities, operationAcks: undefined } };
+  assert.equal(validateAgentHealthResponse(legacyHealth), legacyHealth);
+});
+
+test("rejects a non-boolean operationAcks capability", async () => {
+  const health = await readFixture("agent.health.response.json");
+  health.capabilities.operationAcks = "true";
+
+  assert.throws(() => validateAgentHealthResponse(health), /capabilities\.operationAcks/);
+});
+
+test("validates time sync request and response fixtures", async () => {
+  const request = validateTimeSyncRequest(await readFixture("time.sync.request.json"));
+  const response = validateTimeSyncResponse(await readFixture("time.sync.response.json"));
+
+  assert.equal(request.reason, "vm-resume");
+  assert.equal(response.timeSync.outcome, "corrected");
+  assert.equal(
+    response.timeSync.skewMilliseconds,
+    Date.parse(request.hostUtc) - Date.parse(response.timeSync.guestUtcBefore)
+  );
+});
+
+test("rejects a time sync request whose host clock is not plausible UTC", async () => {
+  for (const hostUtc of ["", "2026-11-11T09:30:00+09:00", "yesterday", "1970-01-01T00:00:00Z", "2200-01-01T00:00:00Z"]) {
+    const request = await readFixture("time.sync.request.json");
+    request.hostUtc = hostUtc;
+
+    assert.throws(() => validateTimeSyncRequest(request), TypeError, hostUtc);
+  }
+});
+
+test("rejects a time sync request with an unknown reason", async () => {
+  const request = await readFixture("time.sync.request.json");
+  request.reason = "because";
+
+  assert.throws(() => validateTimeSyncRequest(request), /reason/);
+});
+
+test("rejects a time sync response whose method does not match its outcome", async () => {
+  const response = await readFixture("time.sync.response.json");
+  response.timeSync.outcome = "resync-requested";
+
+  assert.throws(() => validateTimeSyncResponse(response), /must be resync-task/);
+});
+
+test("rejects a time sync response claiming in-sync with a large skew", async () => {
+  const response = await readFixture("time.sync.response.json");
+  response.timeSync.outcome = "in-sync";
+  response.timeSync.method = "none";
+
+  assert.throws(() => validateTimeSyncResponse(response), /in-sync/);
+});
+
+test("accepts a time sync response that needs an elevated install", async () => {
+  const response = await readFixture("time.sync.response.json");
+  Object.assign(response.timeSync, {
+    outcome: "failed",
+    method: "none",
+    requiresElevation: true,
+    recommendedAction: "install-time-sync-task-elevated"
+  });
+
+  validateTimeSyncResponse(response);
+  response.timeSync.recommendedAction = "none";
+  assert.throws(() => validateTimeSyncResponse(response), /install-time-sync-task-elevated/);
+});
+
+test("rejects an unsupported time sync guest that claims a correction", async () => {
+  const response = await readFixture("time.sync.response.json");
+  response.timeSync.isSupported = false;
+
+  assert.throws(() => validateTimeSyncResponse(response), /unsupported/);
+});
+
+test("validates appearance set request and response fixtures", async () => {
+  const request = validateAppearanceSetRequest(await readFixture("appearance.set.request.json"));
+  const response = validateAppearanceSetResponse(await readFixture("appearance.set.response.json"));
+
+  assert.equal(request.theme, "dark");
+  assert.equal(response.appearance.appsUseLightTheme, false);
+  assert.equal(response.appearance.systemUsesLightTheme, false);
+});
+
+test("rejects an appearance request for a theme Windows does not have", async () => {
+  for (const theme of ["", "auto", "Dark", null]) {
+    const request = await readFixture("appearance.set.request.json");
+    request.theme = theme;
+
+    assert.throws(() => validateAppearanceSetRequest(request), TypeError, String(theme));
+  }
+});
+
+test("rejects an appearance response whose read-back disagrees with the theme", async () => {
+  const response = await readFixture("appearance.set.response.json");
+  response.appearance.systemUsesLightTheme = true;
+
+  assert.throws(() => validateAppearanceSetResponse(response), /read-back/);
+});
+
+test("rejects an appearance response that broadcast without a change", async () => {
+  const response = await readFixture("appearance.set.response.json");
+  response.appearance.changed = false;
+
+  assert.throws(() => validateAppearanceSetResponse(response), /broadcast/);
+});
+
+test("accepts the two IME modes and nothing else", async () => {
+  assert.equal(validateInputImeSet(await readFixture("input.ime.set.json")).mode, "native");
+  assert.equal(
+    validateInputImeSet({ type: MessageType.InputImeSet, requestId: "r", mode: "alphanumeric" }).mode,
+    "alphanumeric"
+  );
+  assert.throws(() => validateInputImeSet({ type: MessageType.InputImeSet, requestId: "r", mode: "hangul" }), /mode/);
+});
+
+test("host folder mount fixtures validate and unsafe shapes are refused", async () => {
+  const request = validateHostFolderMountRequest(await readFixture("host.folder.mount.request.json"));
+  assert.equal(request.driveLetter, "M");
+  assert.equal(validateHostFolderMountResponse(await readFixture("host.folder.mount.response.json")).hostFolder.isMounted, true);
+  for (const change of [{ token: "a&calc" }, { token: "short" }, { driveLetter: "C" }, { port: 0 }, { label: "" }]) {
+    assert.throws(() => validateHostFolderMountRequest({ ...request, ...change }), TypeError, JSON.stringify(change));
+  }
+});
+
+test("validates the window list request and response", async () => {
+  const request = validateWindowListRequest(await readFixture("window.list.request.json"));
+  const response = validateWindowListResponse(await readFixture("window.list.response.json"));
+
+  assert.equal(request.requestId, response.requestId);
+  assert.deepEqual(response.windowIds, ["hwnd:0003029A", "hwnd:000F0254"]);
+  assert.throws(() => validateWindowListResponse({ ...response, windowIds: [""] }), /windowIds/);
+  assert.throws(() => validateWindowListResponse({ ...response, windowIds: undefined }), /windowIds/);
+});
+
+test("accepts a window that cannot be resized and rejects a non-boolean flag", async () => {
+  const created = await readFixture("window.created.json");
+
+  assert.equal(validateWindowLifecycleMetadata({ ...created, resizable: false }).resizable, false);
+  assert.throws(() => validateWindowLifecycleMetadata({ ...created, resizable: "no" }), /resizable/);
+});
+
+test("accepts the desktop windows capability as an optional boolean", async () => {
+  const health = await readFixture("agent.health.response.json");
+
+  assert.equal(validateAgentHealthResponse(health).capabilities.desktopWindows, true);
+  assert.throws(
+    () => validateAgentHealthResponse({
+      ...health,
+      capabilities: { ...health.capabilities, desktopWindows: "yes" }
+    }),
+    /desktopWindows/
+  );
+});
+
+test("validates the tools update request and refuses one that names what to run", async () => {
+  const request = validateToolsUpdateRequest(await readFixture("tools.update.request.json"));
+  const response = validateToolsUpdateResponse(await readFixture("tools.update.response.json"));
+
+  assert.equal(request.requestId, response.requestId);
+  assert.equal(response.accepted, true);
+  assert.equal(response.entryPoint, "H:\\Veil Guest Agent\\U.cmd");
+  for (const field of ["path", "command", "entryPoint", "arguments"]) {
+    assert.throws(() => validateToolsUpdateRequest({ ...request, [field]: "C:\\evil.cmd" }), new RegExp(field));
+  }
+  assert.throws(() => validateToolsUpdateResponse({ ...response, accepted: "yes" }), /accepted/);
 });

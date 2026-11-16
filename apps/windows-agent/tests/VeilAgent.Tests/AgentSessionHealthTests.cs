@@ -279,6 +279,34 @@ public class AgentSessionHealthTests
     }
 
     [Fact]
+    public async Task HealthResponseReportsTheVirtioGpuDisplayDriver()
+    {
+        var session = new AgentSession(
+            new NoOpWindowsDesktop(),
+            new NoOpFrameCapture(),
+            new FakePackageIdentityProbe(true)
+        );
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.AgentHealthRequest,
+            ["requestId"] = "req_health"
+        });
+
+        var response = Assert.Single(replies.DirectReplies);
+        // A host without Windows has no viogpudo; the field is always present so the host can tell
+        // "not installed" from an agent that predates it.
+        Assert.Equal(
+            VirtioGpuDisplay.IsDriverInstalled(),
+            response["capabilities"]!["virtioGpuDisplay"]!.GetValue<bool>());
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.False(response["capabilities"]!["virtioGpuDisplay"]!.GetValue<bool>());
+            Assert.False(VirtioGpuDisplay.TrySetCustomMode(1_920, 1_200));
+        }
+    }
+
+    [Fact]
     public async Task HealthResponseAdvertisesAndReportsTheSharedFolder()
     {
         var sharedFolderProbe = new FakeSharedFolderProbe { IsShared = false };

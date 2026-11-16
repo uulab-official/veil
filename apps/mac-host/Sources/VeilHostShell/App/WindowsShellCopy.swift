@@ -16,6 +16,35 @@ struct WindowsLauncherMetadataStatus: Equatable {
 }
 
 enum WindowsShellCopy {
+    static func restartInstallationMessage(isRunning: Bool, windowsOnDisk: Bool = false) -> String {
+        // Whole sentences per case so each one can be translated with its own word order.
+        switch (isRunning, windowsOnDisk) {
+        case (true, true):
+            return String(localized: "Veil shuts Windows down, then moves the Windows disk (Windows Setup already finished copying Windows to it), its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        case (true, false):
+            return String(localized: "Veil shuts Windows down, then moves the unfinished Windows disk, its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        case (false, true):
+            return String(localized: "Veil moves the Windows disk (Windows Setup already finished copying Windows to it), its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        case (false, false):
+            return String(localized: "Veil moves the unfinished Windows disk, its UEFI settings, and its TPM to the Trash and starts Windows Setup again. The installer ISO, shared folder, and hardware settings are kept.")
+        }
+    }
+
+    /// The guest agent is only expected to answer once Windows is installed and running.
+    /// Before that it is unreachable by definition; treating that as a broken connection
+    /// sends a first-run user into a repair flow for a Windows install that does not exist.
+    static func appConnectionNeedsRepair(
+        hasLiveAppConnection: Bool,
+        agentUnavailable: Bool,
+        windowsInstalled: Bool,
+        runtimeState: VMRuntimeState?
+    ) -> Bool {
+        !hasLiveAppConnection
+            && agentUnavailable
+            && windowsInstalled
+            && runtimeState == .running
+    }
+
     static func headerSubtitle(
         hasLiveAppConnection: Bool,
         runtimeState: VMRuntimeState?,
@@ -87,10 +116,44 @@ enum WindowsShellCopy {
     }
 
     static let quietStopWaitingMessage =
-        "Windows app windows are closed. Veil will stop Windows after status refreshes."
+        String(localized: "Windows app windows are closed. Veil will stop Windows after status refreshes.")
+
+    static func lowDiskSpacePauseTitle(availableBytes: Int64) -> String {
+        let free = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+        return String(localized: "Windows Paused: Mac Disk Almost Full (\(free) free)")
+    }
+
+    static func lowDiskSpacePauseNotificationBody(availableBytes: Int64) -> String {
+        let free = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+        return String(localized: "Only \(free) is free on the disk that holds Windows. Veil paused Windows so it cannot fail mid-write. Free up space and Windows continues by itself.")
+    }
+
+    static let deletedDiskRestoringNotificationBody = String(localized: "The Windows disk file was deleted from your Mac. Veil is copying it back while Windows runs. Keep Windows running until this finishes: shutting it down now would erase it.")
+
+    static let deletedDiskRestoredNotificationBody = String(localized: "Veil put the deleted Windows disk file back where it was. Windows keeps running on it.")
+
+    static func deletedDiskNeedsSpaceNotificationBody(neededBytes: Int64) -> String {
+        let needed = ByteCountFormatter.string(fromByteCount: neededBytes, countStyle: .file)
+        return String(localized: "The Windows disk file was deleted from your Mac. Veil needs \(needed) free to copy it back. Free up space and keep Windows running: shutting it down now would erase it.")
+    }
+
+    static let deletedDiskFailedNotificationBody = String(localized: "The Windows disk file was deleted from your Mac and Veil could not copy it back yet. It tries again in a minute. Keep Windows running: shutting it down now would erase it.")
+
+    static func deletedDiskMenuTitle(_ issue: HostDiskFileGuard.Issue) -> String {
+        switch issue {
+        case .restoring:
+            String(localized: "Restoring Deleted Windows Disk…")
+        case .notEnoughSpace(let needed, _):
+            String(localized: "Windows Disk Deleted: \(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)) Needed to Restore")
+        case .failed:
+            String(localized: "Windows Disk Deleted: Keep Windows Running")
+        }
+    }
+
+    static let deletedDiskBlocksPowerMessage = String(localized: "The Windows disk file was deleted from your Mac. Windows keeps running until Veil has put it back, because turning it off now would erase it.")
 
     static func displayRecoveryStillStaleMessage(statusText: String) -> String {
-        "Display is still \(statusText). Refresh the Windows display before opening an app."
+        String(localized: "Display is still \(statusText). Refresh the Windows display before opening an app.")
     }
 
     static func openWindowsActionTitle(windowsInstalled: Bool) -> String {

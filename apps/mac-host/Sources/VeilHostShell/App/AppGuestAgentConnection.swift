@@ -100,6 +100,7 @@ struct UnavailableGuestAgentService: HostDashboardService {
     func launchApp(appId: String) async throws -> WindowsAppLaunchResult { try failure() }
     func launchNotepad() async throws -> NotepadLaunchResult { try failure() }
     func openFile(appId: String, fileName: String, contentBase64: String) async throws -> WindowsAppLaunchResult { try failure() }
+    func openSharedFile(appId: String, fileName: String, guestPath: String) async throws -> WindowsAppLaunchResult { try failure() }
     func focusWindow(windowId: String) async throws -> WindowFocusResponse { try failure() }
     func closeWindow(windowId: String) async throws -> WindowCloseResponse { try failure() }
     func sendMouseInput(_ input: InputMouseEvent) async throws { try failure() }

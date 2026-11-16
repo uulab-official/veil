@@ -58,6 +58,50 @@ public class AgentSessionWindowResizeTests
         Assert.Null(desktop.LastHeight);
     }
 
+    [Fact]
+    public async Task MovesATrackedWindowToWhereTheHostShowsIt()
+    {
+        var desktop = new RecordingWindowsDesktop();
+        var session = new AgentSession(desktop, new NoOpFrameCapture());
+        await LaunchNotepadAsync(session);
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.WindowMoveRequest,
+            ["requestId"] = "req_move",
+            ["windowId"] = "hwnd:00000010",
+            ["x"] = 240,
+            ["y"] = -12
+        });
+
+        var ack = Assert.Single(replies.DirectReplies);
+        Assert.Equal("operation.ack", ack["type"]!.GetValue<string>());
+        Assert.Equal(("hwnd:00000010", 240, -12), desktop.LastMove);
+    }
+
+    [Theory]
+    [InlineData("hwnd:00000010", 20_000, 0, "invalid_message")]
+    [InlineData("hwnd:00000099", 10, 10, "window_not_tracked")]
+    public async Task RefusesAMoveOutOfRangeOrForAnUntrackedWindow(string windowId, int x, int y, string code)
+    {
+        var desktop = new RecordingWindowsDesktop();
+        var session = new AgentSession(desktop, new NoOpFrameCapture());
+        await LaunchNotepadAsync(session);
+
+        var replies = await session.HandleAsync(new JsonObject
+        {
+            ["type"] = MessageTypes.WindowMoveRequest,
+            ["requestId"] = "req_move_bad",
+            ["windowId"] = windowId,
+            ["x"] = x,
+            ["y"] = y
+        });
+
+        var error = Assert.Single(replies.DirectReplies);
+        Assert.Equal(code, error["code"]!.GetValue<string>());
+        Assert.Null(desktop.LastMove);
+    }
+
     private static async Task LaunchNotepadAsync(AgentSession session)
     {
         var replies = await session.HandleAsync(new JsonObject
@@ -74,6 +118,13 @@ public class AgentSessionWindowResizeTests
     {
         public int? LastWidth { get; private set; }
         public int? LastHeight { get; private set; }
+        public (string WindowId, int X, int Y)? LastMove { get; private set; }
+
+        public bool MoveWindow(string windowId, int x, int y)
+        {
+            LastMove = (windowId, x, y);
+            return true;
+        }
 
         public Task<LaunchedWindow> LaunchAppAsync(WindowsAppDescriptor app, CancellationToken cancellationToken) =>
             Task.FromResult(new LaunchedWindow(

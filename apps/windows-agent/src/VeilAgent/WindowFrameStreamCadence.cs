@@ -16,7 +16,10 @@ namespace Veil.Agent;
 /// </remarks>
 public sealed class WindowFrameStreamCadence
 {
-    public static readonly TimeSpan DefaultActiveInterval = TimeSpan.FromMilliseconds(33);
+    // One display refresh at 120 Hz. An unchanged tick costs well under a millisecond with Desktop
+    // Duplication, so sampling at ProMotion rates no longer costs the guest; at 16 ms a change waited up to
+    // a full 60 Hz refresh before capture started. Needs the 1 ms timer resolution from TimerResolution.
+    public static readonly TimeSpan DefaultActiveInterval = TimeSpan.FromMilliseconds(8);
     public static readonly TimeSpan DefaultIdleInterval = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
@@ -26,7 +29,7 @@ public sealed class WindowFrameStreamCadence
     /// Small enough that a genuinely idle window drops to the cheap rate quickly, large enough that a
     /// pause between keystrokes does not cost the user a visible lag spike on the next change.
     /// </remarks>
-    public const int DefaultUnchangedTicksBeforeIdle = 15;
+    public const int DefaultUnchangedTicksBeforeIdle = 30;
 
     private readonly TimeSpan activeInterval;
     private readonly TimeSpan idleInterval;
@@ -47,6 +50,17 @@ public sealed class WindowFrameStreamCadence
     public bool IsIdle => consecutiveUnchangedTicks >= unchangedTicksBeforeIdle;
 
     public TimeSpan CurrentInterval => IsIdle ? idleInterval : activeInterval;
+
+    /// <summary>
+    /// Returns to the active rate ahead of any visible change, for when the host has just sent input or a
+    /// resize. Waiting for the idle tick to notice the change delayed the first visible response by up to
+    /// the idle interval.
+    /// </summary>
+    public TimeSpan Wake()
+    {
+        consecutiveUnchangedTicks = 0;
+        return CurrentInterval;
+    }
 
     /// <summary>
     /// Records a tick outcome and returns the interval to wait before the next one.

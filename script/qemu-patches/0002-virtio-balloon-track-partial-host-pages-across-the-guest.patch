@@ -1,0 +1,157 @@
+--- a/hw/virtio/virtio-balloon.c
++++ b/hw/virtio/virtio-balloon.c
+@@ -53,20 +53,59 @@
+     pbp->bitmap = NULL;
+ }
+ 
+-static void virtio_balloon_pbp_alloc(PartiallyBalloonedPage *pbp,
+-                                     ram_addr_t base_gpa,
+-                                     long subpages)
++/*
++ * Tracks partly ballooned host pages across the whole guest instead of one
++ * page per request. Windows hands back scattered 4 KiB pages, so on a host
++ * with 16 KiB pages (Apple silicon) the single-page tracking restarted on
++ * nearly every page and discarded almost nothing.
++ */
++static GHashTable *balloon_partial_host_pages(VirtIOBalloon *balloon)
+ {
+-    pbp->base_gpa = base_gpa;
+-    pbp->bitmap = bitmap_new(subpages);
++    if (!balloon->partial_host_pages) {
++        balloon->partial_host_pages = g_hash_table_new(g_direct_hash,
++                                                       g_direct_equal);
++    }
++    return balloon->partial_host_pages;
+ }
+ 
+-static bool virtio_balloon_pbp_matches(PartiallyBalloonedPage *pbp,
+-                                       ram_addr_t base_gpa)
++/* Returns true once every subpage of the host page is in the balloon. */
++static bool balloon_mark_subpage(VirtIOBalloon *balloon, ram_addr_t base_gpa,
++                                 int subpage, int subpages)
+ {
+-    return pbp->base_gpa == base_gpa;
++    GHashTable *pages = balloon_partial_host_pages(balloon);
++    gpointer key = (gpointer)(uintptr_t)base_gpa;
++    uint64_t full = subpages == 64 ? UINT64_MAX : (1ULL << subpages) - 1;
++    uint64_t mask = (uint64_t)(uintptr_t)g_hash_table_lookup(pages, key);
++
++    mask |= 1ULL << subpage;
++    if (mask == full) {
++        g_hash_table_remove(pages, key);
++        return true;
++    }
++    g_hash_table_insert(pages, key, (gpointer)(uintptr_t)mask);
++    return false;
+ }
+ 
++static void balloon_unmark_subpage(VirtIOBalloon *balloon, ram_addr_t base_gpa,
++                                   int subpage)
++{
++    gpointer key = (gpointer)(uintptr_t)base_gpa;
++    uint64_t mask;
++
++    if (!balloon->partial_host_pages) {
++        return;
++    }
++    mask = (uint64_t)(uintptr_t)g_hash_table_lookup(balloon->partial_host_pages,
++                                                     key);
++    mask &= ~(1ULL << subpage);
++    if (mask) {
++        g_hash_table_insert(balloon->partial_host_pages, key,
++                            (gpointer)(uintptr_t)mask);
++    } else {
++        g_hash_table_remove(balloon->partial_host_pages, key);
++    }
++}
++
+ static bool virtio_balloon_inhibited(void)
+ {
+     /*
+@@ -130,21 +169,13 @@
+     base_gpa = memory_region_get_ram_addr(mr) + mr_offset -
+                (rb_offset - rb_aligned_offset);
+ 
+-    if (pbp->bitmap && !virtio_balloon_pbp_matches(pbp, base_gpa)) {
+-        /* We've partially ballooned part of a host page, but now
+-         * we're trying to balloon part of a different one.  Too hard,
+-         * give up on the old partial page */
+-        virtio_balloon_pbp_free(pbp);
++    if (subpages > 64) {
++        return;
+     }
+ 
+-    if (!pbp->bitmap) {
+-        virtio_balloon_pbp_alloc(pbp, base_gpa, subpages);
+-    }
+-
+-    set_bit((rb_offset - rb_aligned_offset) / BALLOON_PAGE_SIZE,
+-            pbp->bitmap);
+-
+-    if (bitmap_full(pbp->bitmap, subpages)) {
++    if (balloon_mark_subpage(balloon, base_gpa,
++                             (rb_offset - rb_aligned_offset) / BALLOON_PAGE_SIZE,
++                             subpages)) {
+         /* We've accumulated a full host page, we can actually discard
+          * it now */
+ 
+@@ -152,7 +183,6 @@
+         /* We ignore errors from ram_block_discard_range(), because it
+          * has already reported them, and failing to discard a balloon
+          * page is not fatal */
+-        virtio_balloon_pbp_free(pbp);
+     }
+ }
+ 
+@@ -172,6 +202,16 @@
+     rb_page_size = qemu_ram_pagesize(rb);
+ 
+     host_addr = (void *)((uintptr_t)addr & ~(rb_page_size - 1));
++
++    if (rb_page_size > BALLOON_PAGE_SIZE) {
++        ram_addr_t rb_aligned_offset = QEMU_ALIGN_DOWN(rb_offset, rb_page_size);
++
++        balloon_unmark_subpage(balloon,
++                               memory_region_get_ram_addr(mr) + mr_offset -
++                               (rb_offset - rb_aligned_offset),
++                               (rb_offset - rb_aligned_offset) /
++                               BALLOON_PAGE_SIZE);
++    }
+ 
+     /* When a page is deflated, we hint the whole host page it lives
+      * on, since we can't do anything smaller */
+@@ -961,6 +1001,10 @@
+     }
+     balloon_stats_destroy_timer(s);
+     qemu_remove_balloon_handler(s);
++    if (s->partial_host_pages) {
++        g_hash_table_destroy(s->partial_host_pages);
++        s->partial_host_pages = NULL;
++    }
+ 
+     virtio_delete_queue(s->ivq);
+     virtio_delete_queue(s->dvq);
+@@ -989,6 +1033,9 @@
+     }
+ 
+     s->poison_val = 0;
++    if (s->partial_host_pages) {
++        g_hash_table_remove_all(s->partial_host_pages);
++    }
+ }
+ 
+ static int virtio_balloon_set_status(VirtIODevice *vdev, uint8_t status)
+--- a/include/hw/virtio/virtio-balloon.h
++++ b/include/hw/virtio/virtio-balloon.h
+@@ -72,6 +72,11 @@
+     uint32_t host_features;
+ 
+     uint32_t poison_val;
++    /*
++     * Host pages bigger than BALLOON_PAGE_SIZE that the guest has only partly
++     * ballooned: host page base (ram_addr_t) -> bitmask of ballooned subpages.
++     */
++    GHashTable *partial_host_pages;
+ 
+     /* State of the resettable container */
+     ResettableState reset_state;

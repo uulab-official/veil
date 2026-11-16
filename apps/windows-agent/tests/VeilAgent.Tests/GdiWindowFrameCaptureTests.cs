@@ -4,6 +4,36 @@ namespace VeilAgent.Tests;
 
 public class GdiWindowFrameCaptureTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CancelledCaptureCannotReplaceTheActiveStreamsComparisonBuffer(bool hasReplacementFrame)
+    {
+        var capture = new GdiWindowFrameCapture();
+        const string windowId = "hwnd:00000010";
+        var currentPixels = new byte[16];
+        var retiredPixels = Enumerable.Repeat((byte)255, 16).ToArray();
+        capture.TakeChangedRegion(windowId, retiredPixels, 2, 2);
+        capture.ForgetWindow(windowId);
+        if (hasReplacementFrame) capture.TakeChangedRegion(windowId, currentPixels, 2, 2);
+        using var retired = new CancellationTokenSource();
+        retired.Cancel();
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            capture.TakeChangedRegion(windowId, retiredPixels, 2, 2, retired.Token));
+
+        var nextRegion = capture.TakeChangedRegion(windowId, currentPixels, 2, 2);
+        if (hasReplacementFrame)
+        {
+            Assert.Null(nextRegion);
+        }
+        else
+        {
+            Assert.NotNull(nextRegion);
+            Assert.True(nextRegion!.Covers(2, 2));
+        }
+    }
+
     [Fact]
     public void ReturnsOneOnNonWindowsPlatforms()
     {

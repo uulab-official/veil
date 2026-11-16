@@ -1,0 +1,6 @@
+{
+  "type": "visual.effects.set.request",
+  "requestId": "req_visual_effects_set",
+  "protocolVersion": 1,
+  "reduced": true
+}

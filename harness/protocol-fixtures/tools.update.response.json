@@ -1,0 +1,7 @@
+{
+  "type": "tools.update.response",
+  "requestId": "req_tools_update",
+  "protocolVersion": 1,
+  "accepted": true,
+  "entryPoint": "H:\\Veil Guest Agent\\U.cmd"
+}

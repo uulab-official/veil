@@ -3,7 +3,7 @@ import SwiftUI
 import VeilHostCore
 
 struct WindowsAppFrameSurface: View {
-    var session: WindowMirrorSession
+    var presentedSession: WindowMirrorSession
     var cornerRadius: CGFloat = 0
     var restartFrameStreamAction: ((String) -> Void)? = nil
     /// Reads the composited surface for a window from the host compositor.
@@ -11,6 +11,28 @@ struct WindowsAppFrameSurface: View {
     /// Injected rather than reached for directly so this view stays testable and so composited pixels are
     /// never copied into the observable session value on every frame.
     var compositedImageProvider: ((String) -> CGImage?)? = nil
+    /// Reads the model's current session. A mirrored window's view is rebuilt only for frames and window
+    /// updates, so the session it was handed misses `window.frame.unchanged` heartbeats; judging liveness
+    /// from that copy showed an idle app as paused while its stream was healthy.
+    var sessionProvider: ((String) -> WindowMirrorSession?)? = nil
+
+    init(
+        session: WindowMirrorSession,
+        cornerRadius: CGFloat = 0,
+        restartFrameStreamAction: ((String) -> Void)? = nil,
+        compositedImageProvider: ((String) -> CGImage?)? = nil,
+        sessionProvider: ((String) -> WindowMirrorSession?)? = nil
+    ) {
+        self.presentedSession = session
+        self.cornerRadius = cornerRadius
+        self.restartFrameStreamAction = restartFrameStreamAction
+        self.compositedImageProvider = compositedImageProvider
+        self.sessionProvider = sessionProvider
+    }
+
+    var session: WindowMirrorSession {
+        sessionProvider?(presentedSession.id) ?? presentedSession
+    }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
@@ -20,21 +42,47 @@ struct WindowsAppFrameSurface: View {
             )
 
             ZStack(alignment: .topTrailing) {
-                if let latestFrameImage {
-                    Color.black
-                        .overlay {
-                            Image(nsImage: latestFrameImage)
-                                .interpolation(.high)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
+                if presentedSession.window.isPopup {
+                    // A popup is an overlay: no backdrop, no status badges, and its transparent surroundings,
+                    // captured as black, cleared so only the popup itself shows over its owner.
+                    if let frame = session.latestFrame,
+                       let popupImage = latestFrameImage.flatMap(PopupFrameTransparency.clearingBackdrop(of:)) {
+                        FrameLayerView(
+                            image: popupImage,
+                            pointsPerPixel: WindowFrameViewport.pointsPerPixel(forWindowsScale: frame.scale),
+                            backdrop: .clear
+                        )
+                    } else {
+                        Color.clear
+                    }
+                } else if let latestFrameImage, let frame = session.latestFrame {
+                    // Unscaled and pinned to the top-left, like a Windows window whose edge is being dragged:
+                    // while the guest redraws at a new size, existing content stays put and the newly exposed
+                    // area takes the app's edge color. Scaling the old bitmap to the new shape made every
+                    // control and line of text swell and shrink during a resize. Input maps the same way;
+                    // see `WindowFrameViewport.anchoredPointsPerPixel`.
+                    FrameLayerView(
+                        image: latestFrameImage,
+                        pointsPerPixel: WindowFrameViewport.pointsPerPixel(forWindowsScale: frame.scale),
+                        backdrop: Self.edgeColor(of: latestFrameImage),
+                        dropsWindowBorder: true
+                    )
 
                     frameQualityOverlay(assessment)
                         .padding(14)
                 } else {
                     statusSurface(assessment)
                 }
+
+                // Covers the captured frame with pixels cropped from the guest display whenever
+                // `window.layout` says the display shows all of this window; empty otherwise.
+                FramebufferCropView(
+                    windowId: presentedSession.id,
+                    pointsPerPixel: WindowFrameViewport.pointsPerPixel(forWindowsScale: session.latestFrame?.scale ?? 1),
+                    onAvailabilityChange: { [windowId = presentedSession.id] isCropping in
+                        GuestFramebufferSource.shared.setCropping(windowId: windowId, isCropping)
+                    }
+                )
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .help(frameStatusHelp(assessment))
@@ -45,7 +93,10 @@ struct WindowsAppFrameSurface: View {
     @ViewBuilder
     private func frameQualityOverlay(_ assessment: WindowFrameStreamAssessment) -> some View {
         switch assessment.status {
-        case .delayed, .stale:
+        // A picture one to five seconds old is not announced. A window that is cropped from the guest
+        // display is only captured once a second, and a window another one covers every few seconds, so
+        // the badge sat on windows whose picture was current or that nobody was looking at.
+        case .stale:
             HStack(spacing: 8) {
                 Image(systemName: assessment.status == .stale ? "pause.circle.fill" : "clock.badge.exclamationmark")
                     .foregroundStyle(assessment.status == .stale ? .orange : .yellow)
@@ -73,9 +124,39 @@ struct WindowsAppFrameSurface: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(.black.opacity(0.66), in: Capsule())
-        case .fresh, .waitingForFirstFrame, .unavailable:
+        case .fresh, .delayed, .waitingForFirstFrame, .unavailable:
             EmptyView()
         }
+    }
+
+    /// The color just inside the frame's bottom-right corner, which fills area the guest has not drawn yet.
+    /// One pixel is read, so this stays cheap at frame rate.
+    static func edgeColor(of image: CGImage) -> CGColor {
+        guard image.width > 2,
+              image.height > 2,
+              let pixel = image.cropping(to: CGRect(x: image.width - 3, y: image.height - 3, width: 1, height: 1)),
+              let context = CGContext(
+                data: nil,
+                width: 1,
+                height: 1,
+                bitsPerComponent: 8,
+                bytesPerRow: 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
+            return CGColor(gray: 0, alpha: 1)
+        }
+
+        context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        guard let bytes = context.data?.assumingMemoryBound(to: UInt8.self) else {
+            return CGColor(gray: 0, alpha: 1)
+        }
+        return CGColor(
+            red: CGFloat(bytes[0]) / 255,
+            green: CGFloat(bytes[1]) / 255,
+            blue: CGFloat(bytes[2]) / 255,
+            alpha: 1
+        )
     }
 
     /// Displayable image for this window.
@@ -86,18 +167,14 @@ struct WindowsAppFrameSurface: View {
     ///
     /// `session.compositedFrameGeneration` is read here purely so SwiftUI re-renders when the compositor's
     /// surface changes. Without that read the view would have no observable dependency on it.
-    private var latestFrameImage: NSImage? {
+    private var latestFrameImage: CGImage? {
         guard let frame = session.latestFrame else {
             return nil
         }
 
         if frame.isCompositedSurface {
             _ = session.compositedFrameGeneration
-            guard let compositedImage = compositedImageProvider?(session.id) else {
-                return nil
-            }
-
-            return NSImage(cgImage: compositedImage, size: .zero)
+            return compositedImageProvider?(session.id)
         }
 
         guard frame.format == "png",
@@ -105,7 +182,7 @@ struct WindowsAppFrameSurface: View {
             return nil
         }
 
-        return NSImage(data: data)
+        return WindowFrameCompositor.decodePNG(data)
     }
 
     private func statusSurface(_ assessment: WindowFrameStreamAssessment) -> some View {
@@ -166,30 +243,30 @@ struct WindowsAppFrameSurface: View {
     private func statusTitle(_ assessment: WindowFrameStreamAssessment) -> String {
         switch assessment.status {
         case .waitingForFirstFrame:
-            return "Opening \(session.window.title)"
+            return String(localized: "Opening \(session.window.title)")
         case .fresh, .delayed, .stale:
-            return "App image could not be displayed"
+            return String(localized: "App image could not be displayed")
         case .unavailable:
-            return "App screen unavailable"
+            return String(localized: "App screen unavailable")
         }
     }
 
     private func statusDetail(_ assessment: WindowFrameStreamAssessment) -> String {
         switch assessment.status {
         case .waitingForFirstFrame:
-            return "Waiting for the Windows app screen."
+            return String(localized: "Waiting for the Windows app screen.")
         case .fresh, .delayed, .stale:
             guard let latestFrame = session.latestFrame else {
-                return "Waiting for the next app screen update."
+                return String(localized: "Waiting for the next app screen update.")
             }
 
-            return "Received screen update \(latestFrame.sequence), but it could not be shown."
+            return String(localized: "Received screen update \(latestFrame.sequence), but it could not be shown.")
         case .unavailable:
             if session.connectionMode == .demo {
-                return "Connect Windows to open this app as a Mac window."
+                return String(localized: "Connect Windows to open this app as a Mac window.")
             }
 
-            return "Windows is connected, but app screen sharing is not available yet."
+            return String(localized: "Windows is connected, but app screen sharing is not available yet.")
         }
     }
 
@@ -203,27 +280,27 @@ struct WindowsAppFrameSurface: View {
 
     private func frameQualityTitle(_ assessment: WindowFrameStreamAssessment) -> String {
         guard let ageMilliseconds = assessment.latestFrameAgeMilliseconds else {
-            return "Waiting for screen"
+            return String(localized: "Waiting for screen")
         }
 
         let seconds = max(1, Int((Double(ageMilliseconds) / 1_000.0).rounded()))
         switch assessment.status {
         case .fresh:
-            return "Live"
+            return String(localized: "Live")
         case .delayed:
-            return "Screen delayed \(seconds)s"
+            return String(localized: "Screen delayed \(seconds)s")
         case .stale:
             if assessment.reopenEscalated {
-                return "App window needs reopen"
+                return String(localized: "App window needs reopen")
             }
             if assessment.recoveryEscalated {
-                return "Screen recovery needed"
+                return String(localized: "Screen recovery needed")
             }
-            return "Screen paused \(seconds)s"
+            return String(localized: "Screen paused \(seconds)s")
         case .waitingForFirstFrame:
-            return "Waiting for screen"
+            return String(localized: "Waiting for screen")
         case .unavailable:
-            return "Screen unavailable"
+            return String(localized: "Screen unavailable")
         }
     }
 
@@ -231,23 +308,23 @@ struct WindowsAppFrameSurface: View {
         switch assessment.status {
         case .fresh:
             guard let interval = assessment.latestFrameIntervalMilliseconds else {
-                return "Live app screen."
+                return String(localized: "Live app screen.")
             }
-            return "Live app screen, latest interval \(interval) ms."
+            return String(localized: "Live app screen, latest interval \(interval) ms.")
         case .delayed:
-            return "The latest app screen update is delayed. Refresh status if it keeps lagging."
+            return String(localized: "The latest app screen update is delayed. Refresh status if it keeps lagging.")
         case .stale:
             if assessment.reopenEscalated {
-                return "The app screen is still paused after capture recovery. Reopen this Windows app window."
+                return String(localized: "The app screen is still paused after capture recovery. Reopen this Windows app window.")
             }
             if assessment.recoveryEscalated {
-                return "The app screen is still paused after \(session.frameStreamRestartCount) restart attempts. Reopen the app window or run diagnostics."
+                return String(localized: "The app screen is still paused after \(session.frameStreamRestartCount) restart attempts. Reopen the app window or run diagnostics.")
             }
-            return "The app screen has stopped updating. Restart the screen stream."
+            return String(localized: "The app screen has stopped updating. Restart the screen stream.")
         case .waitingForFirstFrame:
-            return "Waiting for the first Windows app screen."
+            return String(localized: "Waiting for the first Windows app screen.")
         case .unavailable:
-            return "App screen sharing is unavailable."
+            return String(localized: "App screen sharing is unavailable.")
         }
     }
 
@@ -257,10 +334,10 @@ struct WindowsAppFrameSurface: View {
         }
 
         if let interval = assessment.latestFrameIntervalMilliseconds {
-            return "\(assessment.receivedFrameCount) frames, latest interval \(interval) ms"
+            return String(localized: "\(assessment.receivedFrameCount) frames, latest interval \(interval) ms")
         }
 
-        return "First frame received"
+        return String(localized: "First frame received")
     }
 
     private func frameStatusHelp(_ assessment: WindowFrameStreamAssessment) -> String {
@@ -276,39 +353,39 @@ struct WindowsAppFrameSurface: View {
 
     private func frameRecoveryButtonTitle(_ assessment: WindowFrameStreamAssessment) -> String {
         if assessment.reopenEscalated {
-            return "Reopen"
+            return String(localized: "Reopen")
         }
 
-        return assessment.recoveryEscalated ? "Recover" : "Restart"
+        return assessment.recoveryEscalated ? String(localized: "Recover") : String(localized: "Restart")
     }
 
     private func frameRecoveryButtonHelp(_ assessment: WindowFrameStreamAssessment) -> String {
         if assessment.reopenEscalated {
-            return "Close and reopen this Windows app window."
+            return String(localized: "Close and reopen this Windows app window.")
         }
 
         return assessment.recoveryEscalated
-            ? "Recover this app screen stream."
-            : "Restart this app screen stream."
+            ? String(localized: "Recover this app screen stream.")
+            : String(localized: "Restart this app screen stream.")
     }
 
     private func accessibilityLabel(_ assessment: WindowFrameStreamAssessment) -> String {
         if session.captureState == .unavailable {
-            return "\(session.window.title) app screen unavailable"
+            return String(localized: "\(session.window.title) app screen unavailable")
         }
 
         if hasUndisplayableFrame {
-            return "\(session.window.title) app image could not be displayed"
+            return String(localized: "\(session.window.title) app image could not be displayed")
         }
 
         if session.latestFrame == nil {
-            return "Waiting for \(session.window.title) app screen"
+            return String(localized: "Waiting for \(session.window.title) app screen")
         }
 
         if let frameTimingSummary = frameTimingSummary(assessment) {
-            return "\(session.window.title) Windows app screen, \(assessment.status.rawValue), \(frameTimingSummary)"
+            return String(localized: "\(session.window.title) Windows app screen, \(assessment.status.rawValue), \(frameTimingSummary)")
         }
 
-        return "\(session.window.title) Windows app screen"
+        return String(localized: "\(session.window.title) Windows app screen")
     }
 }

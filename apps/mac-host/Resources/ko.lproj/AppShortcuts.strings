@@ -1,0 +1,8 @@
+/* Siri and Spotlight phrases for Veil's App Shortcuts. ${applicationName} is filled in by the system. */
+"Start Windows in ${applicationName}" = "${applicationName}에서 Windows 시작";
+"Start ${applicationName}" = "${applicationName} 시작";
+"Shut down Windows in ${applicationName}" = "${applicationName}에서 Windows 종료";
+"Suspend Windows in ${applicationName}" = "${applicationName}에서 Windows 일시 중단";
+"Resume Windows in ${applicationName}" = "${applicationName}에서 Windows 재개";
+"Open ${app} in ${applicationName}" = "${applicationName}에서 ${app} 열기";
+"Open a Windows app in ${applicationName}" = "${applicationName}에서 Windows 앱 열기";

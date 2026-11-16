@@ -30,6 +30,11 @@ protocol WindowsNotificationCenterClient: Sendable {
     func authorizationStatus() async -> WindowsNotificationAuthorizationStatus
     func requestAuthorization() async -> Bool
     func add(_ request: WindowsNotificationPresentationRequest) async throws
+    func removeDelivered(identifier: String) async
+}
+
+extension WindowsNotificationCenterClient {
+    func removeDelivered(identifier: String) async {}
 }
 
 struct WindowsNotificationPresenter: Sendable {
@@ -39,7 +44,20 @@ struct WindowsNotificationPresenter: Sendable {
         guard let request = Self.presentationRequest(for: notification) else {
             return .invalidNotification
         }
+        return await deliver(request)
+    }
 
+    /// A notice from Veil itself, such as Windows being paused for disk space.
+    @discardableResult
+    func presentHostNotice(_ request: WindowsNotificationPresentationRequest) async -> WindowsNotificationPresentationResult {
+        await deliver(request)
+    }
+
+    func removeDelivered(identifier: String) async {
+        await center.removeDelivered(identifier: identifier)
+    }
+
+    private func deliver(_ request: WindowsNotificationPresentationRequest) async -> WindowsNotificationPresentationResult {
         let status = await center.authorizationStatus()
         switch status {
         case .authorized, .provisional, .ephemeral:
@@ -134,6 +152,10 @@ struct MacUserNotificationCenter: WindowsNotificationCenterClient {
             trigger: nil
         )
         try await UNUserNotificationCenter.current().add(notificationRequest)
+    }
+
+    func removeDelivered(identifier: String) async {
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [identifier])
     }
 }
 

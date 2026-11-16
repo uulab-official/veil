@@ -35,6 +35,7 @@ public sealed class WindowDiscoveryStreamer
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
             await PruneClosedWindowsAsync(onEvent, cancellationToken);
+            await DiscoverDesktopWindowsAsync(onEvent, cancellationToken);
             await DiscoverNewWindowsAsync(onEvent, cancellationToken);
         }
     }
@@ -76,6 +77,47 @@ public sealed class WindowDiscoveryStreamer
                     await onEvent(closedEvent, cancellationToken);
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Finds app windows of apps with no tracked window yet: an app opened from inside Windows or by another
+    /// app, or one that was already open when the agent started. Once one window of an app is tracked,
+    /// <see cref="DiscoverNewWindowsAsync"/> finds its dialogs and popups.
+    /// </summary>
+    private async Task DiscoverDesktopWindowsAsync(
+        Func<JsonObject, CancellationToken, Task> onEvent,
+        CancellationToken cancellationToken
+    )
+    {
+        // A launch reports its own window. Announcing it from here first would show it twice.
+        if (session.IsLaunching)
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (var found in desktop.DiscoverAppWindows(session.SnapshotTrackedWindowIds()))
+            {
+                if (session.IsLaunching)
+                {
+                    return;
+                }
+
+                var app = await session.AppForDiscoveredWindowAsync(found, cancellationToken);
+                var createdEvent = session.TryTrackDiscoveredWindow(app, found.Window);
+                if (createdEvent is not null)
+                {
+                    await onEvent(createdEvent, cancellationToken);
+                }
+            }
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            Console.Error.WriteLine(
+                $"WindowDiscoveryStreamer: transient desktop discovery failure. {error.GetType().Name}: {error.Message}"
+            );
         }
     }
 

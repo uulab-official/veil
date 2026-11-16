@@ -27,7 +27,7 @@ test("validates every device passthrough fixture", () => {
 
 test("rejects an unavailable capability with no reason", () => {
   const report = readFixture("device-passthrough.requires-privileged-helper.json");
-  delete capability(report, "usb-passthrough").prerequisite;
+  delete capability(report, "network-bridged").prerequisite;
 
   // The entire point of this report is that a "no" arrives with a reason attached.
   assert.throws(() => validateDevicePassthrough(report), /prerequisite/);
@@ -49,7 +49,7 @@ test("rejects an available capability that offers an alternative to itself", () 
 
 test("rejects isAvailable drifting from state", () => {
   const report = readFixture("device-passthrough.requires-privileged-helper.json");
-  capability(report, "usb-passthrough").isAvailable = true;
+  capability(report, "network-bridged").isAvailable = true;
 
   assert.throws(() => validateDevicePassthrough(report), /must agree with/);
 });
@@ -118,14 +118,15 @@ test("rejects leaving USB unknown after QEMU was probed", () => {
   const report = readFixture("device-passthrough.requires-privileged-helper.json");
   const usb = capability(report, "usb-passthrough");
   usb.state = "unknown";
-  usb.requiresPrivilegedHelper = false;
+  usb.isAvailable = false;
+  usb.prerequisite = "unknown";
 
   assert.throws(() => validateDevicePassthrough(report), /resolved when QEMU was probed/);
 });
 
 test("rejects a non-https reference", () => {
   const report = readFixture("device-passthrough.requires-privileged-helper.json");
-  capability(report, "usb-passthrough").reference = "see the QEMU tracker";
+  capability(report, "usb-passthrough").reference = "see the Apple documentation";
 
   // A reference exists so a reader can check the claim rather than trust it.
   assert.throws(() => validateDevicePassthrough(report), /https URL/);
@@ -158,7 +159,7 @@ test("rejects presenting the blocker as pending implementation work", () => {
   const report = readFixture("device-passthrough.requires-privileged-helper.json");
   report.nextActions = report.nextActions.map((action) =>
     action.includes("open product decision")
-      ? "USB passthrough is not implemented yet. Do not run QEMU under sudo."
+      ? "Bridged networking is not implemented yet. Do not run QEMU under sudo."
       : action
   );
 
@@ -176,10 +177,10 @@ test("rejects an unknown capability that does not say how to resolve it", () => 
 
 test("rejects hiding the alternative for an unavailable capability", () => {
   const report = readFixture("device-passthrough.requires-privileged-helper.json");
-  report.nextActions = report.nextActions.filter((action) => !action.startsWith("USB device passthrough:"));
+  report.nextActions = report.nextActions.filter((action) => !action.startsWith("Bridged networking:"));
 
   // Telling a user what they cannot do without telling them what they can is the failure this catches.
-  assert.throws(() => validateDevicePassthrough(report), /surface the alternative for usb-passthrough/);
+  assert.throws(() => validateDevicePassthrough(report), /surface the alternative for network-bridged/);
 });
 
 test("rejects an empty nextActions list", () => {
@@ -194,4 +195,13 @@ test("rejects a report of the wrong kind", () => {
   report.kind = "vmSharedFolderStatus";
 
   assert.throws(() => validateDevicePassthrough(report), /Unsupported device passthrough kind/);
+});
+
+test("rejects USB passthrough reported available with a prerequisite", () => {
+  const report = readFixture("device-passthrough.requires-privileged-helper.json");
+  capability(report, "usb-passthrough").prerequisite = "needs root";
+
+  // The macOS driver limit belongs in the detail of an available capability, not in a prerequisite
+  // that would make the same report read as both "yes" and "no".
+  assert.throws(() => validateDevicePassthrough(report), /must not carry a prerequisite/);
 });

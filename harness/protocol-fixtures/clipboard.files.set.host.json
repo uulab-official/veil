@@ -1,0 +1,10 @@
+{
+  "type": "clipboard.files.set",
+  "requestId": "req_clipboard_8",
+  "origin": "host",
+  "sequence": 8,
+  "shareName": "VeilShared",
+  "relativePaths": [
+    "Veil Clipboard\\20261105-140102-1A2B3C\\report.pdf"
+  ]
+}

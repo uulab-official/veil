@@ -56,8 +56,10 @@ public struct WindowFrameTile: Equatable, Sendable {
     public var scale: Double
     public var isKeyFrame: Bool
     public var rect: WindowFrameTileRect
-    /// PNG bytes covering exactly `rect`.
+    /// Bytes covering exactly `rect`, encoded as `payloadFormat` says.
     public var payload: Data
+    /// `VeilFrameChannelCodec.pngFormat` or `bgraDeflateFormat`.
+    public var payloadFormat: UInt8
 
     public init(
         windowId: String,
@@ -67,8 +69,10 @@ public struct WindowFrameTile: Equatable, Sendable {
         scale: Double,
         isKeyFrame: Bool,
         rect: WindowFrameTileRect,
-        payload: Data
+        payload: Data,
+        payloadFormat: UInt8 = VeilFrameChannelCodec.pngFormat
     ) {
+        self.payloadFormat = payloadFormat
         self.windowId = windowId
         self.sequence = sequence
         self.surfaceWidth = surfaceWidth

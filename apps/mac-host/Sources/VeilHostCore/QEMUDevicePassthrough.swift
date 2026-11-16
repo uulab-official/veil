@@ -2,10 +2,11 @@ import Foundation
 
 /// Why a device-level integration is or is not available on this host.
 ///
-/// `requiresPrivilegedHelper` is the field that matters. Both USB passthrough and the bridged network
-/// modes need root on macOS, and Veil deliberately runs QEMU as the logged-in user. Reporting them as
-/// merely "unsupported" would hide the fact that the blocker is a product decision Veil has not made,
-/// not a missing implementation.
+/// `requiresPrivilegedHelper` is the field that matters. The bridged network modes need root on macOS,
+/// and Veil deliberately runs QEMU as the logged-in user. Reporting them as merely "unsupported" would
+/// hide the fact that the blocker is a product decision Veil has not made, not a missing implementation.
+/// USB passthrough works as the logged-in user for devices macOS has no driver for; taking a device
+/// from a macOS driver is the part that needs root or Apple's capture entitlement.
 public enum VMDevicePassthroughState: String, Codable, Equatable, Sendable {
     case available
     /// Works, but only behind a root-privileged helper Veil does not ship.
@@ -98,9 +99,10 @@ public enum VMDevicePassthroughReportFactory {
 
     public static let privilegedHelperDecision = """
         Parallels ships a signed system extension and a privileged helper; Veil runs QEMU as the \
-        logged-in user, which is why it needs no admin password. USB passthrough and the bridged and \
-        host-only network modes all require root on macOS, so closing them means adopting a privileged \
-        helper installed with SMAppService, or Apple-granted vm.networking entitlements. Running QEMU \
+        logged-in user, which is why it needs no admin password. The bridged and host-only network \
+        modes require root on macOS, as does taking a USB device away from a macOS driver, so closing \
+        them means adopting a privileged helper installed with SMAppService, or the Apple-granted \
+        vm.networking and vm.device-access entitlements. Running QEMU \
         under sudo is refused: it would put a user-controlled command line and a network-reachable \
         guest behind root. The decision is open and deliberately not made by this report.
         """
@@ -158,12 +160,9 @@ public enum VMDevicePassthroughReportFactory {
         return VMDevicePassthroughCapability(
             id: usbPassthroughId,
             title: "USB device passthrough",
-            state: .requiresPrivilegedHelper,
-            requiresPrivilegedHelper: true,
-            prerequisite: "macOS binds most USB devices to a kernel driver, and libusb cannot take exclusive access from it without root. QEMU upstream tracks this as unusable on Apple Silicon without root.",
-            alternative: sharedFolderAlternative,
-            detail: "This QEMU has usb-host, so the remaining blocker is privileges. Veil does not attach the device: a usb-host that cannot claim its device fails at runtime, and on some builds prevents QEMU from starting at all, which would turn a clear 'not supported' into a confusing boot failure.",
-            reference: "https://gitlab.com/qemu-project/qemu/-/work_items/1951"
+            state: .available,
+            detail: "Attached and detached while Windows runs, from Configuration > USB Devices, with QMP device_add usb-host and never in the boot plan, so a device that cannot be claimed never stops Windows from starting. Devices without a macOS driver attach as the logged-in user. Devices macOS has a driver for (keyboards, mice, disks, most audio devices) need the com.apple.vm.device-access entitlement or root before libusb will take them from macOS; Veil checks QEMU's attached property after each attach and removes a device that was not claimed. Devices return to the Mac before Windows stops or suspends.",
+            reference: "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.vm.device-access"
         )
     }
 
@@ -208,13 +207,13 @@ public enum VMDevicePassthroughReportFactory {
         }
 
         if capabilities.contains(where: { $0.state == .notBuiltIntoQEMU }) {
-            actions.append("Install a QEMU built with libusb if USB passthrough matters to you. Note that this only moves the blocker to the privilege problem below; it does not make passthrough work.")
+            actions.append("Install a QEMU built with libusb if USB passthrough matters to you. Devices macOS has a driver for will still need the capture entitlement or root.")
         }
 
         if capabilities.contains(where: { $0.requiresPrivilegedHelper }) {
             // Named as a decision rather than a task. Someone reading this should understand that no
             // amount of host-side code closes it.
-            actions.append("USB passthrough and the bridged and host-only network modes need a root-privileged helper that Veil does not ship. This is an open product decision, not pending implementation work.")
+            actions.append("The bridged and host-only network modes need a root-privileged helper that Veil does not ship. This is an open product decision, not pending implementation work.")
             actions.append("Do not work around it by running QEMU under sudo. That puts a user-controlled command line and a network-reachable guest behind root.")
         }
 

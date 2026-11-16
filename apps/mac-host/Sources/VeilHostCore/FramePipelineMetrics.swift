@@ -59,21 +59,43 @@ public struct FramePipelineDroppedTileCounts: Codable, Equatable, Sendable {
     public var surfaceSizeChanged: Int
     public var undecodablePayload: Int
     public var payloadRectMismatch: Int
+    public var sequenceGap: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case noSurface
+        case surfaceSizeChanged
+        case undecodablePayload
+        case payloadRectMismatch
+        case sequenceGap
+    }
 
     public init(
         noSurface: Int = 0,
         surfaceSizeChanged: Int = 0,
         undecodablePayload: Int = 0,
-        payloadRectMismatch: Int = 0
+        payloadRectMismatch: Int = 0,
+        sequenceGap: Int = 0
     ) {
         self.noSurface = noSurface
         self.surfaceSizeChanged = surfaceSizeChanged
         self.undecodablePayload = undecodablePayload
         self.payloadRectMismatch = payloadRectMismatch
+        self.sequenceGap = sequenceGap
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            noSurface: try values.decodeIfPresent(Int.self, forKey: .noSurface) ?? 0,
+            surfaceSizeChanged: try values.decodeIfPresent(Int.self, forKey: .surfaceSizeChanged) ?? 0,
+            undecodablePayload: try values.decodeIfPresent(Int.self, forKey: .undecodablePayload) ?? 0,
+            payloadRectMismatch: try values.decodeIfPresent(Int.self, forKey: .payloadRectMismatch) ?? 0,
+            sequenceGap: try values.decodeIfPresent(Int.self, forKey: .sequenceGap) ?? 0
+        )
     }
 
     public var total: Int {
-        noSurface + surfaceSizeChanged + undecodablePayload + payloadRectMismatch
+        noSurface + surfaceSizeChanged + undecodablePayload + payloadRectMismatch + sequenceGap
     }
 }
 
@@ -323,6 +345,8 @@ public final class FramePipelineMetrics: @unchecked Sendable {
             state.droppedTiles.undecodablePayload += 1
         case .payloadRectMismatch:
             state.droppedTiles.payloadRectMismatch += 1
+        case .sequenceGap:
+            state.droppedTiles.sequenceGap += 1
         }
         windows[windowId] = state
     }
@@ -452,7 +476,7 @@ public final class FramePipelineMetrics: @unchecked Sendable {
 
         if windows.contains(where: { $0.droppedTiles.total > 0 }) {
             actions.append(
-                "Tiles were dropped. Inspect droppedTiles per window: repeated noSurface or surfaceSizeChanged means key frames are too rare, and payloadRectMismatch or undecodablePayload means the guest and host disagree about the format."
+                "Tiles were dropped. Inspect droppedTiles per window: repeated noSurface, surfaceSizeChanged, or sequenceGap means a fresh key frame is needed; payloadRectMismatch or undecodablePayload means the guest and host disagree about the format."
             )
         }
 

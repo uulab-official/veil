@@ -18,9 +18,10 @@ public struct QEMUProcessOutcome: Equatable, Sendable {
 /// One QEMU Machine Protocol command.
 ///
 /// Veil deliberately models only the commands the Windows App Runtime needs -- runtime state,
-/// pause/resume, memory-state save, and the HMP bridge used for internal disk snapshots -- instead
-/// of exposing a general QEMU control surface. Adding a case here is a protocol-boundary decision,
-/// not a convenience.
+/// pause/resume, memory-state save, removable disc change, the HMP bridge used for internal disk
+/// snapshots, USB device attach/detach, and memory balloon sizing -- instead of exposing a general
+/// QEMU control surface.
+/// Adding a case here is a protocol-boundary decision, not a convenience.
 public enum QEMUQMPCommand: Equatable, Sendable {
     /// Required handshake before any other command on a freshly opened QMP connection.
     case capabilities
@@ -34,9 +35,49 @@ public enum QEMUQMPCommand: Equatable, Sendable {
     /// device state move to the file, the raw system disk is untouched.
     case saveMemoryState(filePath: String)
     case queryMigrate
+    /// Abandons a memory-state save that failed or ran out of time, so the guest can run again.
+    case cancelMemoryStateSave
     /// Escape hatch for monitor-only features that have no stable QMP equivalent, notably the
     /// `savevm`/`loadvm`/`delvm`/`info snapshots` internal-snapshot family.
     case humanMonitor(String)
+    /// Internal snapshot jobs limited to the system disk's format node. HMP `savevm` snapshots every
+    /// writable drive and refuses the raw UEFI variable store ("pflash1 ... does not support
+    /// snapshots"), so Veil names the one qcow2 node instead. Guest memory goes to the same node.
+    case snapshotSave(jobID: String, tag: String, node: String)
+    case snapshotLoad(jobID: String, tag: String, node: String)
+    case snapshotDelete(jobID: String, tag: String, node: String)
+    /// Progress of the snapshot jobs above; they report errors only here, not in their own reply.
+    case queryJobs
+    /// Removes a concluded job so its id can be reused.
+    case jobDismiss(jobID: String)
+    /// Puts a read-only raw disc image in a removable drive, opening a guest-locked tray first.
+    case changeRemovableMedium(deviceID: String, filePath: String)
+    /// Takes the disc out of a removable drive even when the guest has locked the tray.
+    case ejectRemovableMedium(deviceID: String)
+    /// Hands one Mac USB device to the guest through QEMU's libusb-backed `usb-host`. Bus and address
+    /// pick the exact device; vendor and product are matched too, so a reused address cannot hand a
+    /// different device to Windows.
+    case addUSBHostDevice(id: String, bus: String, hostBus: Int, hostAddress: Int, vendorId: Int, productId: Int)
+    /// Removes a device Veil added at runtime. Only ever sent for ids Veil created.
+    case deleteDevice(id: String)
+    /// Whether a `usb-host` device actually claimed its Mac device. `device_add` succeeds even when it
+    /// did not, so this is the only reliable answer.
+    case queryUSBDeviceAttached(id: String)
+    /// Presses the VM's ACPI power button. Windows decides whether to shut down.
+    case systemPowerdown
+    /// Asks the guest's balloon driver to resize the guest to this many bytes (`QEMUMemoryBalloon`).
+    case setBalloonTarget(bytes: Int64)
+    /// The guest's current size through the balloon, in bytes.
+    case queryBalloon
+    /// The memory statistics the balloon driver last reported (`guest-stats`).
+    case queryBalloonStatistics(deviceID: String)
+    /// Every drive, with the file each one reads and the bytes that file has allocated (`query-block`).
+    case queryBlock
+    /// Copies a drive into a new image at `targetPath`, created in `format`, while the guest keeps running.
+    /// Once the job is ready, `jobComplete` switches the drive to the copy. Throttled to `bytesPerSecond`.
+    case driveMirror(jobID: String, device: String, targetPath: String, format: String, bytesPerSecond: Int64)
+    /// Finishes a job that waits for it, such as a ready mirror (which then switches the drive over).
+    case jobComplete(jobID: String)
     case quit
 
     public var executeName: String {
@@ -53,8 +94,44 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "migrate"
         case .queryMigrate:
             "query-migrate"
+        case .cancelMemoryStateSave:
+            "migrate_cancel"
         case .humanMonitor:
             "human-monitor-command"
+        case .snapshotSave:
+            "snapshot-save"
+        case .snapshotLoad:
+            "snapshot-load"
+        case .snapshotDelete:
+            "snapshot-delete"
+        case .queryJobs:
+            "query-jobs"
+        case .jobDismiss:
+            "job-dismiss"
+        case .changeRemovableMedium:
+            "blockdev-change-medium"
+        case .ejectRemovableMedium:
+            "eject"
+        case .addUSBHostDevice:
+            "device_add"
+        case .deleteDevice:
+            "device_del"
+        case .queryUSBDeviceAttached:
+            "qom-get"
+        case .systemPowerdown:
+            "system_powerdown"
+        case .setBalloonTarget:
+            "balloon"
+        case .queryBalloon:
+            "query-balloon"
+        case .queryBalloonStatistics:
+            "qom-get"
+        case .queryBlock:
+            "query-block"
+        case .driveMirror:
+            "drive-mirror"
+        case .jobComplete:
+            "job-complete"
         case .quit:
             "quit"
         }
@@ -75,8 +152,44 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             "VM memory state save to \(filePath)"
         case .queryMigrate:
             "VM memory state save progress query"
+        case .cancelMemoryStateSave:
+            "VM memory state save cancel"
         case .humanMonitor(let command):
             "QEMU monitor command '\(command)'"
+        case .snapshotSave(_, let tag, _):
+            "snapshot '\(tag)' save"
+        case .snapshotLoad(_, let tag, _):
+            "snapshot '\(tag)' restore"
+        case .snapshotDelete(_, let tag, _):
+            "snapshot '\(tag)' delete"
+        case .queryJobs:
+            "QEMU job progress query"
+        case .jobDismiss(let jobID):
+            "QEMU job '\(jobID)' dismissal"
+        case .changeRemovableMedium(_, let filePath):
+            "Disc insert of \(filePath)"
+        case .ejectRemovableMedium:
+            "Disc eject"
+        case .addUSBHostDevice(let id, _, _, _, _, _):
+            "USB device attach \(id)"
+        case .deleteDevice(let id):
+            "device removal \(id)"
+        case .queryUSBDeviceAttached(let id):
+            "USB device attach state query \(id)"
+        case .systemPowerdown:
+            "VM power button press"
+        case .setBalloonTarget(let bytes):
+            "memory balloon resize to \(bytes) bytes"
+        case .queryBalloon:
+            "memory balloon size query"
+        case .queryBalloonStatistics:
+            "memory balloon statistics query"
+        case .queryBlock:
+            "drive query"
+        case .driveMirror(_, let device, _, _, _):
+            "copy of drive \(device)"
+        case .jobComplete(let jobID):
+            "completion of job \(jobID)"
         case .quit:
             "QEMU process quit"
         }
@@ -90,6 +203,49 @@ public enum QEMUQMPCommand: Equatable, Sendable {
             return ["uri": "exec:cat > \(Self.shellSingleQuoted(filePath))"]
         case .humanMonitor(let command):
             return ["command-line": command]
+        case .snapshotSave(let jobID, let tag, let node), .snapshotLoad(let jobID, let tag, let node):
+            return ["job-id": jobID, "tag": tag, "vmstate": node, "devices": [node]]
+        case .snapshotDelete(let jobID, let tag, let node):
+            return ["job-id": jobID, "tag": tag, "devices": [node]]
+        case .jobDismiss(let jobID):
+            return ["id": jobID]
+        case .changeRemovableMedium(let deviceID, let filePath):
+            // JSON carries the path as is; only a `-drive` command line would need commas doubled.
+            return ["id": deviceID, "filename": filePath, "format": "raw", "read-only-mode": "read-only"]
+        case .ejectRemovableMedium(let deviceID):
+            return ["id": deviceID, "force": true]
+        case .addUSBHostDevice(let id, let bus, let hostBus, let hostAddress, let vendorId, let productId):
+            return [
+                "driver": "usb-host",
+                "id": id,
+                "bus": bus,
+                "hostbus": hostBus,
+                "hostaddr": hostAddress,
+                "vendorid": vendorId,
+                "productid": productId
+            ]
+        case .deleteDevice(let id):
+            return ["id": id]
+        case .queryUSBDeviceAttached(let id):
+            return ["path": "/machine/peripheral/\(id)", "property": "attached"]
+        case .setBalloonTarget(let bytes):
+            return ["value": bytes]
+        case .queryBalloonStatistics(let deviceID):
+            return ["path": "/machine/peripheral/\(deviceID)", "property": "guest-stats"]
+        case .driveMirror(let jobID, let device, let targetPath, let format, let bytesPerSecond):
+            // `absolute-paths` has QEMU create the target itself, in the drive's own format; a full sync
+            // gives it no backing file.
+            return [
+                "job-id": jobID,
+                "device": device,
+                "target": targetPath,
+                "format": format,
+                "sync": "full",
+                "mode": "absolute-paths",
+                "speed": bytesPerSecond
+            ]
+        case .jobComplete(let jobID):
+            return ["id": jobID]
         default:
             return nil
         }
@@ -126,6 +282,17 @@ public struct QEMUQMPReply: Equatable, Sendable {
     public var textReturn: String?
     public var statusReturn: String?
     public var isRunning: Bool?
+    /// `query-jobs` entries.
+    public var jobsReturn: [QEMUQMPJob]?
+    /// A bare boolean return, as `qom-get` gives for a boolean property.
+    public var boolReturn: Bool?
+    /// `actual` from `query-balloon`.
+    public var balloonActualBytes: Int64?
+    /// `guest-stats` from the balloon device: each `stat-*` value plus `last-update`, in bytes and
+    /// seconds since the epoch. QEMU reports a statistic the driver never sent as -1.
+    public var balloonStatistics: [String: Int64]?
+    /// `query-block` entries with a medium inserted.
+    public var blockDevicesReturn: [QEMUQMPBlockDevice]?
 
     public init(
         id: String?,
@@ -134,7 +301,12 @@ public struct QEMUQMPReply: Equatable, Sendable {
         errorMessage: String? = nil,
         textReturn: String? = nil,
         statusReturn: String? = nil,
-        isRunning: Bool? = nil
+        isRunning: Bool? = nil,
+        jobsReturn: [QEMUQMPJob]? = nil,
+        boolReturn: Bool? = nil,
+        balloonActualBytes: Int64? = nil,
+        balloonStatistics: [String: Int64]? = nil,
+        blockDevicesReturn: [QEMUQMPBlockDevice]? = nil
     ) {
         self.id = id
         self.isSuccess = isSuccess
@@ -143,6 +315,49 @@ public struct QEMUQMPReply: Equatable, Sendable {
         self.textReturn = textReturn
         self.statusReturn = statusReturn
         self.isRunning = isRunning
+        self.jobsReturn = jobsReturn
+        self.boolReturn = boolReturn
+        self.balloonActualBytes = balloonActualBytes
+        self.balloonStatistics = balloonStatistics
+        self.blockDevicesReturn = blockDevicesReturn
+    }
+}
+
+/// One drive from `query-block` that has a medium inserted.
+public struct QEMUQMPBlockDevice: Equatable, Sendable {
+    public var device: String
+    /// The image file the drive reads, as QEMU opened it. The path may no longer exist.
+    public var filename: String
+    /// The image format QEMU reads the file as, such as `raw` or `qcow2`.
+    public var format: String
+    /// Bytes the file has allocated on the Mac volume.
+    public var actualSize: Int64?
+    public var virtualSize: Int64?
+
+    public init(device: String, filename: String, format: String, actualSize: Int64? = nil, virtualSize: Int64? = nil) {
+        self.device = device
+        self.filename = filename
+        self.format = format
+        self.actualSize = actualSize
+        self.virtualSize = virtualSize
+    }
+}
+
+/// One background job from `query-jobs`.
+public struct QEMUQMPJob: Equatable, Sendable {
+    public var id: String
+    public var status: String
+    /// Set when a concluded job failed.
+    public var error: String?
+
+    public init(id: String, status: String, error: String? = nil) {
+        self.id = id
+        self.status = status
+        self.error = error
+    }
+
+    public var isConcluded: Bool {
+        status == "concluded" || status == "null"
     }
 }
 
@@ -306,14 +521,59 @@ public struct QEMUQMPClient: QEMUQMPControlling {
                 }
 
                 let returnObject = returnValue as? [String: Any]
+                // JSONSerialization decodes `true` as an NSNumber, which also bridges numbers to Bool,
+                // so the CF type check keeps a numeric return from reading as a boolean.
+                let boolReturn = (returnValue as? NSNumber).flatMap {
+                    CFGetTypeID($0) == CFBooleanGetTypeID() ? $0.boolValue : nil
+                }
                 return QEMUQMPReply(
                     id: id,
                     isSuccess: true,
                     textReturn: returnValue as? String,
                     statusReturn: returnObject?["status"] as? String,
-                    isRunning: returnObject?["running"] as? Bool
+                    isRunning: returnObject?["running"] as? Bool,
+                    jobsReturn: (returnValue as? [[String: Any]])?.compactMap { job in
+                        guard let id = job["id"] as? String, let status = job["status"] as? String else {
+                            return nil
+                        }
+                        return QEMUQMPJob(id: id, status: status, error: job["error"] as? String)
+                    },
+                    boolReturn: boolReturn,
+                    balloonActualBytes: (returnObject?["actual"] as? NSNumber)?.int64Value,
+                    balloonStatistics: balloonStatistics(from: returnObject),
+                    blockDevicesReturn: blockDevices(from: returnValue)
                 )
             }
+    }
+
+    private static func blockDevices(from value: Any) -> [QEMUQMPBlockDevice]? {
+        guard let entries = value as? [[String: Any]], entries.contains(where: { $0["device"] != nil }) else {
+            return nil
+        }
+        return entries.compactMap { entry in
+            guard let device = entry["device"] as? String,
+                  let inserted = entry["inserted"] as? [String: Any],
+                  let filename = inserted["file"] as? String else {
+                return nil
+            }
+            let image = inserted["image"] as? [String: Any]
+            return QEMUQMPBlockDevice(
+                device: device,
+                filename: filename,
+                format: (image?["format"] as? String) ?? (inserted["drv"] as? String) ?? "raw",
+                actualSize: (image?["actual-size"] as? NSNumber)?.int64Value,
+                virtualSize: (image?["virtual-size"] as? NSNumber)?.int64Value
+            )
+        }
+    }
+
+    private static func balloonStatistics(from object: [String: Any]?) -> [String: Int64]? {
+        guard let object, let stats = object["stats"] as? [String: Any] else {
+            return nil
+        }
+        var result = stats.compactMapValues { ($0 as? NSNumber)?.int64Value }
+        result["last-update"] = (object["last-update"] as? NSNumber)?.int64Value
+        return result
     }
 
     /// Asynchronous event names seen in one session, useful as suspend/resume evidence.

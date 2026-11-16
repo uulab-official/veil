@@ -1,0 +1,8 @@
+{
+  "type": "window.list.response",
+  "requestId": "req_040",
+  "windowIds": [
+    "hwnd:0003029A",
+    "hwnd:000F0254"
+  ]
+}

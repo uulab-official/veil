@@ -1,0 +1,450 @@
+--- a/qapi/qom.json
++++ b/qapi/qom.json
+@@ -566,6 +566,20 @@
+             '*repeat': 'bool',
+             '*grab-toggle': 'GrabToggleKeys' },
+   'if': 'CONFIG_LINUX' }
++
++##
++# @VeilShmDisplayProperties:
++#
++# Properties for veil-shm-display objects, which mirror the default
++# console into POSIX shared memory for one local client.
++#
++# @path: the Unix socket the client connects to
++#
++# Since: 11.1
++##
++{ 'struct': 'VeilShmDisplayProperties',
++  'data': { 'path': 'str' },
++  'if': 'CONFIG_POSIX' }
+ 
+ ##
+ # @EventLoopBaseProperties:
+@@ -1319,6 +1333,8 @@
+     'tls-creds-psk',
+     'tls-creds-x509',
+     'tls-cipher-suites',
++    { 'name': 'veil-shm-display',
++      'if': 'CONFIG_POSIX' },
+     { 'name': 'x-remote-object', 'features': [ 'unstable' ] },
+     { 'name': 'x-vfio-user-server', 'features': [ 'unstable' ] }
+   ] }
+@@ -1397,6 +1413,8 @@
+       'tls-creds-psk':              'TlsCredsPskProperties',
+       'tls-creds-x509':             'TlsCredsX509Properties',
+       'tls-cipher-suites':          'TlsCredsProperties',
++      'veil-shm-display':           { 'type': 'VeilShmDisplayProperties',
++                                      'if': 'CONFIG_POSIX' },
+       'x-remote-object':            'RemoteObjectProperties',
+       'x-vfio-user-server':         'VfioUserServerProperties'
+   } }
+--- a/ui/meson.build
++++ b/ui/meson.build
+@@ -71,6 +71,7 @@
+   system_ss.add(files('input-linux.c', 'udmabuf.c'))
+ endif
+ system_ss.add(when: cocoa, if_true: files('cocoa.m'))
++system_ss.add(when: pixman, if_true: files('veil-shm.c'))
+ 
+ vnc_ss = ss.source_set()
+ vnc_ss.add(files(
+--- /dev/null
++++ b/ui/veil-shm.c
+@@ -0,0 +1,396 @@
++/*
++ * Veil shared-memory display listener
++ *
++ * Mirrors the default console into a POSIX shared-memory object and tells one
++ * local client which rectangles changed, so a host app can show the guest
++ * display without VNC's refresh tick or a copy of every frame over a socket.
++ *
++ *   -object veil-shm-display,id=veilfb,path=/tmp/veil.fb.sock
++ *
++ * The client connects to the Unix socket and reads newline-terminated JSON:
++ *
++ *   {"t":"surface","shm":"/vfb.1234.1","width":1280,"height":768,
++ *    "stride":5120,"format":537004168}
++ *   {"t":"update","x":0,"y":0,"w":1280,"h":768}
++ *
++ * "surface" names a new shared-memory object holding the whole display in
++ * the given pixman format; the client maps it read-only. Each "update" says a
++ * rectangle of it was rewritten. A client that falls behind gets one full
++ * update once its socket drains, instead of every rectangle it missed.
++ *
++ * This work is licensed under the terms of the GNU GPL, version 2 or later.
++ */
++
++#include "qemu/osdep.h"
++#include "qapi/error.h"
++#include "qemu/cutils.h"
++#include "qemu/error-report.h"
++#include "qemu/main-loop.h"
++#include "qemu/sockets.h"
++#include "qom/object_interfaces.h"
++#include "qom/object.h"
++#include "system/system.h"
++#include "ui/console.h"
++#include "ui/surface.h"
++
++#include <sys/mman.h>
++#include <sys/socket.h>
++#include <sys/un.h>
++
++#define TYPE_VEIL_SHM_DISPLAY "veil-shm-display"
++OBJECT_DECLARE_SIMPLE_TYPE(VeilShmDisplay, VEIL_SHM_DISPLAY)
++
++struct VeilShmDisplay {
++    Object parent;
++
++    char *path;
++    int listen_fd;
++    int client_fd;
++    bool client_needs_surface;
++    bool client_behind;
++
++    DisplayChangeListener dcl;
++    bool registered;
++    Notifier machine_done;
++
++    DisplaySurface *surface;
++    uint8_t *shm;
++    size_t shm_size;
++    char shm_name[32];
++    unsigned generation;
++};
++
++static void veil_shm_unmap(VeilShmDisplay *s)
++{
++    if (s->shm) {
++        munmap(s->shm, s->shm_size);
++        s->shm = NULL;
++    }
++    if (s->shm_name[0]) {
++        shm_unlink(s->shm_name);
++        s->shm_name[0] = '\0';
++    }
++}
++
++static void veil_shm_close_client(VeilShmDisplay *s)
++{
++    if (s->client_fd >= 0) {
++        qemu_set_fd_handler(s->client_fd, NULL, NULL, NULL);
++        close(s->client_fd);
++        s->client_fd = -1;
++    }
++}
++
++/* Returns false when the socket is full or gone; the caller resends later. */
++static bool veil_shm_send(VeilShmDisplay *s, const char *line)
++{
++    size_t length = strlen(line);
++    ssize_t sent;
++
++    if (s->client_fd < 0) {
++        return false;
++    }
++    sent = send(s->client_fd, line, length, MSG_DONTWAIT);
++    if (sent == (ssize_t)length) {
++        return true;
++    }
++    if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
++        s->client_behind = true;
++        return false;
++    }
++    /*
++     * A partial line would corrupt the stream, and so would any error other
++     * than a full buffer: drop the client, which reconnects.
++     */
++    veil_shm_close_client(s);
++    return false;
++}
++
++static void veil_shm_send_surface(VeilShmDisplay *s)
++{
++    char line[256];
++
++    if (!s->shm) {
++        return;
++    }
++    snprintf(line, sizeof(line),
++             "{\"t\":\"surface\",\"shm\":\"%s\",\"width\":%d,\"height\":%d,"
++             "\"stride\":%d,\"format\":%u}\n",
++             s->shm_name, surface_width(s->surface), surface_height(s->surface),
++             surface_stride(s->surface), (unsigned)surface_format(s->surface));
++    if (veil_shm_send(s, line)) {
++        s->client_needs_surface = false;
++    }
++}
++
++static void veil_shm_send_update(VeilShmDisplay *s, int x, int y, int w, int h)
++{
++    char line[128];
++
++    if (s->client_fd < 0 || !s->shm) {
++        return;
++    }
++    if (s->client_needs_surface) {
++        veil_shm_send_surface(s);
++        if (s->client_needs_surface) {
++            return;
++        }
++        x = 0;
++        y = 0;
++        w = surface_width(s->surface);
++        h = surface_height(s->surface);
++    }
++    if (s->client_behind) {
++        /* Everything it missed, in one rectangle, once the socket drains. */
++        x = 0;
++        y = 0;
++        w = surface_width(s->surface);
++        h = surface_height(s->surface);
++        s->client_behind = false;
++    }
++    snprintf(line, sizeof(line),
++             "{\"t\":\"update\",\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d}\n",
++             x, y, w, h);
++    veil_shm_send(s, line);
++}
++
++static void veil_shm_copy(VeilShmDisplay *s, int x, int y, int w, int h)
++{
++    int stride = surface_stride(s->surface);
++    int bytes_per_pixel = surface_bytes_per_pixel(s->surface);
++    uint8_t *source = surface_data(s->surface);
++    int row;
++
++    x = MAX(x, 0);
++    y = MAX(y, 0);
++    w = MIN(w, surface_width(s->surface) - x);
++    h = MIN(h, surface_height(s->surface) - y);
++    if (w <= 0 || h <= 0) {
++        return;
++    }
++    for (row = y; row < y + h; row++) {
++        size_t offset = (size_t)row * stride + (size_t)x * bytes_per_pixel;
++        memcpy(s->shm + offset, source + offset, (size_t)w * bytes_per_pixel);
++    }
++}
++
++static void veil_shm_gfx_switch(DisplayChangeListener *dcl,
++                                DisplaySurface *new_surface)
++{
++    VeilShmDisplay *s = container_of(dcl, VeilShmDisplay, dcl);
++    size_t size;
++    int fd;
++
++    veil_shm_unmap(s);
++    s->surface = new_surface;
++    if (!new_surface || !surface_data(new_surface)) {
++        return;
++    }
++
++    size = (size_t)surface_stride(new_surface) * surface_height(new_surface);
++    snprintf(s->shm_name, sizeof(s->shm_name), "/vfb.%d.%u",
++             (int)getpid(), ++s->generation);
++    fd = shm_open(s->shm_name, O_RDWR | O_CREAT | O_EXCL, 0600);
++    if (fd < 0) {
++        error_report("veil-shm-display: shm_open %s: %s", s->shm_name,
++                     strerror(errno));
++        s->shm_name[0] = '\0';
++        return;
++    }
++    if (ftruncate(fd, size) < 0) {
++        error_report("veil-shm-display: ftruncate: %s", strerror(errno));
++        close(fd);
++        veil_shm_unmap(s);
++        return;
++    }
++    s->shm = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
++    close(fd);
++    if (s->shm == MAP_FAILED) {
++        error_report("veil-shm-display: mmap: %s", strerror(errno));
++        s->shm = NULL;
++        veil_shm_unmap(s);
++        return;
++    }
++    s->shm_size = size;
++    memcpy(s->shm, surface_data(new_surface), size);
++    s->client_needs_surface = true;
++    veil_shm_send_update(s, 0, 0, surface_width(new_surface),
++                         surface_height(new_surface));
++}
++
++static void veil_shm_gfx_update(DisplayChangeListener *dcl,
++                                int x, int y, int w, int h)
++{
++    VeilShmDisplay *s = container_of(dcl, VeilShmDisplay, dcl);
++
++    if (!s->shm) {
++        return;
++    }
++    veil_shm_copy(s, x, y, w, h);
++    veil_shm_send_update(s, x, y, w, h);
++}
++
++static void veil_shm_refresh(DisplayChangeListener *dcl)
++{
++    qemu_console_hw_update(dcl->con);
++}
++
++static bool veil_shm_check_format(DisplayChangeListener *dcl,
++                                  pixman_format_code_t format)
++{
++    return PIXMAN_FORMAT_BPP(format) == 32;
++}
++
++static const DisplayChangeListenerOps veil_shm_ops = {
++    .dpy_name = "veil-shm",
++    .dpy_refresh = veil_shm_refresh,
++    .dpy_gfx_update = veil_shm_gfx_update,
++    .dpy_gfx_switch = veil_shm_gfx_switch,
++    .dpy_gfx_check_format = veil_shm_check_format,
++};
++
++static void veil_shm_client_read(void *opaque)
++{
++    VeilShmDisplay *s = opaque;
++    char discard[64];
++    ssize_t received = recv(s->client_fd, discard, sizeof(discard), MSG_DONTWAIT);
++
++    /* The protocol is one-way; reading only notices the client leaving. */
++    if (received == 0 || (received < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
++        veil_shm_close_client(s);
++    }
++}
++
++static void veil_shm_accept(void *opaque)
++{
++    VeilShmDisplay *s = opaque;
++    int fd = qemu_accept(s->listen_fd, NULL, NULL);
++
++    if (fd < 0) {
++        return;
++    }
++    /* One client: a new connection is the host app reconnecting. */
++    veil_shm_close_client(s);
++    qemu_set_blocking(fd, false, NULL);
++    s->client_fd = fd;
++    s->client_needs_surface = true;
++    s->client_behind = false;
++    qemu_set_fd_handler(fd, veil_shm_client_read, NULL, s);
++    if (s->surface) {
++        veil_shm_send_update(s, 0, 0, surface_width(s->surface),
++                             surface_height(s->surface));
++    }
++}
++
++static void veil_shm_machine_done(Notifier *notifier, void *data)
++{
++    VeilShmDisplay *s = container_of(notifier, VeilShmDisplay, machine_done);
++    QemuConsole *con = qemu_console_lookup_default();
++
++    if (!con) {
++        error_report("veil-shm-display: no console to mirror");
++        return;
++    }
++    qemu_console_register_listener(con, &s->dcl, &veil_shm_ops);
++    qemu_console_listener_set_refresh(&s->dcl, GUI_REFRESH_INTERVAL_DEFAULT);
++    s->registered = true;
++}
++
++static void veil_shm_complete(UserCreatable *uc, Error **errp)
++{
++    VeilShmDisplay *s = VEIL_SHM_DISPLAY(uc);
++    struct sockaddr_un address = { .sun_family = AF_UNIX };
++
++    if (!s->path || strlen(s->path) >= sizeof(address.sun_path)) {
++        error_setg(errp, "veil-shm-display needs a socket path shorter than %zu bytes",
++                   sizeof(address.sun_path));
++        return;
++    }
++    pstrcpy(address.sun_path, sizeof(address.sun_path), s->path);
++    unlink(s->path);
++
++    s->listen_fd = qemu_socket(AF_UNIX, SOCK_STREAM, 0);
++    if (s->listen_fd < 0) {
++        error_setg_errno(errp, errno, "veil-shm-display: socket");
++        return;
++    }
++    if (bind(s->listen_fd, (struct sockaddr *)&address, sizeof(address)) < 0
++        || listen(s->listen_fd, 1) < 0) {
++        error_setg_errno(errp, errno, "veil-shm-display: cannot listen on %s", s->path);
++        close(s->listen_fd);
++        s->listen_fd = -1;
++        return;
++    }
++    chmod(s->path, 0600);
++    qemu_set_blocking(s->listen_fd, false, NULL);
++    qemu_set_fd_handler(s->listen_fd, veil_shm_accept, NULL, s);
++
++    s->machine_done.notify = veil_shm_machine_done;
++    qemu_add_machine_init_done_notifier(&s->machine_done);
++}
++
++static char *veil_shm_get_path(Object *obj, Error **errp)
++{
++    return g_strdup(VEIL_SHM_DISPLAY(obj)->path);
++}
++
++static void veil_shm_set_path(Object *obj, const char *value, Error **errp)
++{
++    VeilShmDisplay *s = VEIL_SHM_DISPLAY(obj);
++
++    g_free(s->path);
++    s->path = g_strdup(value);
++}
++
++static void veil_shm_instance_init(Object *obj)
++{
++    VeilShmDisplay *s = VEIL_SHM_DISPLAY(obj);
++
++    s->listen_fd = -1;
++    s->client_fd = -1;
++}
++
++static void veil_shm_instance_finalize(Object *obj)
++{
++    VeilShmDisplay *s = VEIL_SHM_DISPLAY(obj);
++
++    if (s->registered) {
++        qemu_console_unregister_listener(&s->dcl);
++    }
++    veil_shm_close_client(s);
++    if (s->listen_fd >= 0) {
++        qemu_set_fd_handler(s->listen_fd, NULL, NULL, NULL);
++        close(s->listen_fd);
++        unlink(s->path);
++    }
++    veil_shm_unmap(s);
++    g_free(s->path);
++}
++
++static void veil_shm_class_init(ObjectClass *oc, const void *data)
++{
++    UserCreatableClass *ucc = USER_CREATABLE_CLASS(oc);
++
++    ucc->complete = veil_shm_complete;
++    object_class_property_add_str(oc, "path", veil_shm_get_path, veil_shm_set_path);
++}
++
++static const TypeInfo veil_shm_info = {
++    .name = TYPE_VEIL_SHM_DISPLAY,
++    .parent = TYPE_OBJECT,
++    .class_init = veil_shm_class_init,
++    .instance_size = sizeof(VeilShmDisplay),
++    .instance_init = veil_shm_instance_init,
++    .instance_finalize = veil_shm_instance_finalize,
++    .interfaces = (const InterfaceInfo[]) {
++        { TYPE_USER_CREATABLE },
++        { }
++    }
++};
++
++static void veil_shm_register_types(void)
++{
++    type_register_static(&veil_shm_info);
++}
++
++type_init(veil_shm_register_types);

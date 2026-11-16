@@ -101,6 +101,20 @@ struct WindowFrameCompositorTests {
         #expect(compositor.generation(for: "hwnd:0003029A") == 3)
     }
 
+    @Test("rejects a sequence gap and waits for a key frame")
+    func rejectsSequenceGapUntilResynchronized() {
+        let compositor = Self.makeCompositor()
+
+        #expect(compositor.apply(Self.keyFrame(sequence: 10)).isComposited)
+        #expect(compositor.apply(Self.tile(sequence: 12)) == .needsKeyFrame(reason: .sequenceGap))
+        #expect(!compositor.hasSurface(for: "hwnd:0003029A"))
+
+        // A later delta cannot repair the missing base. The next key frame is the explicit recovery point.
+        #expect(compositor.apply(Self.tile(sequence: 13)) == .needsKeyFrame(reason: .noSurface))
+        #expect(compositor.apply(Self.keyFrame(sequence: 14)).isComposited)
+        #expect(compositor.apply(Self.tile(sequence: 15)).isComposited)
+    }
+
     @Test("refuses a tile that arrives before any key frame")
     func refusesTileBeforeKeyFrame() {
         let compositor = Self.makeCompositor()
@@ -159,6 +173,29 @@ struct WindowFrameCompositorTests {
         #expect(compositor.apply(Self.keyFrame()) == .needsKeyFrame(reason: .undecodablePayload))
     }
 
+    @Test("a rejected update invalidates its delta base until a new key frame", arguments: [false, true], [false, true])
+    func requiresKeyFrameAfterRejectedPayload(isKeyFrame: Bool, mismatchedSize: Bool) {
+        let compositor = Self.makeCompositor()
+        let windowId = "hwnd:0003029A"
+        #expect(compositor.apply(Self.keyFrame()).isComposited)
+        #expect(compositor.apply(Self.keyFrame(windowId: "hwnd:OTHER")).isComposited)
+        var rejected = isKeyFrame ? Self.keyFrame(sequence: 2) : Self.tile(sequence: 2)
+        rejected.payload = mismatchedSize ? Self.payload(width: 1, height: 1) : Data("broken PNG".utf8)
+
+        #expect(compositor.apply(rejected) == .needsKeyFrame(
+            reason: mismatchedSize ? .payloadRectMismatch : .undecodablePayload
+        ))
+        #expect(!compositor.hasSurface(for: windowId))
+        #expect(compositor.image(for: windowId) == nil)
+        #expect(compositor.apply(Self.tile(sequence: 3)) == .needsKeyFrame(reason: .noSurface))
+        #expect(compositor.hasSurface(for: "hwnd:OTHER"))
+        #expect(compositor.apply(Self.tile(windowId: "hwnd:OTHER", sequence: 2)).isComposited)
+
+        #expect(compositor.apply(Self.keyFrame(sequence: 5)).isComposited)
+        #expect(compositor.apply(Self.tile(sequence: 6)).isComposited)
+        #expect(compositor.image(for: windowId) != nil)
+    }
+
     @Test("keeps surfaces separate per window")
     func keepsSurfacesSeparatePerWindow() {
         let compositor = Self.makeCompositor()
@@ -203,13 +240,13 @@ struct WindowFrameCompositorTests {
 
         // The guest uses a top-left origin and CoreGraphics uses bottom-left. A flip error would only show
         // up at the edges, so every corner is exercised.
-        for rect in [
+        for (offset, rect) in [
             WindowFrameTileRect(x: 0, y: 0, width: 10, height: 10),
             WindowFrameTileRect(x: 190, y: 0, width: 10, height: 10),
             WindowFrameTileRect(x: 0, y: 90, width: 10, height: 10),
             WindowFrameTileRect(x: 190, y: 90, width: 10, height: 10)
-        ] {
-            #expect(compositor.apply(Self.tile(rect: rect)).isComposited, "\(rect)")
+        ].enumerated() {
+            #expect(compositor.apply(Self.tile(sequence: offset + 2, rect: rect)).isComposited, "\(rect)")
         }
     }
 

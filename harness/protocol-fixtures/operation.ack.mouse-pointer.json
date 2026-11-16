@@ -1,0 +1,9 @@
+{
+  "accepted": true,
+  "pointer": {
+    "x": 16384,
+    "y": 8192
+  },
+  "requestId": "req_mouse_42",
+  "type": "operation.ack"
+}

@@ -1,0 +1,14 @@
+{
+  "type": "appearance.set.response",
+  "requestId": "req_appearance_set",
+  "protocolVersion": 1,
+  "appearance": {
+    "isSupported": true,
+    "theme": "dark",
+    "appsUseLightTheme": false,
+    "systemUsesLightTheme": false,
+    "changed": true,
+    "broadcast": true,
+    "message": null
+  }
+}

@@ -21,6 +21,18 @@ enum LauncherPrimaryNextActionRoute: Equatable {
     case runRecommendedProof
     case runMultiAppProof
 
+    /// Verification and setup checks stay in Settings and menus; the launcher's one big button
+    /// opens or reconnects apps the way a VM app's main window does.
+    var belongsInLauncherHero: Bool {
+        switch self {
+        case .runRecommendedProof, .runMultiAppProof, .runNotificationProof, .showPrinterBridgePlan,
+             .requestNotificationConsent, .preparePackageIdentity:
+            return false
+        default:
+            return true
+        }
+    }
+
     static func resolve(
         actionId: String,
         command: String?,

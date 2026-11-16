@@ -1,0 +1,403 @@
+diff --git a/include/ui/egl-headless-metal.h b/include/ui/egl-headless-metal.h
+new file mode 100644
+index 000000000..d34ec1036
+--- /dev/null
++++ b/include/ui/egl-headless-metal.h
+@@ -0,0 +1,10 @@
++#ifndef UI_EGL_HEADLESS_METAL_H
++#define UI_EGL_HEADLESS_METAL_H
++
++void *egl_headless_metal_retain(void *tex);
++void egl_headless_metal_release(void *tex);
++bool egl_headless_metal_read(void *texture, uint32_t x, uint32_t y,
++                             uint32_t w, uint32_t h,
++                             uint8_t *dst, size_t dst_stride);
++
++#endif
+diff --git a/ui/egl-headless-metal.m b/ui/egl-headless-metal.m
+new file mode 100644
+index 000000000..5841790a6
+--- /dev/null
++++ b/ui/egl-headless-metal.m
+@@ -0,0 +1,92 @@
++/*
++ * Veil experiment: read a Metal scanout texture back into the 2D console
++ * surface so egl-headless (VNC, screendump) shows Neptune/virgl scanouts.
++ */
++#include "qemu/osdep.h"
++#include "ui/egl-headless-metal.h"
++#import <Metal/Metal.h>
++
++static id<MTLCommandQueue> queue;
++static id<MTLBuffer> staging;
++
++void *egl_headless_metal_retain(void *tex)
++{
++    return [(id<MTLTexture>)tex retain];
++}
++
++void egl_headless_metal_release(void *tex)
++{
++    [(id<MTLTexture>)tex release];
++}
++
++bool egl_headless_metal_read(void *texture, uint32_t x, uint32_t y,
++                             uint32_t w, uint32_t h,
++                             uint8_t *dst, size_t dst_stride)
++{
++    id<MTLTexture> tex = (id<MTLTexture>)texture;
++    bool swap_rb;
++    size_t row = (size_t)w * 4;
++
++    if (!tex || !w || !h) {
++        return false;
++    }
++    switch (tex.pixelFormat) {
++    case MTLPixelFormatBGRA8Unorm:
++    case MTLPixelFormatBGRA8Unorm_sRGB:
++        swap_rb = false;
++        break;
++    case MTLPixelFormatRGBA8Unorm:
++    case MTLPixelFormatRGBA8Unorm_sRGB:
++        swap_rb = true;
++        break;
++    default:
++        fprintf(stderr, "egl-headless: unsupported metal format %lu\n", (unsigned long)tex.pixelFormat);
++        return false;
++    }
++    if (x + w > tex.width || y + h > tex.height) {
++        return false;
++    }
++    @autoreleasepool {
++        if (!queue || queue.device != tex.device) {
++            [queue release];
++            queue = [tex.device newCommandQueue];
++            [staging release];
++            staging = nil;
++        }
++        if (!staging || staging.length < row * h) {
++            [staging release];
++            staging = [tex.device newBufferWithLength:row * h
++                                              options:MTLResourceStorageModeShared];
++        }
++        id<MTLCommandBuffer> cb = [queue commandBuffer];
++        id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
++        [blit copyFromTexture:tex
++                  sourceSlice:0
++                  sourceLevel:0
++                 sourceOrigin:MTLOriginMake(x, y, 0)
++                   sourceSize:MTLSizeMake(w, h, 1)
++                     toBuffer:staging
++            destinationOffset:0
++       destinationBytesPerRow:row
++     destinationBytesPerImage:row * h];
++        [blit endEncoding];
++        [cb commit];
++        [cb waitUntilCompleted];
++        const uint8_t *src = staging.contents;
++        for (uint32_t r = 0; r < h; r++) {
++            uint8_t *d = dst + r * dst_stride;
++            const uint8_t *s = src + r * row;
++            if (!swap_rb) {
++                memcpy(d, s, row);
++            } else {
++                for (uint32_t c = 0; c < w; c++) {
++                    d[c * 4 + 0] = s[c * 4 + 2];
++                    d[c * 4 + 1] = s[c * 4 + 1];
++                    d[c * 4 + 2] = s[c * 4 + 0];
++                    d[c * 4 + 3] = 0xff;
++                }
++            }
++        }
++    }
++    return true;
++}
+diff --git a/ui/egl-headless.c b/ui/egl-headless.c
+index ef5cc02dc..713c8d4dc 100644
+--- a/ui/egl-headless.c
++++ b/ui/egl-headless.c
+@@ -6,6 +6,9 @@
+ #include "ui/egl-helpers.h"
+ #include "ui/egl-context.h"
+ #include "ui/shader.h"
++#ifdef __APPLE__
++#include "ui/egl-headless-metal.h"
++#endif
+ 
+ typedef struct egl_dpy {
+     DisplayChangeListener dcl;
+@@ -17,13 +20,58 @@ typedef struct egl_dpy {
+     bool y_0_top;
+     uint32_t pos_x;
+     uint32_t pos_y;
++    void *mtl_tex;
++    uint32_t mtl_x, mtl_y, mtl_w, mtl_h;
++    bool mtl_dirty;
+ } egl_dpy;
+ 
+ /* ------------------------------------------------------------------ */
+ 
++#ifdef __APPLE__
++/* Veil experiment: FBOs are per-context; always use the display context. */
++#define EGL_HL_ENTER() \
++    EGLContext egl_hl_prev = eglGetCurrentContext(); \
++    eglMakeCurrent(qemu_egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, qemu_egl_rn_ctx); \
++    while (glGetError() != GL_NO_ERROR) { }
++#define EGL_HL_LEAVE() \
++    eglMakeCurrent(qemu_egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, egl_hl_prev)
++#else
++#define EGL_HL_ENTER()
++#define EGL_HL_LEAVE()
++#endif
++
++static void egl_metal_readback(egl_dpy *edpy)
++{
++#ifdef __APPLE__
++    uint32_t w, h;
++
++    if (!edpy->mtl_tex || !edpy->ds || !edpy->mtl_dirty) {
++        return;
++    }
++    edpy->mtl_dirty = false;
++    w = MIN(edpy->mtl_w, (uint32_t)surface_width(edpy->ds));
++    h = MIN(edpy->mtl_h, (uint32_t)surface_height(edpy->ds));
++    if (egl_headless_metal_read(edpy->mtl_tex, edpy->mtl_x, edpy->mtl_y, w, h,
++                                (uint8_t *)surface_data(edpy->ds),
++                                surface_stride(edpy->ds))) {
++        dpy_gfx_update(edpy->dcl.con, 0, 0, w, h);
++    } else {
++        static int warned;
++        if (warned++ < 5) {
++            fprintf(stderr, "egl-headless: metal readback failed %ux%u+%u+%u surf %dx%d\n",
++                    w, h, edpy->mtl_x, edpy->mtl_y,
++                    surface_width(edpy->ds), surface_height(edpy->ds));
++        }
++    }
++#endif
++}
++
+ static void egl_refresh(DisplayChangeListener *dcl)
+ {
++    egl_dpy *edpy = container_of(dcl, egl_dpy, dcl);
++
+     graphic_hw_update(dcl->con);
++    egl_metal_readback(edpy);
+ }
+ 
+ static void egl_gfx_update(DisplayChangeListener *dcl,
+@@ -50,9 +98,21 @@ static QEMUGLContext egl_create_context(DisplayGLCtx *dgc,
+ static void egl_scanout_disable(DisplayChangeListener *dcl)
+ {
+     egl_dpy *edpy = container_of(dcl, egl_dpy, dcl);
++    static int n;
++    if (n++ < 20) {
++        fprintf(stderr, "egl-headless: scanout disable\n");
++    }
++    EGL_HL_ENTER();
+ 
+     egl_fb_destroy(&edpy->guest_fb);
+     egl_fb_destroy(&edpy->blit_fb);
++    EGL_HL_LEAVE();
++#ifdef __APPLE__
++    if (edpy->mtl_tex) {
++        egl_headless_metal_release(edpy->mtl_tex);
++        edpy->mtl_tex = NULL;
++    }
++#endif
+ }
+ 
+ static void egl_scanout_texture(DisplayChangeListener *dcl,
+@@ -66,7 +126,26 @@ static void egl_scanout_texture(DisplayChangeListener *dcl,
+ {
+     egl_dpy *edpy = container_of(dcl, egl_dpy, dcl);
+ 
++    if (native.type == SCANOUT_TEXTURE_NATIVE_TYPE_METAL) {
++        /* Veil experiment: Metal scanouts are read back on refresh */
++        fprintf(stderr, "egl-headless: metal scanout %ux%u rect %u,%u %ux%u\n",
++                backing_width, backing_height, x, y, w, h);
++        egl_scanout_disable(dcl);
++#ifdef __APPLE__
++        edpy->mtl_tex = egl_headless_metal_retain(native.handle);
++        edpy->mtl_x = x;
++        edpy->mtl_y = y;
++        edpy->mtl_w = w;
++        edpy->mtl_h = h;
++        edpy->mtl_dirty = true;
++#endif
++        return;
++    }
++
++    fprintf(stderr, "egl-headless: gl scanout tex %u %ux%u y0top %d\n", backing_id, backing_width, backing_height, backing_y_0_top);
+     edpy->y_0_top = backing_y_0_top;
++    {
++    EGL_HL_ENTER();
+ 
+     /* source framebuffer */
+     egl_fb_setup_for_tex(&edpy->guest_fb,
+@@ -78,6 +157,8 @@ static void egl_scanout_texture(DisplayChangeListener *dcl,
+         egl_fb_destroy(&edpy->blit_fb);
+         egl_fb_setup_new_tex(&edpy->blit_fb, backing_width, backing_height);
+     }
++    EGL_HL_LEAVE();
++    }
+ }
+ 
+ #ifdef CONFIG_GBM
+@@ -145,11 +226,70 @@ static void egl_scanout_flush(DisplayChangeListener *dcl,
+ {
+     egl_dpy *edpy = container_of(dcl, egl_dpy, dcl);
+ 
++    if (edpy->mtl_tex) {
++        edpy->mtl_dirty = true;
++        return;
++    }
+     if (!edpy->guest_fb.texture || !edpy->ds) {
+         return;
+     }
+     assert(surface_format(edpy->ds) == PIXMAN_x8r8g8b8);
++    EGL_HL_ENTER();
+ 
++#ifdef __APPLE__
++    {
++        /*
++         * Veil experiment: GLES (ANGLE) cannot blit between the guest's
++         * texture format and a BGRA blit target, so read the guest
++         * framebuffer directly as RGBA and fix order/orientation on the CPU.
++         */
++        int sw = MIN(surface_width(edpy->ds), edpy->guest_fb.width);
++        int sh = MIN(surface_height(edpy->ds), edpy->guest_fb.height);
++        int stride = surface_stride(edpy->ds);
++        uint8_t *base = (uint8_t *)surface_data(edpy->ds);
++        GLenum err;
++
++        glBindFramebuffer(GL_READ_FRAMEBUFFER, edpy->guest_fb.framebuffer);
++        glPixelStorei(GL_PACK_ROW_LENGTH, stride / 4);
++        glReadPixels(0, 0, sw, sh, GL_RGBA, GL_UNSIGNED_BYTE, base);
++        glPixelStorei(GL_PACK_ROW_LENGTH, 0);
++        err = glGetError();
++        EGL_HL_LEAVE();
++        if (err != GL_NO_ERROR) {
++            static int warned;
++            if (warned++ < 5) {
++                fprintf(stderr, "egl-headless: guest read error 0x%x\n", err);
++            }
++            return;
++        }
++        for (int r = 0; r < sh; r++) {
++            uint8_t *p = base + r * stride;
++            for (int c = 0; c < sw; c++, p += 4) {
++                uint8_t t = p[0];
++                p[0] = p[2];
++                p[2] = t;
++            }
++        }
++        /*
++         * Measured with Windows on virtio-gpu 2D resources before viogpu3d:
++         * read back through ANGLE on Metal, rows already come out in the
++         * order GL's y_0_top says they do not, so the flip is the inverse
++         * of the stock egl_fb_blit/egl_fb_read pair.
++         */
++        if (edpy->y_0_top) {
++            g_autofree uint8_t *tmp = g_malloc(stride);
++            for (int r = 0; r < sh / 2; r++) {
++                uint8_t *a = base + r * stride;
++                uint8_t *b = base + (sh - 1 - r) * stride;
++                memcpy(tmp, a, stride);
++                memcpy(a, b, stride);
++                memcpy(b, tmp, stride);
++            }
++        }
++        dpy_gfx_update(edpy->dcl.con, x, y, w, h);
++        return;
++    }
++#endif
+     if (edpy->cursor_fb.texture) {
+         /* have cursor -> render using textures */
+         egl_texture_blit(edpy->gls, &edpy->blit_fb, &edpy->guest_fb,
+@@ -162,7 +302,14 @@ static void egl_scanout_flush(DisplayChangeListener *dcl,
+         egl_fb_blit(&edpy->blit_fb, &edpy->guest_fb, edpy->y_0_top);
+     }
+ 
++    {
++        static int n;
++        if (n++ % 600 == 0) {
++            fprintf(stderr, "egl-headless: flush #%d %ux%u+%u+%u\n", n, w, h, x, y);
++        }
++    }
+     egl_fb_read(edpy->ds, &edpy->blit_fb);
++    EGL_HL_LEAVE();
+     dpy_gfx_update(edpy->dcl.con, x, y, w, h);
+ }
+ 
+diff --git a/ui/egl-helpers.c b/ui/egl-helpers.c
+index 231a500e5..f3491bf20 100644
+--- a/ui/egl-helpers.c
++++ b/ui/egl-helpers.c
+@@ -180,8 +180,32 @@ void egl_fb_read(DisplaySurface *dst, egl_fb *src)
+ {
+     glBindFramebuffer(GL_READ_FRAMEBUFFER, src->framebuffer);
+     glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
++#ifdef __APPLE__
++    {
++        /* Veil experiment: ANGLE/GLES may refuse BGRA reads; read RGBA and swap */
++        int n = surface_width(dst) * surface_height(dst);
++        uint8_t *p = (uint8_t *)surface_data(dst);
++        GLenum err;
++        glReadPixels(0, 0, surface_width(dst), surface_height(dst),
++                     GL_RGBA, GL_UNSIGNED_BYTE, p);
++        err = glGetError();
++        if (err != GL_NO_ERROR) {
++            static int warned;
++            if (warned++ < 5) {
++                fprintf(stderr, "egl_fb_read: glReadPixels error 0x%x\n", err);
++            }
++            return;
++        }
++        for (int i = 0; i < n; i++, p += 4) {
++            uint8_t t = p[0];
++            p[0] = p[2];
++            p[2] = t;
++        }
++    }
++#else
+     glReadPixels(0, 0, surface_width(dst), surface_height(dst),
+                  GL_BGRA, GL_UNSIGNED_BYTE, surface_data(dst));
++#endif
+ }
+ 
+ void egl_fb_read_rect(DisplaySurface *dst, egl_fb *src, int x, int y, int w, int h)
+@@ -737,6 +761,17 @@ bool egl_init(const char *rendernode, DisplayGLMode mode, Error **errp)
+         error_setg(errp, "egl: egl_init_ctx failed");
+         return false;
+     }
++#elif defined(__APPLE__)
++    /* Veil experiment: headless ANGLE-on-Metal EGL, no window */
++    if (qemu_egl_init_dpy_cocoa(mode) < 0) {
++        error_setg(errp, "egl: ANGLE init failed");
++        return false;
++    }
++    qemu_egl_rn_ctx = qemu_egl_init_ctx();
++    if (!qemu_egl_rn_ctx) {
++        error_setg(errp, "egl: egl_init_ctx failed");
++        return false;
++    }
+ #elif defined(CONFIG_GBM)
+     if (egl_rendernode_init(rendernode, mode) < 0) {
+         error_setg(errp, "egl: render node init failed");
+diff --git a/ui/meson.build b/ui/meson.build
+index 10eea7e1d..14a52b53a 100644
+--- a/ui/meson.build
++++ b/ui/meson.build
+@@ -70,8 +70,11 @@ endif
+ 
+ if opengl.found()
+   egl_headless_ss = ss.source_set()
+-  egl_headless_ss.add(when: [egl, opengl, gbm, pixman],
++  egl_headless_ss.add(when: host_os == 'darwin' ? [egl, opengl, pixman] : [egl, opengl, gbm, pixman],
+                       if_true: files('egl-headless.c'))
++  if host_os == 'darwin' and metal.found()
++    egl_headless_ss.add(when: [egl, opengl, pixman], if_true: [metal, files('egl-headless-metal.m')])
++  endif
+   ui_modules += {'egl-headless' : egl_headless_ss}
+ endif
+ 

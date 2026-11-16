@@ -1,0 +1,6 @@
+{
+  "type": "display.resize.request",
+  "requestId": "req_display_resize",
+  "width": 1920,
+  "height": 1080
+}

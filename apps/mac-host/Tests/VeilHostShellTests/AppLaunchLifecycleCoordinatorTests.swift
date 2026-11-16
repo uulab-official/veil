@@ -51,6 +51,34 @@ struct AppLaunchLifecycleCoordinatorTests {
         )
     }
 
+    @Test("a timed out guest keeps waiting while the embedded console is still booting")
+    func waitsThroughBlankBootConsole() {
+        #expect(
+            AppLaunchLifecycleCoordinator.nextStep(
+                context: context(
+                    state: .running,
+                    agentWaitTimedOut: true,
+                    isConsoleStillBooting: true
+                )
+            ) == .waitForGuestAgent
+        )
+    }
+
+    @Test("a timed out stalled QEMU boot recovers before agent repair")
+    func recoversStalledBootBeforeRepair() {
+        #expect(
+            AppLaunchLifecycleCoordinator.nextStep(
+                context: context(
+                    state: .running,
+                    agentWaitTimedOut: true,
+                    isConsoleStillBooting: false,
+                    canRecoverStalledRuntime: true,
+                    hasAttemptedRuntimeRecovery: false
+                )
+            ) == .recoverStalledRuntime
+        )
+    }
+
     @Test("agent repair stops after two attempts")
     func stopsAfterRepairBudget() {
         #expect(
@@ -85,7 +113,10 @@ struct AppLaunchLifecycleCoordinatorTests {
     private func context(
         state: VMRuntimeState? = .stopped,
         agentWaitTimedOut: Bool = false,
-        repairAttemptCount: Int = 0
+        repairAttemptCount: Int = 0,
+        isConsoleStillBooting: Bool = false,
+        canRecoverStalledRuntime: Bool = false,
+        hasAttemptedRuntimeRecovery: Bool = false
     ) -> AppLaunchLifecycleContext {
         AppLaunchLifecycleContext(
             hasQueuedLaunch: true,
@@ -95,7 +126,10 @@ struct AppLaunchLifecycleCoordinatorTests {
             canStartOrResume: true,
             guestAgentEndpointAvailable: true,
             agentWaitTimedOut: agentWaitTimedOut,
-            repairAttemptCount: repairAttemptCount
+            repairAttemptCount: repairAttemptCount,
+            canRecoverStalledRuntime: canRecoverStalledRuntime,
+            hasAttemptedRuntimeRecovery: hasAttemptedRuntimeRecovery,
+            isConsoleStillBooting: isConsoleStillBooting
         )
     }
 }

@@ -1,0 +1,12 @@
+{
+  "type": "clipboard.image.set",
+  "requestId": "evt_clipboard_3",
+  "origin": "guest",
+  "sequence": 3,
+  "format": "png",
+  "width": 2,
+  "height": 2,
+  "byteLength": 74,
+  "sha256": "d28c139bba718d60154960eaca75535a5cc5b59fe2153e998a29251e8e5f4667",
+  "pngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR4nGP4z8DwH4QZYAwAR8oH+WdZbrcAAAAASUVORK5CYII="
+}

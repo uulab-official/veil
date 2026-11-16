@@ -1,0 +1,16 @@
+{
+  "type": "time.sync.response",
+  "requestId": "req_time_sync",
+  "protocolVersion": 1,
+  "timeSync": {
+    "isSupported": true,
+    "guestUtcBefore": "2026-11-10T22:12:41.118Z",
+    "skewMilliseconds": 40638882,
+    "thresholdMilliseconds": 2000,
+    "outcome": "corrected",
+    "method": "set-system-time",
+    "requiresElevation": false,
+    "recommendedAction": "none",
+    "message": "Windows clock was 40638882 ms behind macOS and has been set from the host."
+  }
+}

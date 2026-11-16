@@ -73,12 +73,7 @@ public struct JSONWindowRestoreIntentStore: WindowRestoreIntentStore {
     }
 
     public static var defaultDirectory: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library", isDirectory: true)
-                .appendingPathComponent("Application Support", isDirectory: true)
-        return base
-            .appendingPathComponent("Veil", isDirectory: true)
+        VeilApplicationSupport.directory
             .appendingPathComponent("Windows Apps", isDirectory: true)
     }
 }

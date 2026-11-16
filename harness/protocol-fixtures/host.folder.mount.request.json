@@ -1,0 +1,9 @@
+{
+  "type": "host.folder.mount.request",
+  "requestId": "req_host_folder",
+  "protocolVersion": 1,
+  "port": 50123,
+  "token": "6f1d0c9a2b7e4f30a8d5c1e9b2f47a60",
+  "driveLetter": "M",
+  "label": "Mac"
+}

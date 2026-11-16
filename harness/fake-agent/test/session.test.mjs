@@ -70,6 +70,23 @@ test("launches Calculator and emits a distinct tracked window event", async () =
   });
 });
 
+test("opens a shared-folder file without interpreting its bytes", async () => {
+  const session = createSession();
+
+  const replies = await session.handle({
+    type: "file.open.shared.request",
+    requestId: "req_open_shared",
+    appId: "winapp_notepad",
+    fileName: "large-report.txt",
+    guestPath: "C:\\VeilShared\\large-report.txt"
+  });
+
+  assert.equal(replies[0].type, "file.open.response");
+  assert.equal(replies[0].requestId, "req_open_shared");
+  assert.equal(replies[1].type, "window.created");
+  assert.equal(replies[1].title, "large-report.txt - Notepad");
+});
+
 test("returns the fixture app list", async () => {
   const session = createSession();
 
@@ -252,11 +269,12 @@ test("rejects window focus requests without a HWND", async () => {
   ]);
 });
 
-test("accepts mouse input events without a reply", async () => {
+test("acknowledges mouse input events", async () => {
   const session = createSession();
 
   const replies = await session.handle({
     type: "input.mouse",
+    requestId: "req_mouse_1",
     windowId: "hwnd:0003029A",
     event: "leftDown",
     x: 240,
@@ -264,7 +282,9 @@ test("accepts mouse input events without a reply", async () => {
     modifiers: []
   });
 
-  assert.deepEqual(replies, []);
+  assert.deepEqual(replies, [
+    { type: "operation.ack", requestId: "req_mouse_1", accepted: true }
+  ]);
 });
 
 test("rejects mouse input events for untracked HWNDs", async () => {
@@ -300,11 +320,12 @@ test("rejects mouse input events for untracked HWNDs", async () => {
   assert.deepEqual(broadcastEvents, []);
 });
 
-test("accepts key input events without a reply", async () => {
+test("acknowledges key input events", async () => {
   const session = createSession();
 
   const replies = await session.handle({
     type: "input.key",
+    requestId: "req_key_1",
     windowId: "hwnd:0003029A",
     event: "keyDown",
     key: "c",
@@ -312,7 +333,9 @@ test("accepts key input events without a reply", async () => {
     modifiers: ["ctrl"]
   });
 
-  assert.deepEqual(replies, []);
+  assert.deepEqual(replies, [
+    { type: "operation.ack", requestId: "req_key_1", accepted: true }
+  ]);
 });
 
 test("rejects key input events for untracked HWNDs", async () => {
@@ -348,7 +371,7 @@ test("rejects key input events for untracked HWNDs", async () => {
   assert.deepEqual(broadcastEvents, []);
 });
 
-test("accepts host clipboard text without a reply", async () => {
+test("acknowledges host clipboard text", async () => {
   const session = createSession();
 
   const replies = await session.handle({
@@ -359,7 +382,9 @@ test("accepts host clipboard text without a reply", async () => {
     text: "hello from macOS"
   });
 
-  assert.deepEqual(replies, []);
+  assert.deepEqual(replies, [
+    { type: "operation.ack", requestId: "req_clipboard_1", accepted: true }
+  ]);
 });
 
 test("broadcasts a fixture frame when a capture stream is subscribed", async () => {
@@ -377,7 +402,9 @@ test("broadcasts a fixture frame when a capture stream is subscribed", async () 
     format: "png"
   });
 
-  assert.deepEqual(subscribeReplies, []);
+  assert.deepEqual(subscribeReplies, [
+    { type: "operation.ack", requestId: "req_frame_subscribe_notepad", accepted: true }
+  ]);
   assert.equal(broadcastEvents.length, 1);
   assert.equal(broadcastEvents[0].type, "window.frame");
   assert.equal(broadcastEvents[0].windowId, "hwnd:0003029A");
@@ -410,7 +437,7 @@ test("rejects capture stream subscription for untracked HWNDs", async () => {
   assert.deepEqual(broadcastEvents, []);
 });
 
-test("accepts frame stream unsubscribe without a reply", async () => {
+test("acknowledges frame stream unsubscribe", async () => {
   const session = createSession();
 
   const unsubscribeReplies = await session.handle({
@@ -419,7 +446,9 @@ test("accepts frame stream unsubscribe without a reply", async () => {
     windowId: "hwnd:0003029A"
   });
 
-  assert.deepEqual(unsubscribeReplies, []);
+  assert.deepEqual(unsubscribeReplies, [
+    { type: "operation.ack", requestId: "req_frame_unsubscribe_notepad", accepted: true }
+  ]);
 });
 
 test("does not echo host clipboard text back as a guest event", async () => {

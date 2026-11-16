@@ -33,6 +33,17 @@ struct WindowsAppWindowPresenterTests {
         )
     }
 
+    @Test("closing the last Windows app leaves nothing on screen, like Parallels Coherence")
+    func closingTheLastAppKeepsTheLauncherHidden() {
+        #expect(
+            LauncherWindowVisibilityPolicy.shouldHideLauncher(
+                visibleMirroredWindowCount: 0,
+                modelRequestsHide: false,
+                lastAppClosedByUser: true
+            )
+        )
+    }
+
     @Test("mirrors several Windows apps side by side as separate macOS windows")
     func mirrorsSeveralWindowsAppsSideBySide() {
         _ = NSApplication.shared
@@ -267,7 +278,7 @@ struct WindowsAppWindowPresenterTests {
         }
 
         var resizeEvents: [(String, Int, Int)] = []
-        presenter.onWindowResize = { windowId, width, height in
+        presenter.onWindowResize = { windowId, width, height, _ in
             resizeEvents.append((windowId, width, height))
         }
 
@@ -281,7 +292,10 @@ struct WindowsAppWindowPresenterTests {
             )
         )
         let window = try #require(mirroredWindow(withId: windowId))
-        window.setContentSize(NSSize(width: 1_440, height: 960))
+        // Shrink rather than grow: AppKit clamps a window to the screen, and CI's virtual display
+        // is smaller than a typical Mac's.
+        window.setContentSize(NSSize(width: 800, height: 520))
+        let finalSize = window.contentRect(forFrameRect: window.frame).size
 
         presenter.windowDidEndLiveResize(
             Notification(name: NSWindow.didEndLiveResizeNotification, object: window)
@@ -289,8 +303,210 @@ struct WindowsAppWindowPresenterTests {
 
         #expect(resizeEvents.count == 1)
         #expect(resizeEvents.first?.0 == windowId)
-        #expect(resizeEvents.first?.1 == 1_440)
-        #expect(resizeEvents.first?.2 == 960)
+        #expect(resizeEvents.first?.1 == Int(finalSize.width))
+        #expect(resizeEvents.first?.2 == Int(finalSize.height))
+        #expect(finalSize.width < 960)
+    }
+
+    @Test("sends the zoom target size as the zoom starts and keeps the frame during the zoom")
+    func sendsZoomTargetSizeAsZoomStarts() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+
+        var resizeEvents: [(String, Int, Int)] = []
+        presenter.onWindowResize = { windowId, width, height, _ in
+            resizeEvents.append((windowId, width, height))
+        }
+        let windowId = "hwnd:zoom"
+        let original = session(
+            windowId: windowId,
+            appId: "winapp_paint",
+            title: "Paint",
+            bounds: WindowBounds(x: 80, y: 80, width: 960, height: 640)
+        )
+        presenter.showWindow(for: original)
+        let window = try #require(mirroredWindow(withId: windowId))
+        let target = NSRect(x: 0, y: 0, width: 1200, height: 800)
+
+        #expect(presenter.windowShouldZoom(window, toFrame: target))
+        let targetContent = window.contentRect(forFrameRect: target).size
+        #expect(resizeEvents.count == 1)
+        #expect(resizeEvents.first?.1 == Int(targetContent.width.rounded()))
+        #expect(resizeEvents.first?.2 == Int(targetContent.height.rounded()))
+
+        // A guest update that lands mid-zoom must not pin the window back to its pre-zoom frame.
+        // AppKit fits the frame to the screen and the aspect lock, and CI's virtual display is small, so the
+        // check is against the frame the zoom actually reached rather than the requested one.
+        window.setFrame(target, display: false)
+        let zoomedFrame = window.frame
+        var updated = original
+        updated.window.bounds = WindowBounds(x: 80, y: 80, width: 1000, height: 640)
+        presenter.showWindow(for: updated)
+        #expect(NSEqualRects(window.frame, zoomedFrame))
+    }
+
+    @Test("desktop mode takes every mirrored window off screen and pauses its frames")
+    func desktopModeHidesMirroredWindowsAndPausesFrames() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        var visibilityChanges: [String] = []
+        presenter.onWindowVisibilityChange = { windowId, isVisible in
+            visibilityChanges.append("\(windowId):\(isVisible)")
+        }
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad", hasFirstFrame: true))
+        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator", hasFirstFrame: true))
+
+        presenter.hideAllForDesktop()
+
+        #expect(presenter.isHiddenForDesktop)
+        #expect(!presenter.isWindowOnScreen(windowId: "hwnd:0001"))
+        #expect(!presenter.isWindowOnScreen(windowId: "hwnd:0002"))
+        // Sessions stay open in the guest; the windows are only hidden.
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002"])
+        #expect(visibilityChanges == ["hwnd:0001:false", "hwnd:0002:false"])
+
+        // Entering the mode again must not pause twice.
+        presenter.hideAllForDesktop()
+        #expect(visibilityChanges.count == 2)
+    }
+
+    @Test("apps mode brings back the windows the desktop hid and resumes their frames")
+    func appsModeRestoresHiddenWindowsAndResumesFrames() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        var visibilityChanges: [String] = []
+        presenter.onWindowVisibilityChange = { windowId, isVisible in
+            visibilityChanges.append("\(windowId):\(isVisible)")
+        }
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad", hasFirstFrame: true))
+        presenter.showWindow(for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator", hasFirstFrame: true))
+        presenter.hideAllForDesktop()
+        visibilityChanges.removeAll()
+
+        presenter.showAllAfterDesktop()
+
+        #expect(!presenter.isHiddenForDesktop)
+        #expect(presenter.isWindowOnScreen(windowId: "hwnd:0001"))
+        #expect(presenter.isWindowOnScreen(windowId: "hwnd:0002"))
+        #expect(visibilityChanges == ["hwnd:0001:true", "hwnd:0002:true"])
+        // The window that was frontmost before the desktop took over is frontmost again.
+        #expect(presenter.foregroundWindowId == "hwnd:0002")
+
+        // Leaving a mode that is not active does nothing.
+        presenter.showAllAfterDesktop()
+        #expect(visibilityChanges.count == 2)
+    }
+
+    @Test("a window that opens or asks to come forward while the desktop shows stays hidden and paused")
+    func windowsStayHiddenWhileDesktopShows() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        var visibilityChanges: [String] = []
+        presenter.onWindowVisibilityChange = { windowId, isVisible in
+            visibilityChanges.append("\(windowId):\(isVisible)")
+        }
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.showWindow(for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad", hasFirstFrame: true))
+        presenter.hideAllForDesktop()
+        visibilityChanges.removeAll()
+
+        presenter.showWindow(
+            for: session(windowId: "hwnd:0001", appId: "winapp_notepad", title: "Notepad", hasFirstFrame: true),
+            bringToFront: true
+        )
+        presenter.showWindow(
+            for: session(windowId: "hwnd:0002", appId: "winapp_calculator", title: "Calculator", hasFirstFrame: true),
+            bringToFront: true
+        )
+        presenter.bringAllToFront()
+
+        #expect(!presenter.isWindowOnScreen(windowId: "hwnd:0001"))
+        #expect(!presenter.isWindowOnScreen(windowId: "hwnd:0002"))
+        #expect(presenter.visibleWindowIds == ["hwnd:0001", "hwnd:0002"])
+        #expect(visibilityChanges == ["hwnd:0002:false"])
+
+        presenter.showAllAfterDesktop()
+
+        #expect(presenter.isWindowOnScreen(windowId: "hwnd:0001"))
+        #expect(presenter.isWindowOnScreen(windowId: "hwnd:0002"))
+        #expect(visibilityChanges == ["hwnd:0002:false", "hwnd:0001:true", "hwnd:0002:true"])
+    }
+
+    @Test("a window still waiting for its first frame keeps streaming while the desktop hides it")
+    func firstFrameStreamsWhileHiddenForDesktop() {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        var visibilityChanges: [String] = []
+        presenter.onWindowVisibilityChange = { windowId, isVisible in
+            visibilityChanges.append("\(windowId):\(isVisible)")
+        }
+        defer {
+            presenter.closeAll()
+        }
+
+        // Veil opens on the desktop while the app connection comes up and returns to apps mode on the first
+        // app frame. Pausing a window that has none yet meant that frame never came and every window stayed
+        // hidden.
+        presenter.hideAllForDesktop()
+        presenter.showWindow(for: session(windowId: "hwnd:0003", appId: "winapp_paint", title: "Paint"))
+
+        #expect(!presenter.isWindowOnScreen(windowId: "hwnd:0003"))
+        #expect(visibilityChanges.isEmpty)
+    }
+
+    @Test("shows a Windows popup as a borderless transparent overlay attached to its owner")
+    func showsPopupAsOverlayOnOwner() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+        let owner = session(
+            windowId: "hwnd:popup-owner",
+            appId: "winapp_paint",
+            title: "Paint",
+            bounds: WindowBounds(x: 100, y: 50, width: 800, height: 500)
+        )
+        var popup = session(
+            windowId: "hwnd:popup",
+            appId: "winapp_paint",
+            title: "Popup Host",
+            bounds: WindowBounds(x: 140, y: 120, width: 400, height: 40)
+        )
+        popup.window.popup = true
+        popup.window.ownerWindowId = owner.id
+        let sessions = [owner.id: owner, popup.id: popup]
+        presenter.sessionProvider = { sessions[$0] }
+
+        presenter.showWindow(for: owner)
+        presenter.showWindow(for: popup)
+
+        let ownerWindow = try #require(mirroredWindow(withId: owner.id))
+        let popupWindow = try #require(mirroredWindow(withId: popup.id))
+        #expect(popupWindow is NSPanel)
+        #expect(popupWindow.styleMask.contains(.borderless))
+        #expect(!popupWindow.styleMask.contains(.titled))
+        #expect(!popupWindow.isOpaque)
+        #expect(popupWindow.backgroundColor == .clear)
+        #expect(popupWindow.parent === ownerWindow)
+        // 40 points right of and 70 points below the owner's top-left, as in Windows.
+        #expect(popupWindow.frame.minX == ownerWindow.frame.minX + 40)
+        #expect(popupWindow.frame.maxY == ownerWindow.frame.maxY - 70)
+        #expect(popupWindow.frame.size == NSSize(width: 400, height: 40))
     }
 
     @Test("restore policy deminiaturizes minimized Windows app windows")
@@ -428,7 +644,11 @@ struct WindowsAppWindowPresenterTests {
         var backgroundFocusReport = passingReport
         backgroundFocusReport.isAppActive = false
         backgroundFocusReport.isMainWindowKey = false
-        #expect(backgroundFocusReport.meetsLauncherContract)
+        #expect(backgroundFocusReport.meetsLauncherContract == false)
+
+        var nonKeyActiveReport = passingReport
+        nonKeyActiveReport.isMainWindowKey = false
+        #expect(nonKeyActiveReport.meetsLauncherContract == false)
 
         var duplicateWindowReport = passingReport
         duplicateWindowReport.mainWindowCount = 2
@@ -485,13 +705,97 @@ struct WindowsAppWindowPresenterTests {
         #expect(callbackWindowIds.isEmpty)
     }
 
+    @Test("shows only the Windows caption on a mirrored window")
+    func showsOnlyTheWindowsCaptionOnMirroredWindow() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+
+        presenter.appIdentityProvider = { appId in
+            WindowsAppWindowIdentity(
+                appId: appId,
+                appName: "Notepad",
+                iconData: nil
+            )
+        }
+        presenter.showWindow(
+            for: session(windowId: "hwnd:identity", appId: "winapp_notepad", title: "Notes.txt")
+        )
+
+        let window = try #require(mirroredWindow(withId: "hwnd:identity"))
+        // The guest bitmap carries the Windows title bar; a visible macOS titlebar above it doubled the title
+        // and the window buttons.
+        #expect(window.styleMask.contains(.fullSizeContentView))
+        #expect(window.titlebarAppearsTransparent)
+        #expect(window.titleVisibility == .hidden)
+        #expect(window.title == "Notes.txt")
+        #expect(window.titlebarAccessoryViewControllers.isEmpty)
+        #expect(window.standardWindowButton(.closeButton)?.isHidden == true)
+        #expect(window.standardWindowButton(.miniaturizeButton)?.isHidden == true)
+        #expect(window.standardWindowButton(.zoomButton)?.isHidden == true)
+        // Free to take any shape: the guest window follows the Mac size instead of a stretched bitmap.
+        #expect(window.contentResizeIncrements == NSSize(width: 1, height: 1))
+        #expect(window.contentAspectRatio == .zero)
+        // Still a titled window, so it keeps its shadow, resizing, and Close/Minimize/Zoom commands.
+        #expect(window.styleMask.isSuperset(of: [.titled, .closable, .miniaturizable, .resizable]))
+    }
+
+    @Test("turns caption button clicks into the matching Mac window actions")
+    func turnsCaptionButtonClicksIntoMacWindowActions() throws {
+        _ = NSApplication.shared
+        let presenter = WindowsAppWindowPresenter()
+        defer {
+            presenter.closeAll()
+        }
+        var forwardedMouseEvents: [String] = []
+        presenter.onMouseInput = { _, event, _, _ in
+            forwardedMouseEvents.append(event)
+        }
+        presenter.showWindow(
+            for: session(windowId: "hwnd:caption", appId: "winapp_paint", title: "Paint")
+        )
+        let window = try #require(mirroredWindow(withId: "hwnd:caption"))
+        let contentView = try #require(window.contentView)
+        contentView.layoutSubtreeIfNeeded()
+        let inputView = try #require(Self.inputCaptureView(in: contentView))
+        let viewFrame = inputView.convert(inputView.bounds, to: nil)
+        // 69 points from the right edge of a 1:1 surface is the Windows maximize button.
+        let point = NSPoint(x: viewFrame.maxX - 69, y: viewFrame.maxY - 10)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1
+            ))
+            if type == .leftMouseDown { inputView.mouseDown(with: event) } else { inputView.mouseUp(with: event) }
+        }
+        // A Mac action, not a click forwarded to Windows.
+        #expect(forwardedMouseEvents.isEmpty)
+        #expect(window.isZoomed)
+        #expect(!window.isMiniaturized)
+    }
+
+    private static func inputCaptureView(in view: NSView) -> NSView? {
+        if String(describing: type(of: view)).contains("InputCaptureNSView") {
+            return view
+        }
+        for subview in view.subviews {
+            if let match = inputCaptureView(in: subview) {
+                return match
+            }
+        }
+        return nil
+    }
+
     private func session(
         windowId: String,
         appId: String,
         title: String,
-        bounds: WindowBounds = WindowBounds(x: 80, y: 80, width: 960, height: 640)
+        bounds: WindowBounds = WindowBounds(x: 80, y: 80, width: 960, height: 640),
+        hasFirstFrame: Bool = false
     ) -> WindowMirrorSession {
-        WindowMirrorSession(
+        var session = WindowMirrorSession(
             window: WindowCreatedEvent(
                 windowId: windowId,
                 processId: 4912,
@@ -504,6 +808,13 @@ struct WindowsAppWindowPresenterTests {
             connectionMode: .agent,
             captureState: .pending
         )
+        if hasFirstFrame {
+            session.latestFrame = try? JSONDecoder().decode(WindowFrameEvent.self, from: Data("""
+            {"type":"window.frame","windowId":"\(windowId)","frameId":"frame_1","sequence":1,"format":"png",
+             "width":\(bounds.width),"height":\(bounds.height),"scale":1,"encodedData":""}
+            """.utf8))
+        }
+        return session
     }
 
     private func mirroredWindow(withId windowId: String) -> NSWindow? {
