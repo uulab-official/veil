@@ -63,6 +63,10 @@ struct VeilHostShellApp: App {
     @AppStorage(GuestStateSyncSettings.reduceVisualEffectsKey) var reduceWindowsVisualEffects = true
 
     init() {
+        // A write to a socket or pipe whose other end is gone (QEMU, swtpm or a helper that exited) must
+        // fail with EPIPE, not end Veil with SIGPIPE, which leaves no crash report. Sockets Veil opens
+        // itself also set SO_NOSIGPIPE; this covers the ones libraries open.
+        signal(SIGPIPE, SIG_IGN)
         let runtimeBooter = AppRuntimeBooterFactory.make()
         let connectionPlan = AppGuestAgentConnectionPlan.resolve(provider: runtimeBooter.provider)
         let transport = connectionPlan.endpointURL.map { URLSessionWebSocketTransport(url: $0) }
