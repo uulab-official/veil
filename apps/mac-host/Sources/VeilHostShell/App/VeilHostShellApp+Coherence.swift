@@ -137,7 +137,7 @@ extension VeilHostShellApp {
                 source.isApplyingDisplayScale = false
             }
             if resizes, resizesFirst {
-                _ = await model.resizeDisplay(width: target.display.width, height: target.display.height)
+                await resizeGuestDisplayForApps(width: target.display.width, height: target.display.height)
             }
             if changesScale {
                 let reported = await model.setDisplayScale(scalePercent: target.scalePercent)
@@ -150,10 +150,18 @@ extension VeilHostShellApp {
                 }
             }
             if resizes, !resizesFirst {
-                _ = await model.resizeDisplay(width: target.display.width, height: target.display.height)
+                await resizeGuestDisplayForApps(width: target.display.width, height: target.display.height)
             }
             source.coherencePixelsPerPoint = source.scaleRefused ? 1 : target.pixelsPerPoint
         }
+    }
+
+    /// On the GPU runtime QEMU has to pass the size to the virtio-gpu device before Windows can take it
+    /// (`RFBDesktopSizeForwarder`); the desktop view does that from its own VNC session.
+    private func resizeGuestDisplayForApps(width: Int, height: Int) async {
+        // A no-op off the GPU runtime: the service checks the running launch itself.
+        _ = await vmModel.forwardDisplaySizeToGPU(width: width, height: height)
+        _ = await model.resizeDisplay(width: width, height: height)
     }
 
     /// Outside the apps view the guest display follows the desktop view's window, sized with

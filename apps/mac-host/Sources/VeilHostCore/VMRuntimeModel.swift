@@ -301,6 +301,11 @@ public final class VMRuntimeModel {
         }
     }
 
+    /// Passes a desktop size to the GPU runtime's display device ahead of the agent's mode change.
+    public func forwardDisplaySizeToGPU(width: Int, height: Int) async -> Bool {
+        await service.forwardDisplaySizeToGPU(width: width, height: height)
+    }
+
     /// Inserts the GPU driver disc. Returns the refusal for the caller to show.
     @discardableResult
     public func insertGPUDriverMedia() async -> String? {

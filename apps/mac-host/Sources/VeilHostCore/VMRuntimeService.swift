@@ -20,6 +20,9 @@ public protocol VMRuntimeService: Sendable {
     /// Puts a disc with the tools this Veil ships into the running Windows' removable drive.
     func insertGuestToolsUpdateMedia() async throws -> VMRemovableMediaStatus
     func insertGPUDriverMedia() async throws -> VMRemovableMediaStatus
+    /// Passes a desktop size to the virtio-gpu device of a Windows running on the GPU runtime, so its
+    /// driver lists the size; false when Windows is not on that runtime or QEMU did not take it.
+    func forwardDisplaySizeToGPU(width: Int, height: Int) async -> Bool
     /// Presses the running VM's ACPI power button.
     func pressPowerButton() async throws
     func markGuestAgentConnected(agentVersion: String) async throws -> VMRuntimeSnapshot
@@ -106,6 +109,10 @@ public extension VMRuntimeService {
 
     func insertGPUDriverMedia() async throws -> VMRemovableMediaStatus {
         throw VMRemovableMediaError.notRunning
+    }
+
+    func forwardDisplaySizeToGPU(width: Int, height: Int) async -> Bool {
+        false
     }
 
     func pressPowerButton() async throws {

@@ -97,4 +97,18 @@ extension LocalVMRuntimeService {
         try GPUDriverMedia.build(packageDirectory: runtime.driverPackageDirectory, mediaURL: mediaURL)
         return try await insertRemovableMedia(path: mediaURL.path)
     }
+
+    /// See `RFBDesktopSizeForwarder`: viogpu3d switches only to a size QEMU passed to the device first.
+    public func forwardDisplaySizeToGPU(width: Int, height: Int) async -> Bool {
+        guard let record = try? await qemuLaunchRecordStore.loadLatest(),
+              let pid = record.pid, qemuLaunchProcessIsRunning(pid),
+              QEMUGPURuntime.launchUsesGPURuntime(record),
+              let socketPath = record.vncSocketPath else {
+            return false
+        }
+        let response = await Task.detached {
+            RFBDesktopSizeForwarder.forward(width: width, height: height, unixSocketPath: socketPath)
+        }.value
+        return response.map { $0.isForwardedToGuest || $0.isSuccess } ?? false
+    }
 }
