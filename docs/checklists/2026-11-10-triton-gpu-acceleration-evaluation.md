@@ -520,3 +520,21 @@ Also seen:
   shutdown.
 - Windows 11 Notepad reopened the discarded tabs at the next app launch, from its own session store.
 - The agent on this Windows still lacks the session unlock trigger (`e54f1dcb`) until a tools update.
+
+## After the switch (2026-11-16): Retina size, the driver report, SIGPIPE
+
+- **Retina size works when QEMU passes it first.** After the restart Windows stayed at 1024x768 in the apps
+  view. The 2048x1280 refusal measured on the clone came from asking the agent alone: viogpu3d lists only
+  sizes QEMU has handed to the virtio-gpu device, and does not answer viogpudo's custom-mode escape. RFB
+  SetDesktopSize 2048x1280 on the VNC socket answered result 4 (forwarded), and the agent's
+  `display.resize.request` 2048x1280 right after it was accepted; the scanout became 2048x1280. The apps
+  view now does the same (`RFBDesktopSizeForwarder`, through `forwardDisplaySizeToGPU`) before each resize;
+  the desktop view already sent SetDesktopSize from its own VNC session.
+- **The viogpudo report no longer overwrites the software runtime's display choice.** With VioGpu3D bound,
+  the agent reports `virtioGpuDisplay` false, and Veil recorded that, so turning GPU acceleration off and
+  restoring the backup (which has viogpudo) would cold-boot on ramfb plus virtio-gpu, as two monitors.
+  Reports are now ignored while the profile is on GPU. The user's profile, already rewritten to false, was
+  set back to true by hand.
+- **SIGPIPE is ignored app-wide.** Veil's own sockets set `SO_NOSIGPIPE`, but a write to anything else
+  whose other end exited would end Veil without a crash report, which matches the one unexplained exit
+  above. Not proven to be its cause.

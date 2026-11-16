@@ -1280,6 +1280,11 @@ Rules:
   virtio-win's `viogpures.exe` uses) and calls `ChangeDisplaySettingsEx` again, stepping through a listed
   mode when Windows is already on the custom one. The driver pads the scanout width up to a multiple of 16,
   so the host requests 16-aligned widths.
+- Triton's `viogpu3d` (the GPU runtime) does not answer that escape, and refuses a size QEMU has not passed
+  to the device (`display_mode_not_supported` for 2048x1280). So in the apps view, which has no VNC session
+  of its own, the host first sends RFB SetDesktopSize on a short VNC connection (`RFBDesktopSizeForwarder`)
+  and sends `display.resize.request` after QEMU answers result 4; the driver then lists the size and the
+  agent's `ChangeDisplaySettingsEx` takes it. Off the GPU runtime the host skips that step.
 - The RFB display path invokes this fallback after a QEMU `ExtendedDesktopSize` rejection, and after QEMU
   answers result code 4 ("request forwarded"): QEMU passed the size to `virtio-gpu`, and the VirtIO GPU
   driver lists it as a mode but does not switch to it on its own. A later successful RFB desktop-size response becomes authoritative
